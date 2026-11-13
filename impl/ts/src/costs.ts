@@ -2,9 +2,18 @@
 // formulas, the logical sizes of values, and the measures they're taken over.
 import { costMeasure, costModel, costSubject } from './generated/machine';
 import { leafSize, makeCostRates } from './generated/costs';
-import { scalarCount } from './unicode';
+import { scalarCount, utf8Length } from './unicode';
 import { digitsOf, integerOf, isInteger } from './decimal';
-import { decimalParts, ownedMapPairs, textStorage, type Value } from './values';
+import {
+  cacheContents,
+  cacheSize,
+  decimalParts,
+  knownContents,
+  knownSize,
+  ownedMapPairs,
+  textStorage,
+  type Value,
+} from './values';
 
 /** What one charge measures: its subjects and the instruction's own counts. */
 export type Measured = {
@@ -57,9 +66,8 @@ const {
 const { none: NONE, input: INPUT, result: RESULT, v: V, x1: X1 } = costSubject;
 const noCounts: Measured = {};
 
-const encoder = new TextEncoder();
-const known = new WeakMap<Value, number>();
-const knownContents = new WeakMap<Value, number>();
+/** A map entry's contents besides its value: 16 plus its key's UTF-8 bytes. */
+const keySize = (key: string): number => 16 + utf8Length(key);
 
 /** The measures of one value that aren't sizes. */
 const measureOf = (measure: number, v: Value | undefined): number => {
@@ -179,28 +187,27 @@ const countOf = (measure: number, counts: Measured): number => {
 const contentsOf = (v: Value): number => {
   switch (v.kind) {
     case 'list': {
-      const cached = knownContents.get(v);
-      if (cached !== undefined) {
+      const cached = knownContents(v);
+      if (cached >= 0) {
         return cached;
       }
       let total = 0;
       for (let i = 1; i <= v.length; i++) {
         total += sizeOf(v.index(i));
       }
-      knownContents.set(v, total);
+      cacheContents(v, total);
       return total;
     }
     case 'map': {
-      const cached = knownContents.get(v);
-      if (cached !== undefined) {
+      const cached = knownContents(v);
+      if (cached >= 0) {
         return cached;
       }
-      const total = ownedMapPairs(v)!.reduce(
-        (sum, [key, value]) =>
-          sum + 16 + encoder.encode(key).length + sizeOf(value),
-        0,
-      );
-      knownContents.set(v, total);
+      let total = 0;
+      for (const [key, value] of ownedMapPairs(v)!) {
+        total += keySize(key) + sizeOf(value);
+      }
+      cacheContents(v, total);
       return total;
     }
     case 'range': {
@@ -224,13 +231,13 @@ export const cacheListExtension = (
 ): void => {
   const contents =
     contentsOf(current) + (all ? contentsOf(part) : sizeOf(part));
-  knownContents.set(result, contents);
-  known.set(result, partSize('list', result.length, contents));
+  cacheContents(result, contents);
+  cacheSize(result, partSize('list', result.length, contents));
 };
 
 /** The part of a map's contents its keys add, one term per key. */
 export const keysContents = (keys: readonly string[]): number =>
-  keys.reduce((sum, key) => sum + 16 + encoder.encode(key).length, 0);
+  keys.reduce((sum, key) => sum + keySize(key), 0);
 
 /** Seed a newly built List's or map's size from the values it was built of. */
 export const cacheBuild = (
@@ -242,8 +249,8 @@ export const cacheBuild = (
   for (const item of items) {
     contents += sizeOf(item);
   }
-  knownContents.set(result, contents);
-  known.set(
+  cacheContents(result, contents);
+  cacheSize(
     result,
     partSize(
       result.kind,
@@ -264,13 +271,12 @@ export const cacheMapWrite = (
     return;
   }
   const previous = current.hasKey(key)
-    ? 16 + encoder.encode(key).length + sizeOf(current.get(key))
+    ? keySize(key) + sizeOf(current.get(key))
     : 0;
-  const added =
-    part === undefined ? 0 : 16 + encoder.encode(key).length + sizeOf(part);
+  const added = part === undefined ? 0 : keySize(key) + sizeOf(part);
   const contents = contentsOf(current) - previous + added;
-  knownContents.set(result, contents);
-  known.set(result, partSize('map', result.mapSize, contents));
+  cacheContents(result, contents);
+  cacheSize(result, partSize('map', result.mapSize, contents));
 };
 export const cacheListEdit = (
   result: Value,
@@ -282,19 +288,19 @@ export const cacheListEdit = (
     contentsOf(current) -
     sizeOf(current.index(i + 1)) +
     (part === undefined ? 0 : sizeOf(part));
-  knownContents.set(result, contents);
-  known.set(result, partSize('list', result.length, contents));
+  cacheContents(result, contents);
+  cacheSize(result, partSize('list', result.length, contents));
 };
 
 /** A value's logical size (chapter 8, Logical sizes), as if nothing were shared. */
 export const sizeOf = (v: Value): number => {
-  const cached = known.get(v);
-  if (cached !== undefined) {
+  const cached = knownSize(v);
+  if (cached >= 0) {
     return cached;
   }
   const leaf = leafSize(v, measureOf);
   if (leaf !== undefined) {
-    known.set(v, leaf);
+    cacheSize(v, leaf);
     return leaf;
   }
   // Deep values are sized leaves first, so no size recurses far. A
@@ -305,18 +311,18 @@ export const sizeOf = (v: Value): number => {
   const seen = new Set<Value>();
   while (pending.length) {
     const next = pending.pop()!;
-    if (known.has(next) || seen.has(next)) {
+    if (knownSize(next) >= 0 || seen.has(next)) {
       continue;
     }
     const leaf = leafSize(next, measureOf);
     if (leaf !== undefined) {
-      known.set(next, leaf);
+      cacheSize(next, leaf);
       continue;
     }
     seen.add(next);
     order.push(next);
     for (const child of childrenOf(next)) {
-      if (!known.has(child) && !seen.has(child)) {
+      if (knownSize(child) < 0 && !seen.has(child)) {
         pending.push(child);
       }
     }
@@ -324,9 +330,9 @@ export const sizeOf = (v: Value): number => {
   for (let i = order.length - 1; i >= 0; i--) {
     const value = order[i]!;
     const formula = sizes.get(value.kind)!;
-    known.set(value, evaluate(formula, noCounts, value));
+    cacheSize(value, evaluate(formula, noCounts, value));
   }
-  return known.get(v)!;
+  return knownSize(v);
 };
 const childrenOf = (v: Value): Value[] => {
   switch (v.kind) {

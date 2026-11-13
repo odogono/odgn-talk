@@ -19,6 +19,7 @@ import {
   isWhiteSpace,
   scalarCount,
   unicodeTables,
+  utf8Length,
 } from '../src/unicode';
 
 const dataRoot = resolve(import.meta.dir, '../../../.cache/unicode/18.0.0');
@@ -76,6 +77,25 @@ test('packed tables decode to exactly the generated data', () => {
   ] as const;
   for (const name of mappings) {
     expect(Object.fromEntries(unicodeTables[name]), name).toEqual(data[name]);
+  }
+});
+
+test('utf8Length counts the bytes TextEncoder writes', () => {
+  const encoder = new TextEncoder();
+  for (const s of [
+    '',
+    'key',
+    'café',
+    'ℕ→ℝ',
+    '日本語',
+    '😀a😀',
+    '\u007f\u0080\u07ff\u0800\uffff',
+    '\u{10000}\u{10ffff}',
+    'lone \ud800 high',
+    'lone \udc00 low',
+    'trailing \ud83d',
+  ]) {
+    expect(utf8Length(s)).toBe(encoder.encode(s).length);
   }
 });
 

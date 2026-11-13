@@ -6,9 +6,9 @@ import {
   charactersAt,
   isASCII,
   joinNFC,
+  utf8Length,
 } from './unicode';
 
-const encoder = new TextEncoder();
 type Head = { count: number; text: string };
 
 // A leading flag run, Indic extenders or emoji Extend/ZWJ sequences can carry
@@ -40,7 +40,7 @@ export class TextStorage {
   }
 
   get utf8Length(): number {
-    return (this.#utf8 ??= encoder.encode(this.text).length);
+    return (this.#utf8 ??= utf8Length(this.text));
   }
 
   get characterCount(): number {

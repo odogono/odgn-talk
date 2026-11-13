@@ -147,6 +147,14 @@ export let isDecimal: (input: unknown) => input is Decimal;
 export let ownedMapPairs: (value: Value) => Pairs | undefined;
 /** Internal: immutable Text storage and its cached derived facts. */
 export let textStorage: (value: Value) => TextStorage;
+/**
+ * Internal: a Value's cached logical size and contents (costs.ts), or -1
+ * before either is known. Caching never changes what the Value is.
+ */
+export let knownSize: (value: Value) => number;
+export let knownContents: (value: Value) => number;
+export let cacheSize: (value: Value, size: number) => void;
+export let cacheContents: (value: Value, contents: number) => void;
 let textValue: (storage: TextStorage) => Value;
 
 export class Decimal {
@@ -220,6 +228,8 @@ export class Decimal {
 export class Value {
   readonly #data: Payload;
   readonly #kind: Kind;
+  #size = -1;
+  #contents = -1;
   private constructor(token: symbol, kind: Kind, payload: Payload) {
     if (token !== valueToken) {
       invalidValue('Use a named Value constructor');
@@ -234,6 +244,14 @@ export class Value {
     ownedMapPairs = value =>
       value.#kind === 'map' ? (value.#data as MapStorage).pairs() : undefined;
     textStorage = value => value.#data as TextStorage;
+    knownSize = value => value.#size;
+    knownContents = value => value.#contents;
+    cacheSize = (value, size) => {
+      value.#size = size;
+    };
+    cacheContents = (value, contents) => {
+      value.#contents = contents;
+    };
     textValue = storage => makeValue('text', storage);
     editListValue = (current, i, value) =>
       makeValue('list', (current.#data as ListStorage).set(i, value));
