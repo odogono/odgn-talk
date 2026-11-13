@@ -445,7 +445,7 @@ pub const Session = struct {
         for (s.objects.items) |o| _ = try s.objectOf(o.kind, o.id);
         var bound: std.ArrayList(c.talk_load_object) = .empty;
         for (s.setup.items) |b| try bound.append(s.alloc(), .{ .name = b.name.ptr, .name_len = b.name.len, .object = try s.objectOf(b.kind, b.id) });
-        const load: c.talk_load_options = .{ .name = "session", .name_len = 7, .source = "", .source_len = 0, .grants = s.loaded.items.ptr, .grants_len = s.loaded.items.len, .grants_as_used = false, .owner = null, .objects = bound.items.ptr, .objects_len = bound.items.len, .limits = null };
+        const load: c.talk_load_options = .{ .name = "session", .name_len = 7, .source = "", .source_len = 0, .grants = s.loaded.items.ptr, .grants_len = s.loaded.items.len, .grants_as_used = false, .forbid_suspension = false, .owner = null, .objects = bound.items.ptr, .objects_len = bound.items.len, .limits = null };
         var script: ?*c.talk_script = null;
         try check_(c.talk_load(s.group, &load, &script));
         s.script = script;
@@ -1972,7 +1972,7 @@ pub const Session = struct {
         const source = s.sourceOf(lines);
         var bound: std.ArrayList(c.talk_load_object) = .empty;
         for (s.setup.items) |b| try bound.append(s.alloc(), .{ .name = b.name.ptr, .name_len = b.name.len, .object = try s.objectOf(b.kind, b.id) });
-        const load: c.talk_load_options = .{ .name = name.ptr, .name_len = name.len, .source = source.ptr, .source_len = source.len, .grants = s.loaded.items.ptr, .grants_len = s.loaded.items.len, .grants_as_used = true, .owner = null, .objects = bound.items.ptr, .objects_len = bound.items.len, .limits = null };
+        const load: c.talk_load_options = .{ .name = name.ptr, .name_len = name.len, .source = source.ptr, .source_len = source.len, .grants = s.loaded.items.ptr, .grants_len = s.loaded.items.len, .grants_as_used = true, .forbid_suspension = false, .owner = null, .objects = bound.items.ptr, .objects_len = bound.items.len, .limits = null };
         const mark = s.trace_lines.items.len;
         var script: ?*c.talk_script = null;
         const code = c.talk_load(s.group, &load, &script);

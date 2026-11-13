@@ -726,6 +726,9 @@ pub const Script = struct {
     debt: u64 = 0,
     /// Why it was stopped, once it has been; Stop is sticky.
     stopped: ?[]const u8 = null,
+    /// Loaded with `forbidSuspension`, which its later code is checked
+    /// under too (ADR 0178).
+    forbid_suspension: bool = false,
 
     pub fn object(s: *const Script, name: []const u8) ?*objects.Object {
         for (s.objects) |o| if (std.mem.eql(u8, o.name, name)) return o.object;
@@ -1570,6 +1573,9 @@ pub const LoadOptions = struct {
     grants: ?[]const NamedGrant = null,
     /// Keep only the granted Operations the Script uses.
     grants_as_used: bool = false,
+    /// Refuse any possible Suspension Point; kept by Reload, Extend,
+    /// Library replacement and restore (ADR 0178).
+    forbid_suspension: bool = false,
     /// The object the Script becomes the Owning Script of.
     owner: ?*objects.Object = null,
     /// Its well-known objects, which also give the checker their kinds.
@@ -2156,6 +2162,8 @@ pub const Group = struct {
         g.write("> load {s} identity={x}\n", .{ name, s.identity });
         const pa = parsed.arena.allocator();
         var context = try g.codeContext(pa, options.context, options.objects, options.owner);
+        context.forbid_suspension = options.forbid_suspension;
+        s.forbid_suspension = options.forbid_suspension;
         if (options.grants) |named| {
             const viewed = try pa.alloc(check.Grant, named.len);
             for (named, viewed) |n, *v| v.* = .{ .name = try pa.dupe(u8, n.name), .operations = try capabilities.checkOperations(pa, n.grant) };
@@ -2496,7 +2504,7 @@ pub const Group = struct {
         var inherited: std.ArrayList(check.Inherited) = .empty;
         for (s.variableNames()) |n| try inherited.append(pa, .{ .name = n, .variable = true });
         try inherited.appendSlice(pa, s.names.items);
-        var context = try g.codeContext(pa, .{}, s.objects, s.owner);
+        var context = try g.codeContext(pa, .{ .forbid_suspension = s.forbid_suspension }, s.objects, s.owner);
         context.grants = try keptView(pa, s.grants, how == .restore or how == .rebuild_restored);
         context.inherited = inherited.items;
         var refused: usize = 0;
@@ -2666,7 +2674,7 @@ pub const Group = struct {
     fn newCode(g: *Group, s: *Script) !*Script {
         const fresh = try g.gpa.create(Script);
         g.generations += 1;
-        fresh.* = .{ .name = s.name, .identity = undefined, .arena = undefined, .code = .init(g.gpa), .unit = undefined, .variables = &.{}, .definitions = &.{}, .grants = s.grants, .owner = s.owner, .objects = s.objects, .limits = s.limits, .effects = s.effects, .generation = g.generations };
+        fresh.* = .{ .name = s.name, .identity = undefined, .arena = undefined, .code = .init(g.gpa), .unit = undefined, .variables = &.{}, .definitions = &.{}, .grants = s.grants, .owner = s.owner, .objects = s.objects, .limits = s.limits, .effects = s.effects, .forbid_suspension = s.forbid_suspension, .generation = g.generations };
         fresh.unit.values = &.{};
         return fresh;
     }
@@ -2688,7 +2696,7 @@ pub const Group = struct {
     pub fn buildCode(g: *Group, s: *Script, fresh: *Script, parsed: *Parsed, extensions: []const []const u8, revoked: bool) !bool {
         const ca = fresh.code.allocator();
         const pa = parsed.arena.allocator();
-        var context = try g.codeContext(pa, .{}, s.objects, s.owner);
+        var context = try g.codeContext(pa, .{ .forbid_suspension = s.forbid_suspension }, s.objects, s.owner);
         context.grants = try keptView(pa, s.grants, revoked);
         var refused: usize = 0;
         const code = try g.lowerCode(ca, s.name, s.name, parsed, context, s.limits.pattern_size, &refused) orelse return false;
@@ -2714,7 +2722,7 @@ pub const Group = struct {
         s.imports = parsed.imports;
         s.identity = codeIdentity(s.name, s.source, .script, s.imports);
         const pa = parsed.arena.allocator();
-        var context = try g.codeContext(pa, .{}, s.objects, s.owner);
+        var context = try g.codeContext(pa, .{ .forbid_suspension = s.forbid_suspension }, s.objects, s.owner);
         context.grants = try keptView(pa, s.grants, true);
         var refused: usize = 0;
         const code = try g.lowerCode(ca, s.name, s.name, &parsed, context, s.limits.pattern_size, &refused) orelse return false;
@@ -4702,7 +4710,7 @@ pub const Group = struct {
         for (g.scripts.items, scripts) |s, *x| {
             const grants = try a.alloc(fingerprint.Grant, s.grants.len);
             for (s.grants, grants) |sg, *y| y.* = .{ .name = sg.name, .json = sg.declarations orelse try fingerprint.grantJson(a, sg.grant.capability, sg.kept) };
-            x.* = .{ .name = s.name, .identity = s.identity, .grants = grants, .limits = limitValues(s.limits) };
+            x.* = .{ .name = s.name, .identity = s.identity, .grants = grants, .limits = limitValues(s.limits), .forbid_suspension = s.forbid_suspension };
         }
         return fingerprint.compute(libraries, scripts);
     }

@@ -740,6 +740,7 @@ func (x *executionReplay) apply(i int) error {
 			return err
 		}
 		asUsed, _ := setup["grantsAsUsed"].(bool)
+		forbid, _ := setup["forbidSuspension"].(bool)
 		bindings, err := x.objects.bindings(setup)
 		if x.sessionObjects != nil {
 			bindings = x.sessionBindings
@@ -755,7 +756,7 @@ func (x *executionReplay) apply(i int) error {
 				return fmt.Errorf("unknown owner %v", ref)
 			}
 		}
-		_, e = x.g.Load(talk.LoadOptions{Owner: owner, Name: name, Source: source, Limits: setupLimits(setup["limits"]), Grants: grants, GrantsAsUsed: asUsed, Objects: bindings})
+		_, e = x.g.Load(talk.LoadOptions{Owner: owner, Name: name, Source: source, Limits: setupLimits(setup["limits"]), Grants: grants, GrantsAsUsed: asUsed, ForbidSuspension: forbid, Objects: bindings})
 		if e != nil {
 			if _, ok := e.(*talk.LoadError); !ok {
 				return e

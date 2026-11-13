@@ -91,8 +91,8 @@ class Host:
         source, source_len = self.text(source)
         # talk_load_options: name, name_len, source, source_len, grants,
         # grants_len, grants_as_used and its padding, owner, objects,
-        # objects_len, limits.
-        options = self.alloc(struct.pack("<6I?3x4I", name, name_len, source, source_len, 0, 0, False, 0, 0, 0, 0))
+        # objects_len, limits, forbid_suspension and its padding.
+        options = self.alloc(struct.pack("<6I?3x4I?3x", name, name_len, source, source_len, 0, 0, False, 0, 0, 0, 0, False))
         out = self.out()
         code = self.call("talk_load", group, options, out)
         return code, self.pointer_at(out)

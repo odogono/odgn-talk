@@ -167,6 +167,8 @@ pub const Unit = struct {
     library: bool,
     objects: []const check.Object,
     grants: []const check.Grant,
+    /// Loaded with `forbidSuspension`.
+    forbid_suspension: bool = false,
 };
 
 pub const Disassembly = struct { unit: []const u8, expected: []const u8 };
@@ -282,7 +284,8 @@ pub fn fromTables(a: Allocator, all: []const Table) Error!Setup {
                 }
                 try grants.append(a, .{ .name = g.key, .operations = operations.items });
             };
-            try units.append(a, .{ .name = string(t, "name"), .source = string(t, "source"), .library = library, .objects = objects.items, .grants = grants.items });
+            const forbid = if (field(t, "forbidSuspension")) |x| x == .raw and std.mem.eql(u8, x.raw, "true") else false;
+            try units.append(a, .{ .name = string(t, "name"), .source = string(t, "source"), .library = library, .objects = objects.items, .grants = grants.items, .forbid_suspension = forbid });
         } else if (std.mem.eql(u8, t.header, "[[disassembly]]")) {
             try disassembly.append(a, .{ .unit = string(t, "unit"), .expected = string(t, "expected") });
         }

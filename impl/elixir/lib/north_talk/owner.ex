@@ -420,6 +420,7 @@ defmodule NorthTalk.Owner do
       }
 
       fields = if o = opts[:owner], do: Map.put(fields, "owner", object_ref(state, g, o)), else: fields
+      fields = if opts[:forbid_suspension], do: Map.put(fields, "forbidSuspension", true), else: fields
 
       fields =
         if objects = opts[:objects],

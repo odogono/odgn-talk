@@ -216,6 +216,8 @@ pub const Script = struct {
     grants: []const Grant,
     /// Each limit in `limits.toml`'s order.
     limits: [limits_table.limit.len]u64,
+    /// Written only when set, so existing Fingerprints don't change (ADR 0178).
+    forbid_suspension: bool = false,
 };
 
 /// The Group Fingerprint of these Libraries and Scripts, which it sorts.
@@ -278,7 +280,9 @@ fn write(w: *std.Io.Writer, libraries: []const Library, scripts: []const Script)
             try writeString(w, l.ts);
             try w.print(":{d}", .{v});
         }
-        try w.writeAll("}}");
+        try w.writeByte('}');
+        if (s.forbid_suspension) try w.writeAll(",\"forbidSuspension\":true");
+        try w.writeByte('}');
     }
     try w.writeAll("]}");
 }

@@ -1824,6 +1824,7 @@ pub const Host = struct {
             const grants = try scriptGrants(a, table, defs, effects);
             try script_grants.put(a, script, grants);
             const as_used = if (case_setup.field(table, "grantsAsUsed")) |x| x == .raw and std.mem.eql(u8, x.raw, "true") else false;
+            const forbid = if (case_setup.field(table, "forbidSuspension")) |x| x == .raw and std.mem.eql(u8, x.raw, "true") else false;
             const owner: ?*c.talk_object = if (case_setup.field(table, "owner")) |x| try objectNamed(store, a, x) else null;
             var bound: std.ArrayList(c.talk_load_object) = .empty;
             if (case_setup.field(table, "objects")) |given| for (given.table) |e| {
@@ -1837,7 +1838,7 @@ pub const Host = struct {
                     @field(limits, f) = v;
                 };
             }
-            const load: c.talk_load_options = .{ .name = script.ptr, .name_len = script.len, .source = source.ptr, .source_len = source.len, .grants = grants.ptr, .grants_len = grants.len, .grants_as_used = as_used, .owner = owner, .objects = bound.items.ptr, .objects_len = bound.items.len, .limits = &limits };
+            const load: c.talk_load_options = .{ .name = script.ptr, .name_len = script.len, .source = source.ptr, .source_len = source.len, .grants = grants.ptr, .grants_len = grants.len, .grants_as_used = as_used, .forbid_suspension = forbid, .owner = owner, .objects = bound.items.ptr, .objects_len = bound.items.len, .limits = &limits };
             var loaded: ?*c.talk_script = null;
             const code = c.talk_load(h.group, &load, &loaded);
             if (code == c.TALK_LOAD_REFUSED) return;

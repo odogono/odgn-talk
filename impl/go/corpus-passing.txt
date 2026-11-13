@@ -251,6 +251,7 @@ load-diagnostics/empty-interpolation
 load-diagnostics/empty-join
 load-diagnostics/empty-timeout
 load-diagnostics/fallback-handler
+load-diagnostics/forbid-suspension
 load-diagnostics/implicit-property-targets
 load-diagnostics/initialiser-failed
 load-diagnostics/invalid-raw-text-closing-margin
@@ -344,6 +345,7 @@ reload/extend-script-name
 reload/extend-shared-names
 reload/extend-units
 reload/extension-state-cap
+reload/forbid-suspension
 reload/function-staleness
 reload/reload-carry-and-discard
 reload/replace-library-drop-mailbox

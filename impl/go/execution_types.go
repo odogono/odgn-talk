@@ -45,9 +45,12 @@ type LoadOptions struct {
 	// GrantsAsUsed keeps only the granted Operations that the Script and its
 	// Libraries use plus implicit abandonment dependencies, trimming once at Load.
 	GrantsAsUsed bool
-	Owner        *Object            // the Script becomes its Owning Script
-	Objects      map[string]*Object // well-known objects, bound by name
-	Limits       Limits
+	// ForbidSuspension refuses any possible Suspension Point as "can't
+	// suspend here"; kept by Reload, Extend, Library replacement and restore.
+	ForbidSuspension bool
+	Owner            *Object            // the Script becomes its Owning Script
+	Objects          map[string]*Object // well-known objects, bound by name
+	Limits           Limits
 }
 
 type Limits struct {
@@ -116,11 +119,12 @@ type Inspection struct {
 }
 
 type ScriptView struct {
-	DisabledGrants []string // disabled named Grants, in code-point order; empty when none
-	Name           string
-	Vars           []Pair        // its Script Variables, in declaration order
-	Runs           []RunView     // every Run that hasn't ended, in the order they started
-	Mailbox        []MessageView // in mailbox order
+	DisabledGrants   []string // disabled named Grants, in code-point order; empty when none
+	ForbidSuspension bool     // loaded with ForbidSuspension
+	Name             string
+	Vars             []Pair        // its Script Variables, in declaration order
+	Runs             []RunView     // every Run that hasn't ended, in the order they started
+	Mailbox          []MessageView // in mailbox order
 }
 
 type RunView struct {

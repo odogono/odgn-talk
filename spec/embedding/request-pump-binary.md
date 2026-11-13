@@ -90,7 +90,7 @@ are positional; absence is Nothing, and list length must match exactly:
 | `03` | pump | host-to-guest | ref, group, now, fuelSlice, fuelCap |
 | `04` | request-pump | host-to-guest | ref, group, token, to, message, now, fuelSlice, fuelCap |
 | `05` | call-pump | host-to-guest | ref, group, token, fn, args, limits, now, fuelSlice, fuelCap |
-| `0b` | load | host-to-guest | ref, group, name, source, grants, grantsAsUsed, owner, objects, limits, newGroup, refuseWorker |
+| `0b` | load | host-to-guest | ref, group, name, source, grants, grantsAsUsed, owner, objects, limits, newGroup, refuseWorker, forbidSuspension |
 | `81` | admission | guest-to-host | ref, delivery, err, abandoned, settled, trace |
 | `82` | completion | guest-to-host | ref, delivery, token, state, nextDeadline, fuelUsed, reports, gone, err, abandoned, settled, trace |
 
@@ -175,6 +175,7 @@ A Report Value the Core cannot encode is Nothing.
 | `error` | `value` |
 | `fallback` | `bool` |
 | `fn` | `value` |
+| `forbidSuspension` | `bool` |
 | `fuel` | `uint` (run end, run accounting, charge result); `int` (settlement) |
 | `fuelCap` | `int` |
 | `fuelLeft` | `uint` |
@@ -355,8 +356,9 @@ input (tag `0b`). Its reply, including diagnostics and Trace, remains the
 ordinary JSON Load reply. JSON `load` and `new-group` remain available.
 
 `name` and `source` are protocol text: UTF-8 byte strings with a byte length,
-without JSON escaping or normalization. `grants`, `grantsAsUsed`, `owner`,
-`objects` and `limits` have their JSON Load meanings. The maps are protocol
+without JSON escaping or normalization. `grants`, `grantsAsUsed`,
+`forbidSuspension`, `owner`, `objects` and `limits` have their JSON Load
+meanings. The maps are protocol
 maps; Object references keep their `{"$object":[kind,id]}` shape, with
 protocol-text strings. Nothing omits an optional field. `refuseWorker` keeps
 the inline-input worker refusal semantics.

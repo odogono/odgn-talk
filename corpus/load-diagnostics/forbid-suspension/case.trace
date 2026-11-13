@@ -11,7 +11,6 @@ diag bad code="can't suspend here" pos=15:3
 diag bad code="can't suspend here" pos=17:5
 diag bad code="can't suspend here" pos=19:3
 diag bad code="can't suspend here" pos=20:3
-diag bad code="can't suspend here" pos=21:5
 diag bad code="can't suspend here" pos=24:5
 diag bad code="can't suspend here" pos=30:3
 > load good identity=a490ed7e8bf1c84d20023d8b6299e50993e4f2ea372c0240bddde7af5c085019

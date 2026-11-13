@@ -940,6 +940,7 @@ typedef struct talk_load_options {
     const struct talk_load_object *objects;
     size_t objects_len;
     const talk_limits *limits; /* NULL: the default limit profile */
+    bool forbid_suspension; /* refuse any possible Suspension Point as "can't suspend here"; kept by Reload, Extend, Library replacement and restore */
 } talk_load_options;
 
 /* C only: a well-known object bound to a name at load. */
@@ -1863,6 +1864,7 @@ typedef struct talk_script_view {
     size_t runs_len;
     const talk_message_view *mailbox; /* in mailbox order */
     size_t mailbox_len;
+    bool forbid_suspension; /* loaded with forbid_suspension */
 } talk_script_view;
 
 typedef struct talk_inspection {

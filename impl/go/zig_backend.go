@@ -359,6 +359,9 @@ func (b *zigGroup) load(o LoadOptions) (*Script, error) {
 		return nil, err
 	}
 	fields := map[string]any{"name": o.Name, "source": o.Source, "grants": grants, "grantsAsUsed": o.GrantsAsUsed}
+	if o.ForbidSuspension {
+		fields["forbidSuspension"] = true
+	}
 	// The guest refuses another Group's handle, named by a placeholder it
 	// never made, as wrong group with this Load's records.
 	handle := func(h *Object) map[string]any {

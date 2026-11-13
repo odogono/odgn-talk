@@ -29,6 +29,9 @@ const firstLeaf = (e: SemanticElement): Leaf => {
   return current;
 };
 
+const isJoin = (n: SemanticNode) =>
+  n.rule === 'Wait' && word(n.children[1], 'for') && word(n.children[2], 'all');
+
 const WAITING_RULES = new Set([
   'Send',
   'AskTell',
@@ -66,12 +69,12 @@ const factsOf = (
   forbid: boolean,
 ): Facts => {
   const facts: Facts = { commands: [], calls: [], points: [] };
-  const work: { cleanup: boolean; node: SemanticNode }[] =
+  const work: { cleanup: boolean; join: boolean; node: SemanticNode }[] =
     root.children.flatMap(c =>
-      c.kind === 'node' ? [{ node: c, cleanup: false }] : [],
+      c.kind === 'node' ? [{ node: c, cleanup: false, join: false }] : [],
     );
   while (work.length) {
-    const { node, cleanup } = work.pop()!;
+    const { node, cleanup, join } = work.pop()!;
     if (node.rule === 'Lambda') {
       lambdas.push(node);
       continue;
@@ -88,17 +91,19 @@ const factsOf = (
       case 'Wait':
         point(firstLeaf(node));
         break;
+      // In a Join's body, these are Join Members: the Join's closing `end`
+      // is its only Suspension Point (chapter 5, Joins).
       case 'Send':
         if (has(node, 'ResultTarget') && !waits) {
           report('missing and wait', firstLeaf(node));
         }
-        if (waits) {
+        if (waits && !join) {
           point(firstLeaf(node));
         }
         break;
       case 'AskTell':
       case 'OperationLine':
-        if (waits) {
+        if (waits && !join) {
           point(firstLeaf(node));
         }
         break;
@@ -163,7 +168,11 @@ const factsOf = (
           cleanup ||
           word(node.children[i - 1], 'finally') ||
           recoveryBody(node, i);
-        work.push({ node: child, cleanup: inFinally });
+        work.push({
+          node: child,
+          cleanup: inFinally,
+          join: join || isJoin(node),
+        });
       }
     }
   }
