@@ -7,6 +7,29 @@ tracked separately in the Spec's Data Files.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-13
+
+### Added
+
+- **spec:** Let an Elixir Host check a value against a Shape with `NorthTalk.conforms/3` and `NorthTalk.explain/3`, through a new `explain` message (#2197).
+- **spec:** Let a Host load a Script with `forbidSuspension`, so that any possible Suspension Point in it is the load error `can't suspend here`.
+- **spec:** Let a Host check a value against a Shape it built, with `conforms` and `explain` in the TS, Go and C embeddings; `explain` gives the `explain` Built-in's report (#2195).
+- **ts:** The TS Core takes `forbidSuspension` at Load, refuses any possible Suspension Point in such a Script as `can't suspend here`, and keeps the option through Reload, Extend, Library replacement and restore.
+
+### Fixed
+
+- **spec:** Say that `sqlite busy` and `store busy` can arise without a Fuel Slice when Groups sharing a database or Store are pumped at the same time, as a multi-tenant Go server does.
+- **ts:** A peer router whose `dial` rejects now fails `reach` with `bad address` and a waiting send with `send failed` (reason `unreachable`) at once, and drops a `post` quietly, instead of leaving an unhandled rejection and a Script waiting out its MaxWait (#2210).
+- **ts:** The TS peer router now withdraws a Script's exposures when it stops, its owner Object is disposed, or its `peer` Grant is revoked or disabled, so a stopped Script's names are free again and Remote Sends to it fail as `not exposed` (#2211).
+- **ts:** Shape checks (`conforms`, `explain` and Host checks) no longer throw a TypeError when a value holds the same part both directly and inside another of its parts (#2209).
+
+### Performance
+
+- **ts:** Make collection-heavy Runs faster by caching each Value's logical size on the Value itself rather than in WeakMaps, and by counting map keys' UTF-8 bytes without encoding them.
+- **ts:** Read a Library's exports from its declaration headers without converting its bodies, making the LSP's edit-and-reanalyse cycle about 9× faster (#2221).
+- **ts:** Decode a Shape's data once and reuse it, rather than on every `conforms`, `check`, `explain` or Clause Shape test, with Fuel and the Trace unchanged: `core/shapes` runs about 24% faster and `messaging/shape-sends` about 13% faster (#2196).
+- **ts:** Make Runs that roll back while Host Inputs queue up about 1.8× faster, by counting urgent inputs instead of rescanning the queue on every turn.
+
 ## [0.7.0] - 2026-11-06
 
 ### Breaking
