@@ -126,7 +126,7 @@ The test configuration points at the repository's `.cache/` build.
 
 ## Limits and faults
 
-- **Limits:** `:memory_cap` bounds guest linear memory, `:timeout` bounds each reactor call, and `:limits` sets the Script limits each `load/4` starts from, which its own `limits:` may override. `NorthTalk.memory/1` reports linear memory apart from the BEAM's own. A Group out of memory under the cap fails its waiting requests with `out of memory`.
+- **Limits:** `:memory_cap` bounds guest linear memory, `:timeout` bounds each reactor call, and `:limits` sets the Script limits each `load/4` starts from, which its own `limits:` may override. `load/4` with `forbid_suspension: true` refuses any possible Suspension Point in the Script as `can't suspend here`, for a Host that keeps every wait in its own storage; Reload, extend, Library replacement and restore keep it ([ADR 0178](../../docs/adr/0178-a-host-may-load-a-script-that-must-never-suspend.md)). `NorthTalk.memory/1` reports linear memory apart from the BEAM's own. A Group out of memory under the cap fails its waiting requests with `out of memory`.
 - **Traps and timeouts** poison the instance: the owner fails every waiting request with `instance trapped` and stops with `{:shutdown, :trapped}`. Effects are never retried. To carry on, start a new owner and `restore/4` a save kept from before. Other owners are unaffected.
 
 ## Measurements
