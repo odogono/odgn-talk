@@ -392,6 +392,32 @@ export const characterJoinEnd = (s: string): number => {
 const asciiOnly = /^[\u0000-\u007f]*$/;
 export const isASCII = (s: string): boolean => asciiOnly.test(s);
 
+/** The UTF-8 byte count of `s`, as TextEncoder would encode it, unallocated. */
+export const utf8Length = (s: string): number => {
+  let bytes = s.length;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) {
+      continue;
+    }
+    if (c < 0x8_00) {
+      bytes += 1;
+    } else if (
+      c >= 0xd8_00 &&
+      c <= 0xdb_ff &&
+      (s.charCodeAt(i + 1) & 0xfc_00) === 0xdc_00
+    ) {
+      // A surrogate pair: two UTF-16 units, four bytes.
+      bytes += 2;
+      i++;
+    } else {
+      // Lone surrogates encode as U+FFFD, three bytes like the rest.
+      bytes += 2;
+    }
+  }
+  return bytes;
+};
+
 /** Slices `s` at Character boundaries from characterBoundaries. */
 export const charactersAt = (
   s: string,
