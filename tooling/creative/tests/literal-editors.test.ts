@@ -70,6 +70,85 @@ test('a deleted literal is removed', () => {
   );
 });
 
+const block = (...texts: string[]) =>
+  `on click\n${texts.map(text => `  loop "${text}"\n`).join('')}end click\n`;
+const nth = (source: string, text: string, n: number) => {
+  let at = -1;
+  for (let i = 0; i <= n; i++) {
+    at = source.indexOf(`"${text}"`, at + 1);
+  }
+  return at + 1;
+};
+const without = (source: string, text: string, n: number) => {
+  const at = nth(source, text, n);
+  const start = source.lastIndexOf('\n', at) + 1;
+  return source.slice(0, start) + source.slice(source.indexOf('\n', at) + 1);
+};
+
+test('deleting the first of two literals removes it, not its neighbour', () => {
+  const before = block('c4', 'e4');
+  const after = without(before, 'c4', 0);
+  const first = followLiteral({ at: nth(before, 'c4', 0) }, before, after);
+  expect(first.state.kind).toBe('removed');
+  const second = followLiteral({ at: nth(before, 'e4', 0) }, before, after);
+  expect(second.pin.at).toBe(nth(after, 'e4', 0));
+  expect(second.state.kind === 'ready' && second.state.text).toBe('e4');
+});
+
+test('deleting the middle of three literals removes only it', () => {
+  const before = block('c4', 'c4 e4', 'c4 e4 g4');
+  const after = without(before, 'c4 e4', 0);
+  const pins = ['c4', 'c4 e4', 'c4 e4 g4'].map(text =>
+    followLiteral({ at: nth(before, text, 0) }, before, after),
+  );
+  expect(pins.map(p => p.state.kind)).toEqual(['ready', 'removed', 'ready']);
+  expect(pins[0]!.pin.at).toBe(nth(after, 'c4', 0));
+  expect(pins[2]!.pin.at).toBe(nth(after, 'c4 e4 g4', 0));
+});
+
+test('a literal sharing a deleted one’s prefix keeps its own pin', () => {
+  const before = block('c4', 'c4 e4');
+  const after = without(before, 'c4', 0);
+  const kept = followLiteral({ at: nth(before, 'c4 e4', 0) }, before, after);
+  expect(kept.pin.at).toBe(nth(after, 'c4 e4', 0));
+  expect(kept.state.kind === 'ready' && kept.state.text).toBe('c4 e4');
+  const gone = followLiteral({ at: nth(before, 'c4', 0) }, before, after);
+  expect(gone.state.kind).toBe('removed');
+});
+
+test('of identical literals, a deletion is never moved onto another', () => {
+  const before = block('c4', 'c4', 'c4');
+  for (const n of [0, 1, 2]) {
+    const after = without(before, 'c4', n);
+    const pins = [0, 1, 2].map(i =>
+      followLiteral({ at: nth(before, 'c4', i) }, before, after),
+    );
+    // The source cannot tell which one went, so the scan blames the last.
+    expect(pins.map(p => p.state.kind)).toEqual(['ready', 'ready', 'removed']);
+    expect(pins[0]!.pin.at).toBe(nth(after, 'c4', 0));
+    expect(pins[1]!.pin.at).toBe(nth(after, 'c4', 1));
+  }
+});
+
+test('undoing a deletion leaves a pin on the literal it followed', () => {
+  const before = block('e4');
+  const after = block('c4', 'e4');
+  const kept = followLiteral({ at: nth(before, 'e4', 0) }, before, after);
+  expect(kept.pin.at).toBe(nth(after, 'e4', 0));
+  expect(kept.state.kind === 'ready' && kept.state.text).toBe('e4');
+});
+
+test('a pin outlives a deletion while the source is unreadable', () => {
+  const before = block('c4', 'e4');
+  const broken = without(before, 'c4', 0).replace('end click', 'end clack');
+  const pin = { at: nth(before, 'e4', 0) };
+  const first = followLiteral(pin, before, broken);
+  expect(first.state.kind).toBe('unreadable');
+  const fixed = broken.replace('end clack', 'end click');
+  const second = followLiteral(first.pin, broken, fixed);
+  expect(second.state.kind === 'ready' && second.state.text).toBe('e4');
+});
+
 test('an edit rewrites only its characters of the literal', () => {
   expect(replaceInLiteral(SOURCE, { at: LEAD }, 0, 2, 'd4')).toEqual({
     source: SOURCE.replace('c4 e4', 'd4 e4'),

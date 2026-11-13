@@ -61,12 +61,8 @@ export type LiteralState =
   | { kind: 'unreadable' }
   | { kind: 'removed' };
 
-/** Where `offset` in `before` is in `after`, around the one changed span. */
-export const mapOffset = (
-  before: string,
-  after: string,
-  offset: number,
-): number => {
+/** How `before` and `after` agree at their start and end. */
+const ends = (before: string, after: string) => {
   let prefix = 0;
   const shortest = Math.min(before.length, after.length);
   while (prefix < shortest && before[prefix] === after[prefix]) {
@@ -79,6 +75,16 @@ export const mapOffset = (
   ) {
     suffix++;
   }
+  return { prefix, suffix };
+};
+
+/** Where `offset` in `before` is in `after`, around the one changed span. */
+export const mapOffset = (
+  before: string,
+  after: string,
+  offset: number,
+): number => {
+  const { prefix, suffix } = ends(before, after);
   if (offset <= prefix) {
     return offset;
   }
@@ -119,7 +125,12 @@ export const followLiteral = (
 ): { pin: LiteralPin; state: LiteralState } => {
   const texts = patternTexts(after);
   const at = mapOffset(before, after, pin.at);
-  const found = covering(texts, at) ?? counterpart(texts, before, pin, at);
+  const survivor = moved(texts, before, after, pin);
+  if (survivor === null) {
+    return { pin: { at }, state: { kind: 'removed' } };
+  }
+  const found =
+    survivor ?? covering(texts, at) ?? counterpart(texts, before, pin, at);
   if (!found) {
     return {
       pin: { at },
@@ -127,6 +138,45 @@ export const followLiteral = (
     };
   }
   return { pin: { at: found.offset }, state: stateOf(found.text) };
+};
+
+const touches = (found: PatternText, from: number, to: number) =>
+  from <= found.range(0, found.text.length).to && to >= found.offset;
+
+/**
+ * When a change added or removed literals, what became of the pinned one if
+ * the change touched it: the literal it is now, `null` when it went, or
+ * `undefined` when the change left it alone. A position inside the changed
+ * span says nothing about which literal that is, as deleting `loop "c4"`
+ * before `loop "e4"` leaves `"e4"` where `"c4"` started, and undoing it puts
+ * `"c4"` back where `"e4"` started, so the literals the change touched are
+ * matched by text instead; a pin whose text the change kept fewer copies of
+ * than it touched cannot be told apart from its twins, and counts as gone.
+ */
+const moved = (
+  texts: PatternText[],
+  before: string,
+  after: string,
+  pin: LiteralPin,
+): PatternText | null | undefined => {
+  const old = patternTexts(before);
+  const pinned = old.find(found => found.offset === pin.at);
+  if (!pinned || texts.length === old.length || !parses(after)) {
+    return undefined;
+  }
+  const { prefix, suffix } = ends(before, after);
+  const was = old.filter(found =>
+    touches(found, prefix, before.length - suffix),
+  );
+  if (!was.includes(pinned)) {
+    return undefined;
+  }
+  const is = texts.filter(found =>
+    touches(found, prefix, after.length - suffix),
+  );
+  const twins = was.filter(found => found.text === pinned.text);
+  const kept = is.filter(found => found.text === pinned.text);
+  return kept.length < twins.length ? null : kept[twins.indexOf(pinned)]!;
 };
 
 /**

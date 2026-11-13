@@ -19,6 +19,8 @@ import { bringWindowForward, floatingWindow } from './windows';
 
 type Open = {
   body: HTMLElement;
+  /** Set once the window closes, so its host's callbacks do nothing. */
+  closed?: true;
   editor: RegisteredLiteralEditor;
   node: HTMLElement;
   notice: HTMLElement;
@@ -111,14 +113,19 @@ export class LiteralEditorWindows {
       element: body,
       view: VIEW_API,
       replace: (from, to, insert) => this.#replace(open, from, to, insert),
-      audition: name =>
-        this.options.audition(name, literalAt(open.text, open.pin.at)?.on),
+      audition: name => {
+        if (!open.closed) {
+          this.options.audition(name, literalAt(open.text, open.pin.at)?.on);
+        }
+      },
       parse: text => {
         const parsed = parseMiniNotation(text);
         return parsed.ok ? parsed.pattern : undefined;
       },
       select: (from, to) => {
-        const found = literalAt(open.text, open.pin.at);
+        const found = open.closed
+          ? undefined
+          : literalAt(open.text, open.pin.at);
         if (found && from >= 0 && from <= to && to <= found.text.length) {
           const range = found.range(from, to);
           this.options.select(open.source, range.from, range.to);
@@ -224,6 +231,9 @@ export class LiteralEditorWindows {
     to: number,
     insert: string,
   ): string | undefined {
+    if (open.closed) {
+      return 'the window is closed';
+    }
     if (open.state.kind !== 'ready') {
       return 'the literal cannot be edited now';
     }
@@ -237,6 +247,7 @@ export class LiteralEditorWindows {
   }
 
   #close(open: Open): void {
+    open.closed = true;
     open.view.close?.();
     open.node.remove();
     this.#open = this.#open.filter(o => o !== open);
