@@ -662,6 +662,7 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 | `[scripts]` | `source` | the file that holds its source | trace, disassembly |
 | `[scripts]` | `grants` | its Grants: a table from each granted name to `{capability, ops, binding}`, where `ops` is a list of Operation names or `"all"`, and `capability` may be left out when it is the granted name; optional `binding` is Host text for the Grant (Locale defaults to `und`, and other Capabilities to no binding), or for `sqlite` a table `{database, tables, maxRows}`; optional `coordinator` names its Segment Coordinator, shared by every Grant in the case given that name, and without one a Grant is its own | trace, disassembly |
 | `[scripts]` | `grantsAsUsed` | `true` to keep only the granted Operations the Script uses | trace |
+| `[scripts]` | `forbidSuspension` | `true` to load it with `forbidSuspension`, so that any possible Suspension Point is a load error | trace |
 | `[scripts]` | `owner` | the Host Object it owns, as `{kind, id}` | trace |
 | `[scripts]` | `objects` | its well-known objects, a table from name to `{kind, id}` | trace, disassembly |
 | `[scripts]` | `limits` | its limits, a table from each limit's `ts` name to its value; absent limits take their defaults | trace |

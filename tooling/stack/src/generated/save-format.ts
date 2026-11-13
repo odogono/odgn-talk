@@ -2243,6 +2243,17 @@ export const saveSchema = {
           "type": "list of script sources"
         }
       ]
+    },
+    {
+      "tag": 15,
+      "name": "suspension",
+      "required": false,
+      "fields": [
+        {
+          "name": "forbidden",
+          "type": "list of uint"
+        }
+      ]
     }
   ]
 } as const;

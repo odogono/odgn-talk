@@ -383,6 +383,17 @@ name = "sources"
 type = "list of script sources"
 is = "One per Script, in `scripts` order."
 
+[[section]]
+tag = 15
+name = "suspension"
+required = false
+holds = "The Scripts loaded with `forbidSuspension` (chapter 9). A save without one leaves the section out, so a save from before the option reads as none."
+
+[[section.field]]
+name = "forbidden"
+type = "list of uint"
+is = "Each such Script's position in `scripts`, from 0, ascending, and at least one."
+
 # ------------------------------------------------------------------- records
 
 [[record]]

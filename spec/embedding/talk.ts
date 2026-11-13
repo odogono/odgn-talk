@@ -751,6 +751,8 @@ export interface LoadOptions {
   grants: Record<string, Grant<any>>;
   /** Trim once at Load, including Library needs and implicit abandonment dependencies. */
   grantsAsUsed?: boolean;
+  /** Refuse any possible Suspension Point as `can't suspend here`; kept by Reload, Extend, Library replacement and restore. */
+  forbidSuspension?: boolean;
   owner?: HostObject;
   objects?: Record<string, HostObject>;
   limits?: Partial<Limits>;
@@ -867,6 +869,7 @@ export interface Inspection {
 export interface ScriptView {
   name: string;
   disabledGrants?: string[]; // disabled named Grants, in code-point order; absent when empty
+  forbidSuspension?: true;   // loaded with forbidSuspension; absent otherwise
   vars: [string, Value][]; // its Script Variables, in declaration order
   runs: RunView[];         // every Run that hasn't ended, in the order they started
   mailbox: MessageView[];  // in mailbox order

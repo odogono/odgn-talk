@@ -138,9 +138,9 @@ sources = ["ADR 0012", "#115"]
 
 [[diagnostic]]
 code = "can't suspend here"
-raised_when = "A possible Suspension Point is in a `finally` block or a Recovery Catch, or a named function, or a Handler called function-style, reaches one, directly or through what it calls"
-at = "the Suspension Point, or the call in the function or Handler through which it reaches one"
-sources = ["ADR 0017", "ADR 0020", "#115"]
+raised_when = "A possible Suspension Point is in a `finally` block or a Recovery Catch, or a named function, or a Handler called function-style, reaches one, directly or through what it calls, or a Script loaded with `forbidSuspension` holds one or calls a Handler that may reach one"
+at = "the Suspension Point, or the call in the function or Handler through which it reaches one, or the call to a Handler that may suspend"
+sources = ["ADR 0017", "ADR 0020", "#115", "ADR 0178", "#2237"]
 
 [[diagnostic]]
 code = "unknown import"

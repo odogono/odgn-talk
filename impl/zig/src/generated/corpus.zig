@@ -2218,6 +2218,14 @@ pub const corpus: CorpusTable = .{
         },
         .{
             .table = "scripts",
+            .key = "forbidSuspension",
+            .is = "`true` to load it with `forbidSuspension`, so that any possible Suspension Point is a load error",
+            .kinds = &.{
+                "trace",
+            },
+        },
+        .{
+            .table = "scripts",
             .key = "owner",
             .is = "the Host Object it owns, as `{kind, id}`",
             .kinds = &.{
