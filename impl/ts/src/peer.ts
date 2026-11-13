@@ -270,10 +270,15 @@ export class PeerRouter {
     }
   }
 
+  /**
+   * The wire for a dialled link, or undefined when there is none: the dial
+   * found nothing, rejected, or gave a closed link. Only the dial's own
+   * rejection is caught, so a fault in what uses the wire still surfaces.
+   */
   private async wireFor(
     link: Promise<PeerLink | undefined>,
   ): Promise<Wire | undefined> {
-    const got = await link;
+    const got = await link.catch(() => undefined);
     if (!got || got.closed) {
       return undefined;
     }
