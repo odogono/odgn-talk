@@ -2219,6 +2219,14 @@ var Corpus = CorpusTable{
 		},
 		CorpusTableSetupEntry{
 			Table: "scripts",
+			Key:   "forbidSuspension",
+			Is:    "`true` to load it with `forbidSuspension`, so that any possible Suspension Point is a load error",
+			Kinds: []string{
+				"trace",
+			},
+		},
+		CorpusTableSetupEntry{
+			Table: "scripts",
 			Key:   "owner",
 			Is:    "the Host Object it owns, as `{kind, id}`",
 			Kinds: []string{

@@ -161,6 +161,7 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 - **May suspend:** the loader infers which Handlers may suspend over the call graph, including imported Handlers, and reaches a fixpoint for recursion. A Lambda whose body holds a Suspension Point is may-suspend, and the flag is part of its value.
 - **Never suspend:** functions, Handlers called function-style, Guards, dispatch and Built-ins. A call without `and wait` never suspends.
 - **`finally`** blocks may contain no Suspension Point, checked at load ([chapter 6](06-errors-and-limits.md#catching)).
+- **Scripts that never suspend:** a Host may load a Script with `forbidSuspension`, and then the Script may hold no possible Suspension Point at all, checked at load ([chapter 9](09-embedding.md#loading-and-libraries)). `wait 0 bars` and `and wait` on a Function Value that turns out not to suspend count, since the rule is about what the source could do.
 - **Waiting on an answer:** a suspending Operation call waits at most its Operation's `maxPending`, or else the Script's `MaxWait`. A `send … and wait`, and a call to a Function Value in another Script, wait at most `MaxWait`. When the time runs out, the call is abandoned and the Run raises `timeout` ([chapter 6](06-errors-and-limits.md#limits)).
 - **Inside a Timeout Block,** every Suspension Point also waits at most until the block's deadline, and the earlier deadline wins ([Timeout Blocks](#timeout-blocks)).
 

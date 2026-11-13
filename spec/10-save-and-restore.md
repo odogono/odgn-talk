@@ -51,6 +51,7 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
   - its Script Variables, its definitions' values, its mailbox and work queue in order, and each clause's queue of parked Runs
   - its counters (`FuelTotal`, `AllocTotal`, `Runs`, `Faults`) and its Persistent State size
   - its Fuel Slice debt, the Grants the Host has revoked or disabled, and whether it has been stopped
+  - whether it was loaded with `forbidSuspension`, in the optional `suspension` section, which a save without such a Script leaves out
   - each message in its mailbox with its delivery id, its limit override and the reply it owes, if any
 - **Each Run:** everything [chapter 8](08-the-abstract-machine-and-the-cost-model.md#the-machines-state) lists, including:
   - its frames, each with its code position (a code unit's identity, a body and a pc), its locals and its operand stack
@@ -298,6 +299,14 @@ Each Script's base and extension sources, in an Embedded-source Snapshot.
 | Field | Type | Is |
 | --- | --- | --- |
 | sources | `list of script sources` | One per Script, in `scripts` order. |
+
+#### 15: suspension (optional)
+
+The Scripts loaded with `forbidSuspension` (chapter 9). A save without one leaves the section out, so a save from before the option reads as none.
+
+| Field | Type | Is |
+| --- | --- | --- |
+| forbidden | `list of uint` | Each such Script's position in `scripts`, from 0, ascending, and at least one. |
 
 <!-- end -->
 
@@ -1013,7 +1022,7 @@ A Map pair.
 1. **Reading:** every Core reads exactly the current [save format](#the-save-format) version, with no automatic snapshot migration. Bytes that aren't a save, a body digest or section digest that doesn't match, an unknown required section, or bytes a section's fields don't account for, are the Host error `invalid save`; so is an older format, including each Core's own formats from before ADR 0144. A save written under nanosecond time resolution is such a format, and its Host starts a fresh Group ([ADR 0091](../docs/adr/0091-time-has-microsecond-resolution.md)).
 2. **Libraries:** the Host passes compiled Libraries for the saved identities. The Core matches them by identity, and a Library it needs that isn't given is a mismatch.
 3. **Grants:** disabled status is preserved, including with variables-only policy, independently of rebinding. The Host's `Grants` function re-binds each Script's Grants, by the Script's name and the Grant's name. A Grant whose Capability, or kept Operations' declarations, differ from the saved ones is a mismatch, including declarations that differ only in their `labels` ([ADR 0115](../docs/adr/0115-operation-declarations-may-declare-argument-labels.md)). A declaration's `description` and `examples` are never saved or compared ([ADR 0076](../docs/adr/0076-operation-declarations-carry-documentation-that-only-tooling-reads.md)). Only the saved Operation set is retained; additional Operations the Host offers, and their declarations, are ignored. A Grant the Host doesn't return is restored as revoked, so a call through it raises `capability revoked`. It still binds its name, so the Script still loads, in a variables-only restore too. The Core reconstructs all saved source units before applying revocation state, so an existing extension may still call a revoked Grant. It keeps its saved Capability and declarations for step 4, so on its own it never makes a mismatch.
-4. **Versions:** the Core computes the Group Fingerprint from the saved Scripts and limits, the Libraries and Grants from steps 2 and 3, and its own language and Cost Model versions. If it equals the saved one, the restore is **full**. Otherwise it is a mismatch, and the Host's `Mismatch` policy decides: `RejectMismatch` fails with the Host error `save mismatch`, `VariablesOnly` does a [variables-only restore](#variables-only-restore), and `ReloadChanged` does a [Partial Restore](#partial-restore) when the only mismatch is Script code, and a variables-only restore otherwise.
+4. **Versions:** the Core computes the Group Fingerprint from the saved Scripts, limits and `forbidSuspension`, the Libraries and Grants from steps 2 and 3, and its own language and Cost Model versions. If it equals the saved one, the restore is **full**. Otherwise it is a mismatch, and the Host's `Mismatch` policy decides: `RejectMismatch` fails with the Host error `save mismatch`, `VariablesOnly` does a [variables-only restore](#variables-only-restore), and `ReloadChanged` does a [Partial Restore](#partial-restore) when the only mismatch is Script code, and a variables-only restore otherwise.
 5. **Control validation:** before accepting saved dispatch control, validate code identities, body/table/PC references, phase consistency, owner-local layouts and shared storage, pending target argument counts and slots, cleanup references/progress/scope identities, monotonic attempt counters and acyclic ownership/continuations. Malformed state is `invalid save`. Reconstruct aliases only from validated ownership.
 6. **Host Objects:** the Host's `Resolve` function turns each saved `(kind, id)` into a native object. An id it can't resolve restores as a disposed Host Object, and its `[kind, id]` is listed in the result's `Disposed`. The Host gets each restored handle back with `group.ObjectByID(kind, id)` ([chapter 9](09-embedding.md#host-objects)).
 7. **Text Patterns** are recompiled from their source, charging nothing.
@@ -1089,7 +1098,7 @@ A checkpoint restored with the same Store revisions restores the same watches, p
 
 A variables-only restore rebuilds each Script from its saved source and then each of its extensions in the order they were made (or the Host-supplied bundle in native TS external-source mode), against the Core's current versions, the Libraries given and the Grants re-bound, and keeps only its Script Variables. It follows the Reload rule, [carrying variables over](#carrying-variables-over) for every Script at once.
 
-- **Kept:** each Script's Script Variables whose names it still declares, its counters, its owner and well-known objects, its limits, and its revoked and disabled Grants. Host Objects are kept, and resolved as for a full restore.
+- **Kept:** each Script's Script Variables whose names it still declares, its counters, its owner and well-known objects, its limits, its `forbidSuspension`, and its revoked and disabled Grants. Host Objects are kept, and resolved as for a full restore.
 - **Discarded:** every Run, suspended, parked or preempted, the mailbox, the work queue, the input queue, each Broadcast in progress and the Fuel Slice debt. Runs are discarded with no `finally`. The result lists the discarded Runs in `DiscardedRuns`, the dropped Deliveries (the mailboxes' and the input queue's) in `DroppedMessages`, and the abandoned calls in `AbandonedCalls`, so the Host can cancel the ones it still has. `Pending` is empty.
 - **Late answers:** an answer or failure for an abandoned call is recorded and ignored, as for any call that isn't pending ([chapter 9](09-embedding.md#capabilities)). A Host reaches the restored Group with one only over the message layer, since a `Call` from before the save answers into the Group that made it.
 - **Reported:** these lists are the report, as a `stop` report's are, so no discarded Run has a `run end`. The one exception is a Decision: the first Pump gives a `decided` report for each open Decision that was discarded or dropped, with each unsealed recipient undecided, `cancelled`, naming its Script and its Run if it had begun. A Broadcast keeps already sealed ballots and aggregates them by the ordinary Verdict rule; a dropped Broadcast not yet given recipients is undecided with empty lists. These deferred reports are saved if the Host saves again before the first Pump ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)).
@@ -1114,7 +1123,7 @@ Under `ReloadChanged`, a mismatch only in Script code identity continues the Scr
 
 A Host changes a loaded Script's code in one of two ways ([ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md)). Each is a worker call, and a Host Input recorded in the Trace.
 
-- **Kept by both:** the Script's name, its place in the Group's load order, its owner, its well-known objects, its Grants and their revocations, its limits and its counters. `FuelTotal` and the other counters carry on from where they were.
+- **Kept by both:** the Script's name, its place in the Group's load order, its owner, its well-known objects, its Grants and their revocations, its limits, its `forbidSuspension` and its counters. New code is checked under it, so a Reload or Extend that would bring in a Suspension Point is a LoadError. `FuelTotal` and the other counters carry on from where they were.
 
 ### Reload
 
