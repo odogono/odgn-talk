@@ -134,6 +134,54 @@ export const runBrowserTests = async () => {
     assert(hosts[0]!.parse('c4 e4')?.layers.length === 1, 'parses');
   });
 
+  await test('deleting a literal closes only its own window', async () => {
+    shell.code.replace('on click\n  loop "c4"\n  loop "e4"\nend click');
+    await until(() => windows().length === 0, 'the old window closing');
+    const opened = hosts.length;
+    const mark = (at: number) =>
+      document.querySelector<HTMLButtonElement>(
+        `.literal-editor-mark[data-at="${at}"]`,
+      );
+    for (const text of ['c4', 'e4']) {
+      const at = source().indexOf(`"${text}"`) + 1;
+      await until(() => !!mark(at), `the ${text} mark`);
+      mark(at)!.click();
+    }
+    await until(() => windows().length === 2, 'both windows');
+    const [first, second] = hosts.slice(opened);
+    const view = EditorView.findFromDOM(
+      document.querySelector<HTMLElement>('#code-browser .cm-editor')!,
+    )!;
+    const line = view.state.doc.line(2);
+    view.dispatch({ changes: { from: line.from, to: line.to + 1 } });
+    await until(() => windows().length === 1, 'the deleted one closing');
+    assert(shown() === 'e4', `the survivor shows ${shown()}`);
+
+    const deleted = source();
+    const stale = first!.replace(0, 2, 'g4');
+    assert(stale !== undefined, 'the closed window refused');
+    assert(source() === deleted, `the closed window wrote: ${source()}`);
+
+    assert(second!.replace(0, 2, 'a4') === undefined, 'the survivor edits');
+    assert(source().includes('"a4"'), source());
+    assert(shown() === 'a4', `the survivor shows ${shown()}`);
+
+    shell.editor.undo();
+    shell.editor.undo();
+    await until(() => source().includes('"c4"'), 'the deletion undone');
+    assert(windows().length === 1, 'undo reopens nothing');
+    assert(shown() === 'e4', `the survivor shows ${shown()}`);
+    assert(first!.replace(0, 2, 'g4') !== undefined, 'still refused');
+    assert(source().includes('"c4"'), `undo then wrote: ${source()}`);
+
+    const at = source().indexOf('"c4"') + 1;
+    await until(() => !!mark(at), 'the restored mark');
+    mark(at)!.click();
+    await until(() => windows().length === 2, 'reopened explicitly');
+    assert(hosts.at(-1)!.replace(0, 2, 'd4') === undefined, 'reopened edits');
+    assert(source().includes('"d4"\n  loop "e4"'), source());
+  });
+
   await test('it closes when the literal is removed', () => {
     shell.code.replace('on click\nend click');
     assert(windows().length === 0, 'closed');
