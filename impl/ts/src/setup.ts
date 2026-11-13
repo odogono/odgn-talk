@@ -106,6 +106,7 @@ export type Setup = {
   }[];
   operations?: OperationSpec[];
   scripts?: {
+    forbidSuspension?: boolean;
     grants?: Record<
       string,
       {
@@ -368,6 +369,7 @@ export const buildSetupGroup = (
       return group.load({
         grants,
         grantsAsUsed: script.grantsAsUsed,
+        ...(script.forbidSuspension ? { forbidSuspension: true } : {}),
         name: script.name,
         source: script.text ?? readSource(script.source),
         limits: script.limits,

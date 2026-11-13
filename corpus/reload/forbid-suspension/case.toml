@@ -1,0 +1,24 @@
+# forbid-suspension: Reload, Extend, Library replacement and restore keep a
+# Script's `forbidSuspension`, so new code that would bring in a Suspension
+# Point is refused (spec chapter 9, Loading and Libraries; chapter 10,
+# Reload and Extend; ADR 0178; #2238).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[libraries]]
+name = "fmt"
+version = "1"
+source = "fmt.talk"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+forbidSuspension = true
+
+[[scripts]]
+name = "u"
+source = "u.talk"

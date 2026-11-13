@@ -1,0 +1,37 @@
+# Pins `can't suspend here` for a Script loaded with `forbidSuspension`: at
+# each form of Suspension Point, at a Command Call to a local or imported
+# Handler that may suspend, inside a Lambda and a Timeout Block, and for
+# `wait 0 bars`. The same source loads with the option off, and a Script with
+# no Suspension Point loads and runs with it on (chapter 9; ADR 0178; #2238).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "feed"
+name = "fetch"
+mode = "suspending"
+
+[[libraries]]
+name = "slow"
+version = "1"
+source = "slow.talk"
+
+[[scripts]]
+name = "bad"
+source = "waits.talk"
+forbidSuspension = true
+grants = { feed = { ops = ["fetch"] } }
+
+[[scripts]]
+name = "good"
+source = "waits.talk"
+grants = { feed = { ops = ["fetch"] } }
+
+[[scripts]]
+name = "calm"
+source = "calm.talk"
+forbidSuspension = true
+grants = { feed = { ops = ["fetch"] } }

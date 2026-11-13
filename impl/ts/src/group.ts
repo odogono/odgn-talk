@@ -233,6 +233,8 @@ export type SessionControls = {
 export type TsGroupOptions = GroupOptions & { session?: SessionPort };
 export type TsRestoreOptions = RestoreOptions & { session?: SessionPort };
 export type LoadOptions = {
+  /** Refuse any possible Suspension Point as `can't suspend here`; kept by Reload, Extend, Library replacement and restore (ADR 0178). */
+  forbidSuspension?: boolean;
   /** Its Grants, by the name the Script uses for each. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a Grant of any binding, as talk.ts has it.
   grants?: Readonly<Record<string, Grant<any>>>;
@@ -432,6 +434,7 @@ export type MessageView = {
 export type Inspection = {
   scripts: {
     disabledGrants?: string[];
+    forbidSuspension?: true;
     mailbox: MessageView[];
     name: string;
     runs: RunView[];
@@ -543,6 +546,8 @@ export type ScriptState = {
   debt: number;
   disabled: Set<string>;
   faults: number;
+  /** Loaded with `forbidSuspension`, which its later code is checked under too. */
+  forbidSuspension: boolean;
   fuelTotal: number;
   grants: ReadonlyMap<string, Grant<unknown>>;
   handle: TsScript;
@@ -1222,7 +1227,7 @@ export class TsGroup implements Group {
     });
   }
 
-  /** Worker. A Fingerprint covers code, declarations and limits, never state. */
+  /** Worker. A Fingerprint covers code, declarations, limits and `forbidSuspension`, never state. */
   fingerprint(): Uint8Array {
     this.worker();
     const scripts = [...this.scripts].sort(byName).map(s => ({
@@ -1239,6 +1244,8 @@ export class TsGroup implements Group {
           s.limits[name as LimitName],
         ]),
       ),
+      // Only when set, so that existing Fingerprints don't change (ADR 0178).
+      ...(s.forbidSuspension ? { forbidSuspension: true } : {}),
     }));
     return hexBytes(
       sha256(
@@ -1478,6 +1485,7 @@ export class TsGroup implements Group {
         group.load({
           name: script.name,
           source: sources[0]!,
+          forbidSuspension: save.suspension?.includes(i) === true,
           limits: limitsOf(script.limits),
           grants,
           owner:
@@ -3774,7 +3782,10 @@ export class TsGroup implements Group {
       objects,
       declarationsOf(grants),
       undefined,
-      propertyChecks(o.objects ?? {}, o.owner),
+      {
+        ...propertyChecks(o.objects ?? {}, o.owner),
+        forbidSuspension: o.forbidSuspension === true,
+      },
     );
     this.trace?.(
       recordLine('load', [o.name], [['identity', p.identity]], true),
@@ -3809,6 +3820,7 @@ export class TsGroup implements Group {
       grants: kept,
       revoked: new Set(),
       disabled: new Set(),
+      forbidSuspension: o.forbidSuspension === true,
       handle,
       loaded,
       identity: p.identity,
@@ -3920,7 +3932,10 @@ export class TsGroup implements Group {
       Object.keys(s.objects),
       declarationsOf(grants),
       undefined,
-      propertyChecks(s.objects, s.owner?.handle),
+      {
+        ...propertyChecks(s.objects, s.owner?.handle),
+        forbidSuspension: s.forbidSuspension,
+      },
     );
     const loaded = this.loadPrepared(s.name, p, s.limits);
     const staged: ScriptState = {
@@ -4087,7 +4102,10 @@ export class TsGroup implements Group {
       Object.keys(s.objects),
       declarationsOf(availableGrants(s)),
       existing,
-      propertyChecks(s.objects, s.owner?.handle),
+      {
+        ...propertyChecks(s.objects, s.owner?.handle),
+        forbidSuspension: s.forbidSuspension,
+      },
     );
     const identity = codeIdentity(
       'extension',
@@ -6910,6 +6928,7 @@ export class TsGroup implements Group {
         ...(s.disabled.size
           ? { disabledGrants: [...s.disabled].sort(compareText) }
           : {}),
+        ...(s.forbidSuspension ? { forbidSuspension: true as const } : {}),
         vars,
         runs: this.runsOf(s).map(item => ({
           id: item.id,

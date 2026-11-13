@@ -25,10 +25,13 @@ export const saveSections = {
   decisions: 12,
   accounting: 13,
   sources: 14,
+  suspension: 15,
 } as const;
 const lastRequired = saveSections.accounting;
-const isKnown = (tag: number) => tag >= 1 && tag <= saveSections.sources;
-const isOptionalKnown = (tag: number) => tag === saveSections.sources;
+const isKnown = (tag: number) => tag >= 1 && tag <= saveSections.suspension;
+/** Whether a section is one of the known optional ones. */
+export const isOptionalKnown = (tag: number) =>
+  tag === saveSections.sources || tag === saveSections.suspension;
 
 export const invalidSave = (): never => {
   throw new HostError('invalid save');

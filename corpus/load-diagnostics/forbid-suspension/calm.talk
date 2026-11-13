@@ -1,0 +1,21 @@
+-- calm.talk: no possible Suspension Point, so it loads with forbidSuspension.
+-- It sends without waiting, and calls Handlers that can't suspend, local and
+-- imported.
+use note from slow
+
+script variable seen = []
+
+on check
+  send ping to me
+  record 2
+  note 3
+  put it after seen
+end check
+
+on record x
+  put x after seen
+end record
+
+on ping
+  put "ping" after seen
+end ping

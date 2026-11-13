@@ -218,6 +218,15 @@ export const encodeGroup = (g: GroupSnapshot): Uint8Array => {
               ),
           }
         : {}),
+      // Optional, and left out when no Script has the option (ADR 0178).
+      ...(g.scripts.some(s => s.forbidSuspension)
+        ? {
+            suspension: w =>
+              w.suspension(
+                g.scripts.flatMap((s, i) => (s.forbidSuspension ? [i] : [])),
+              ),
+          }
+        : {}),
     },
   );
 };

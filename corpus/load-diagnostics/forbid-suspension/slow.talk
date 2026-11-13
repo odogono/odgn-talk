@@ -1,0 +1,10 @@
+-- slow.talk: forbid-suspension's Library, with a Handler that may suspend
+-- and one that can't.
+
+on pause
+  wait 1 s
+end pause
+
+on note x
+  return x
+end note

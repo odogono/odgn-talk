@@ -1118,6 +1118,14 @@ export class WasmGroup implements Group {
         `${MUSICAL_CLOCK} is the Group's own Grant name`,
       );
     }
+    // The reactor doesn't read the option yet (#2240), and dropping it would
+    // let a Script suspend that the Host said must not.
+    if (o.forbidSuspension) {
+      throw new HostError(
+        'invalid value',
+        'The Zig reactor does not support forbidSuspension yet',
+      );
+    }
     const grants = this.#musicalClock
       ? { ...given, [MUSICAL_CLOCK]: this.#musicalClock }
       : given;

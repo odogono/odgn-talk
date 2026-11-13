@@ -1,0 +1,42 @@
+# Unblessed: forbidSuspension kept by Reload, Extend, replace-library and restore (#2239); first blessing awaits human review.
+# - A Reload without a Suspension Point loads; one with a `wait` is refused.
+# - An Extend whose Handler waits is refused.
+# - Replacing fmt with a `note` that may suspend is refused as a whole: s
+#   can't take it, so u keeps the old fmt too.
+# - After a save and restore, a Reload with a `wait` is still refused.
+
+> add-library fmt identity=cc1c90487d62f0289e00d875178b77cf1c6911375bb947244545a55bd5a7ca92
+> load s identity=0dd898c8df4ad10950d153d5ab372f3f8352ce0834ca38d0a18a094a976dd645
+> load u identity=4c79eb3efbccfc7481783e2722fdd95607d4f1dd63ed3f7b0fc64880c2a48bc2
+
+> reload s carry=yes source="use note from fmt" & newline & "script variable got = 0" & newline & "on go" & newline & "  note 3" & newline & "  put it into got" & newline & "end go" identity=d95df5514cb74722b2f4e926539eca3287330dae631c002023ce79531be5bad0
+stopped s reason="reload"
+> reload s carry=yes source="on go" & newline & "  wait 1 s" & newline & "end go" identity=90a7bb0e8f62279f7a7245a35265d594556ae6e52ad19d9191831e37268384df
+diag s code="can't suspend here" pos=2:3
+> extend s source="on later" & newline & "  wait 1 s" & newline & "end later" identity=3cef3964ea1e8c2a975893a4a91867855065582e3d3ebd32b9dda580fe6b6e6a
+diag s+1 code="can't suspend here" pos=2:3
+
+> replace-library fmt carry=yes source="on note x" & newline & "  wait 1 s" & newline & "  return x + 200" & newline & "end note" identity=2952f9a71abba5f8e630d4bca9254fcf71697216bb4733c008eb9b7f622b426a
+diag s code="can't suspend here" pos=4:3
+
+> deliver d1 to=s message=go
+> deliver d2 to=u message=go
+> pump clock=2026-11-13T10:00:00Z
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=32 alloc=16 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=32 alloc=16
+seg u/r1 start delivery=d2 handler=go clause=1 fuel=32 alloc=16 state=16 end=return
+run u/r1 outcome=completed delivery=d2 handler=go fuel=32 alloc=16
+pumped state=idle fuel=64
+
+> save s1
+> restore from=s1 fingerprint=2979c676b70b4f18386e30cf65ffa21d9e717a8bb5638880d72dd1faee0ebaba mode=full
+> reload s carry=yes source="on go" & newline & "  send go to me and wait" & newline & "end go" identity=6dd42c29e4f67a7b3b9bd346841b49e41f64348f2dbb968c29912d5d286bc113
+diag s code="can't suspend here" pos=2:3
+> deliver d3 to=s message=go
+> pump clock=2026-11-13T10:00:01Z
+seg s/r2 start delivery=d3 handler=go clause=1 fuel=32 alloc=16 state=16 end=return
+run s/r2 outcome=completed delivery=d3 handler=go fuel=32 alloc=16
+pumped state=idle fuel=32
+> vars
+vars s got=103
+vars u got=102
