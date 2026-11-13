@@ -33,6 +33,7 @@ import type { ParseError } from './parser';
 import type {
   Binding,
   LibraryExport,
+  SemanticElement,
   SemanticName,
   SemanticScope,
   SemanticTree,
@@ -2708,37 +2709,66 @@ export type CompileResult =
       unit: null;
     };
 
-/** A checked Library's exports, for the Scripts and Libraries that import it. */
+const isTokenText = (element: SemanticElement | undefined, text: string) =>
+  element?.kind === 'token' && element.text === text;
+// A declared name, from under its Name or MessageName nodes.
+const declaredName = (element: SemanticElement | undefined): string => {
+  while (element?.kind === 'node') {
+    element = element.children[0];
+  }
+  return (element as SemanticName).text;
+};
+
+/**
+ * A checked Library's exports, for the Scripts and Libraries that import it.
+ * It reads only declaration headers, so it never converts a body.
+ */
 export const exportsOf = (
   tree: SemanticTree,
 ): Record<string, Exclude<LibraryExport, string>> => {
   const out: Record<string, Exclude<LibraryExport, string>> = {};
-  for (const decl of viewSource(tree.root)) {
-    if (
-      (decl.k !== 'function' &&
-        decl.k !== 'handler' &&
-        decl.k !== 'constant') ||
-      decl.private ||
-      (decl.k === 'handler' && decl.fallback)
-    ) {
+  for (const child of tree.root.children) {
+    if (child.kind !== 'node' || isTokenText(child.children[0], 'private')) {
       continue;
     }
-    if (decl.k === 'function') {
-      out[decl.name] = {
+    const first = child.children[0];
+    const decl =
+      child.rule === 'Declaration' && first?.kind === 'node' ? first : child;
+    if (decl.rule === 'Function') {
+      let required = 0;
+      let total = 0;
+      for (const part of decl.children.slice(2)) {
+        if (part.kind === 'node' && part.rule === 'Parameter') {
+          total++;
+          required += part.children[2] ? 0 : 1;
+        } else if (
+          (part.kind === 'node' && part.rule === 'Block') ||
+          isTokenText(part, 'end')
+        ) {
+          break;
+        }
+      }
+      out[declaredName(decl.children[1])] = {
         kind: 'function',
-        contract: {
-          required: decl.params.filter(param => !param.default).length,
-          total: decl.params.length,
-        },
+        contract: { required, total },
       };
-    } else {
-      out[decl.k === 'handler' ? decl.name : decl.name.text] =
-        decl.k === 'handler'
-          ? {
-              kind: decl.k,
-              maySuspend: tree.maySuspend?.includes(decl.name) ?? false,
-            }
-          : { kind: decl.k, ...(decl.shape ? { shape: true } : {}) };
+    } else if (decl.rule === 'Handler') {
+      if (isTokenText(decl.children[1], 'any')) {
+        continue;
+      }
+      const name = declaredName(decl.children[1]);
+      out[name] = {
+        kind: 'handler',
+        maySuspend: tree.maySuspend?.includes(name) ?? false,
+      };
+    } else if (
+      decl.rule === 'Declaration' &&
+      (isTokenText(first, 'constant') || isTokenText(first, 'shape'))
+    ) {
+      out[declaredName(decl.children[1])] = {
+        kind: 'constant',
+        ...(isTokenText(first, 'shape') ? { shape: true } : {}),
+      };
     }
   }
   return out;
