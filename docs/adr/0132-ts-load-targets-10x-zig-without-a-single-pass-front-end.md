@@ -7,3 +7,5 @@ A time-boxed prototype measured the cheapest structural slices of a single-pass 
 The TS Load target is therefore within **10×** of the Zig Core for `lifecycle/load-*` and `macro/*`, measured as #1579 does: Bun on an Apple M5 with alternating `--count 5` runs, plus a Node spot-check. A single-pass or incremental front end stays out of scope for Load. Incremental reanalysis for the LSP (#1584) is a separate workload and is not decided here. The Run target and the constraints from #1579 are unchanged: the code stays runtime-neutral and generates no JS.
 
 On an idle machine after the follow-up lexer and semantic-pass changes, TS Load measured 5.8–6.6× of Zig for the small Script, 8.1–8.7× for the large Script and 6.7–7.2× for `macro/*`, all within the target.
+
+- Superseded in part by [ADR 0177](0177-ts-load-has-an-absolute-budget-not-a-ratio-to-zig.md): the 10× target is replaced by an absolute Load budget on Bun. The single-pass front end stays out of scope.
