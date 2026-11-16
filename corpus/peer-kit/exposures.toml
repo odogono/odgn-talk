@@ -1,0 +1,84 @@
+# expose and unexpose, and what a Remote Send finds afterwards.
+scripts = ["a", "b", "c"]
+
+[[sequence]]
+name = "exposing a name gives a Peer, and exposing it again gives the same one"
+steps = [
+  { do = "expose", name = "inbox", as = "p" },
+  { do = "expose", name = "inbox", same = "p" },
+  { do = "post", script = "b", peer = "p", message = "ping", args = "[1]", deliveries = [
+    { kind = "deliver", message = "ping", args = "[1]" },
+  ] },
+  { do = "call", script = "b", peer = "p", message = "ask", args = '["x"]', deliveries = [
+    { kind = "request", message = "ask", args = '["x"]' },
+  ] },
+]
+
+[[sequence]]
+name = "a name another Script holds is in use"
+steps = [
+  { do = "expose", name = "inbox", as = "p" },
+  { do = "expose", script = "b", name = "inbox", error = '{code: "name in use"}' },
+  { do = "post", script = "c", peer = "p", message = "ping", args = "[]", deliveries = [
+    { kind = "deliver", message = "ping", args = "[]" },
+  ] },
+]
+
+[[sequence]]
+name = "exposing with no name makes a new unnamed exposure each time"
+steps = [
+  { do = "expose", as = "u1" },
+  { do = "expose", as = "u2" },
+  { do = "post", script = "b", peer = "u1", message = "one", args = "[]", deliveries = [
+    { kind = "deliver", message = "one", args = "[]" },
+  ] },
+  { do = "post", script = "b", peer = "u2", message = "two", args = "[]", deliveries = [
+    { kind = "deliver", message = "two", args = "[]" },
+  ] },
+]
+
+[[sequence]]
+name = "unexposing a name withdraws it, and the name can be exposed again"
+steps = [
+  { do = "expose", name = "inbox", as = "p" },
+  { do = "unexpose", name = "inbox" },
+  { do = "post", script = "b", peer = "p", message = "ping", args = "[]" },
+  { do = "call", script = "b", peer = "p", message = "ask", args = "[]", error = '{code: "send failed", reason: "not exposed"}' },
+  { do = "expose", script = "b", name = "inbox", as = "q" },
+  { do = "post", script = "c", peer = "q", message = "ping", args = "[]", deliveries = [
+    { script = "b", kind = "deliver", message = "ping", args = "[]" },
+  ] },
+  { do = "post", script = "c", peer = "p", message = "ping", args = "[]" },
+]
+
+[[sequence]]
+name = "unexposing by Peer withdraws that exposure only"
+steps = [
+  { do = "expose", as = "u1" },
+  { do = "expose", as = "u2" },
+  { do = "expose", name = "inbox", as = "p" },
+  { do = "unexpose", peer = "u1" },
+  { do = "call", script = "b", peer = "u1", message = "ask", args = "[]", error = '{code: "send failed", reason: "not exposed"}' },
+  { do = "post", script = "b", peer = "u2", message = "two", args = "[]", deliveries = [
+    { kind = "deliver", message = "two", args = "[]" },
+  ] },
+  { do = "unexpose", peer = "p" },
+  { do = "call", script = "b", peer = "p", message = "ask", args = "[]", error = '{code: "send failed", reason: "not exposed"}' },
+  { do = "expose", script = "b", name = "inbox", as = "q" },
+]
+
+[[sequence]]
+name = "unexposing what another Script owns, or a name nobody holds, does nothing"
+steps = [
+  { do = "expose", name = "inbox", as = "p" },
+  { do = "expose", as = "u" },
+  { do = "unexpose", script = "b", name = "inbox" },
+  { do = "unexpose", script = "b", peer = "u" },
+  { do = "unexpose", name = "missing" },
+  { do = "post", script = "c", peer = "p", message = "ping", args = "[]", deliveries = [
+    { kind = "deliver", message = "ping", args = "[]" },
+  ] },
+  { do = "post", script = "c", peer = "u", message = "ping", args = "[]", deliveries = [
+    { kind = "deliver", message = "ping", args = "[]" },
+  ] },
+]

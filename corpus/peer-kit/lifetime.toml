@@ -1,0 +1,96 @@
+# Release withdraws a Grant's Peer Exposures, except on Reload (chapter 9, The peer router: Lifetime).
+scripts = ["a", "b", "c", "d", "e"]
+
+[[sequence]]
+name = "stop, revoke and disable withdraw the owner's named and unnamed exposures; reload keeps them"
+steps = [
+  { do = "expose", script = "a", name = "na", as = "na" },
+  { do = "expose", script = "a", as = "ua" },
+  { do = "expose", script = "b", name = "nb", as = "nb" },
+  { do = "expose", script = "b", as = "ub" },
+  { do = "expose", script = "c", name = "nc", as = "nc" },
+  { do = "expose", script = "c", as = "uc" },
+  { do = "expose", script = "d", name = "nd", as = "nd" },
+  { do = "expose", script = "d", as = "ud" },
+  { do = "release", script = "a", reason = "stop" },
+  { do = "release", script = "b", reason = "reload" },
+  { do = "release", script = "c", reason = "revoke" },
+  { do = "release", script = "d", reason = "disable" },
+  { do = "call", script = "e", peer = "na", message = "ask", args = "[]", error = '{code: "send failed", reason: "not exposed"}' },
+  { do = "call", script = "e", peer = "ua", message = "ask", args = "[]", error = '{code: "send failed", reason: "not exposed"}' },
+  { do = "call", script = "e", peer = "nb", message = "ask", args = "[]", deliveries = [
+    { script = "b", kind = "request", message = "ask", args = "[]" },
+  ] },
+  { do = "call", script = "e", peer = "ub", message = "ask", args = "[]", deliveries = [
+    { script = "b", kind = "request", message = "ask", args = "[]" },
+  ] },
+  { do = "call", script = "e", peer = "nc", message = "ask", args = "[]", error = '{code: "send failed", reason: "not exposed"}' },
+  { do = "call", script = "e", peer = "uc", message = "ask", args = "[]", error = '{code: "send failed", reason: "not exposed"}' },
+  { do = "call", script = "e", peer = "nd", message = "ask", args = "[]", error = '{code: "send failed", reason: "not exposed"}' },
+  { do = "call", script = "e", peer = "ud", message = "ask", args = "[]", error = '{code: "send failed", reason: "not exposed"}' },
+  { do = "post", script = "e", peer = "na", message = "ping", args = "[]" },
+  { do = "post", script = "e", peer = "uc", message = "ping", args = "[]" },
+  { do = "post", script = "e", peer = "ud", message = "ping", args = "[]" },
+  { do = "post", script = "e", peer = "ub", message = "ping", args = "[]", deliveries = [
+    { script = "b", kind = "deliver", message = "ping", args = "[]" },
+  ] },
+]
+
+[[sequence]]
+name = "a release withdraws only the released owner's exposures"
+steps = [
+  { do = "expose", script = "a", name = "na", as = "na" },
+  { do = "expose", script = "b", name = "nb", as = "nb" },
+  { do = "expose", script = "b", as = "ub" },
+  { do = "release", script = "a", reason = "revoke" },
+  { do = "post", script = "e", peer = "nb", message = "ping", args = "[]", deliveries = [
+    { script = "b", kind = "deliver", message = "ping", args = "[]" },
+  ] },
+  { do = "post", script = "e", peer = "ub", message = "ping", args = "[]", deliveries = [
+    { script = "b", kind = "deliver", message = "ping", args = "[]" },
+  ] },
+  { do = "post", script = "e", peer = "na", message = "ping", args = "[]" },
+]
+
+[[sequence]]
+name = "a withdrawn name is free to expose again"
+steps = [
+  { do = "expose", script = "a", name = "inbox", as = "p" },
+  { do = "release", script = "a", reason = "stop" },
+  { do = "expose", script = "b", name = "inbox", as = "q" },
+  { do = "post", script = "e", peer = "q", message = "ping", args = "[]", deliveries = [
+    { script = "b", kind = "deliver", message = "ping", args = "[]" },
+  ] },
+  { do = "post", script = "e", peer = "p", message = "ping", args = "[]" },
+]
+
+[[sequence]]
+name = "after a reload, exposing the name again gives the same Peer"
+steps = [
+  { do = "expose", script = "a", name = "inbox", as = "p" },
+  { do = "release", script = "a", reason = "reload" },
+  { do = "expose", script = "a", name = "inbox", same = "p" },
+  { do = "expose", script = "b", name = "inbox", error = '{code: "name in use"}' },
+]
+
+[[sequence]]
+name = "a release with nothing exposed, or repeated, does nothing"
+steps = [
+  { do = "release", script = "a", reason = "stop" },
+  { do = "expose", script = "a", name = "inbox", as = "p" },
+  { do = "release", script = "b", reason = "stop" },
+  { do = "release", script = "a", reason = "revoke" },
+  { do = "release", script = "a", reason = "stop" },
+  { do = "call", script = "e", peer = "p", message = "ask", args = "[]", error = '{code: "send failed", reason: "not exposed"}' },
+]
+
+[[sequence]]
+name = "a Remote Send delivered before the release stays delivered"
+steps = [
+  { do = "expose", script = "a", name = "inbox", as = "p" },
+  { do = "post", script = "e", peer = "p", message = "ping", args = "[1]", deliveries = [
+    { script = "a", kind = "deliver", message = "ping", args = "[1]" },
+  ] },
+  { do = "release", script = "a", reason = "stop" },
+  { do = "post", script = "e", peer = "p", message = "ping", args = "[2]" },
+]
