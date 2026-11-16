@@ -1,0 +1,28 @@
+# Unblessed: the built-in clock granted with :grant (#2275); first blessing awaits human review.
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="on reading" & newline & "  ask time to now" & newline & "  say it" & newline & "end reading" identity=a8dc17fd4753498b879b70f24f093a2792b459a24d06057a112ad79fb327a897
+> extend session source="on entry1" & newline & "reading" & newline & "end entry1" & newline identity=7168de4bf90b50a050894f9e5661a051f434b92cd7a09fcbd59cb3f43a63d372
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+call session/r1.c1 op=time.now args=[] result=2026-09-30T10:00:00Z
+call session/r1.c2 op=console.write args=[2026-09-30T10:00:00Z]
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=46 alloc=16 state=0 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=46 alloc=16
+pumped state=idle fuel=46
+> extend session source="on later" & newline & "  wait 5 s" & newline & "  reading" & newline & "end later" identity=0119b46f54812a95ee0089b5b4ff1238da2de295b6a7fb757575d9e0a179c2ac
+> extend session source="on entry2" & newline & "send later to session" & newline & "end entry2" & newline identity=31fde6905b586bb663f9a839a13776eb7547a84759f457e280034f8bd665f81c
+> request d2 to=session message=entry2
+> pump clock=2026-09-30T10:00:00Z
+send session/r2 to=session message=later
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=29 alloc=32 state=32 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=29 alloc=32
+seg session/r3 start from=session/r2 handler=later clause=1 fuel=15 alloc=0 state=176 end=wait until=2026-09-30T10:00:05Z
+pumped state=idle fuel=44 next=2026-09-30T10:00:05Z
+> pump clock=2026-09-30T10:00:05Z
+call session/r3.c1 op=time.now args=[] result=2026-09-30T10:00:05Z
+call session/r3.c2 op=console.write args=[2026-09-30T10:00:05Z]
+seg session/r3 resume fuel=42 alloc=16 state=0 end=return
+run session/r3 outcome=completed handler=later fuel=57 alloc=16
+pumped state=idle fuel=42
+> vars
+vars session
