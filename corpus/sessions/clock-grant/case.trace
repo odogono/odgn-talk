@@ -1,4 +1,3 @@
-# Unblessed: the built-in clock granted with :grant (#2275); first blessing awaits human review.
 > load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
 > extend session source="on reading" & newline & "  ask time to now" & newline & "  say it" & newline & "end reading" identity=a8dc17fd4753498b879b70f24f093a2792b459a24d06057a112ad79fb327a897
 > extend session source="on entry1" & newline & "reading" & newline & "end entry1" & newline identity=7168de4bf90b50a050894f9e5661a051f434b92cd7a09fcbd59cb3f43a63d372

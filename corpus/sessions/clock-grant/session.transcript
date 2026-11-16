@@ -1,4 +1,3 @@
-# Unblessed: the built-in clock granted with :grant (#2275); first blessing awaits human review.
 # The built-in clock takes no binding, and reads each Pump's Clock reading.
 > :grant time clock now
 ! bad arguments
