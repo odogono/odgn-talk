@@ -815,7 +815,7 @@ const Invalid = error{InvalidValue};
 
 /// A Shape from its data-model JSON (the Host Manifest's, chapter 9).
 /// Allocated with `a`, which its parts keep.
-fn shapeOf(a: Allocator, j: Json, depth: usize) (Allocator.Error || Invalid)!*caps.Shape {
+pub fn shapeOf(a: Allocator, j: Json, depth: usize) (Allocator.Error || Invalid)!*caps.Shape {
     if (depth > 32) return error.InvalidValue;
     switch (j) {
         .string => |s| {

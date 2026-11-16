@@ -3953,6 +3953,12 @@ export fn talk_define_object_kind(c: *Core, def: *const ObjectKindDef, out: *?*o
     return .ok;
 }
 
+/// Zig only, for the Session Host: a Shape from its data-model JSON, as an
+/// Object Kind declaration writes it.
+pub fn shapeFromJson(j: std.json.Value) !*Shape {
+    return @import("message.zig").shapeOf(allocator, j, 0);
+}
+
 /// Zig only, for the corpus runner: the Shape of an object of the kind
 /// named, which need not be defined yet, as a collection's own kind isn't.
 pub fn objectShapeNamed(name: []const u8) !*Shape {

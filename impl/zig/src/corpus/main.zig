@@ -476,4 +476,5 @@ test "every corpus Trace line reads against the record catalogue" {
 
 test {
     _ = talk_replay;
+    _ = session_case;
 }

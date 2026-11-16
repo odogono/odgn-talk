@@ -5,6 +5,12 @@
 //! and asks a Driver for everything from outside: Clock readings, typed
 //! lines, prompt answers, and where its output and Trace go. A REPL drives it
 //! live; the corpus runner drives it from a Session Transcript.
+//!
+//! Host Objects come from a Transcript's `%` envelopes, or live from an
+//! embedder (#2276): it `declare`s Object Kinds, identities and initial
+//! bindings as envelopes, and answers each crossing through `Driver.prop`
+//! while the Pump waits at a Crossing Pause. The session records every
+//! envelope a replay reads through `Driver.record`.
 const std = @import("std");
 const c = @import("talk-c");
 const northtalk = @import("northtalk");
@@ -65,6 +71,18 @@ pub const Driver = struct {
     /// Under a real Clock, waits until the foreground's next deadline, before
     /// the Pump for it; a replay's readings come from the Transcript.
     sleep: *const fn (context: *anyopaque, until: Instant) void,
+    /// Live Host Objects (#2276), all null in a replay. The answer to a
+    /// crossing: chapter 9's `prop` need as JSON in, its `prop-result`
+    /// (`{"value": V}`, `{"ok": true}`, `{"fail": {…}}` or
+    /// `{"hostError": true}`) out. Before answering, the driver may
+    /// `declare` an identity the answer names.
+    prop: ?*const fn (context: *anyopaque, need: []const u8) []const u8 = null,
+    /// A live Restore's resolver: the identities it asks for, as JSON
+    /// `[[kind, id], …]` sorted by kind then id, in; a JSON array with a
+    /// boolean for each, whether it still resolves, out.
+    resolve: ?*const fn (context: *anyopaque, objects: []const u8) []const u8 = null,
+    /// An object envelope the live session recorded, for the Transcript.
+    record: ?*const fn (context: *anyopaque, envelope: []const u8) void = null,
 };
 
 const Mode = enum { immediate, suspending, fire_and_forget };
@@ -251,10 +269,23 @@ pub const Session = struct {
     handles: std.StringHashMapUnmanaged(*c.talk_value) = .empty,
     /// The object an `:inspect` Run returned, for its reader Run.
     reader: ?*c.talk_value = null,
-    /// A Restore's recorded resolver outcomes.
+    /// A Restore's recorded resolver outcomes, and how many it used.
     resolved: ?[]const std.json.Value = null,
+    resolved_used: usize = 0,
+    /// A live Restore's answers, by identity.
+    resolving: std.ArrayList(Resolution) = .empty,
+    /// The recording's counters (session-observation.md), which a Restore
+    /// doesn't rewind: property crossings, Value exposures and Function
+    /// handles.
+    crossed: u64 = 0,
+    exposures: u64 = 0,
+    handle_count: u64 = 0,
+    /// The handle each exposed Function Value was last given, by its
+    /// address, for writing it in a crossing.
+    supplied: std.AutoHashMapUnmanaged(usize, []const u8) = .empty,
 
     const ObjectRef = struct { kind: []const u8, id: []const u8 };
+    const Resolution = struct { kind: []const u8, id: []const u8, resolved: bool = false };
     const SetupBinding = struct { name: []const u8, kind: []const u8, id: []const u8 };
 
     const Library = struct { source: []const u8, library: *c.talk_library };
@@ -387,6 +418,9 @@ pub const Session = struct {
         const text = line[0..len];
         s.driver.trace(s.driver.context, text);
         s.trace_lines.append(s.alloc(), s.dupe(text)) catch {};
+        // An Operation call's arguments are a Value exposure
+        // (session-observation.md), numbered as its record arrives.
+        if (std.mem.startsWith(u8, text, "call ")) s.exposures += 1;
         // A Run's Segment end, which says whether it waits for a deadline.
         if (std.mem.startsWith(u8, text, "seg ") or std.mem.startsWith(u8, text, "preempt ")) {
             const rest = text[std.mem.indexOfScalar(u8, text, ' ').? + 1 ..];
@@ -760,6 +794,7 @@ pub const Session = struct {
         defer c.talk_reports_release(result.reports);
         s.last = at;
         if (code != c.TALK_OK) return error.HostError;
+        try s.answerCrossings(&result);
         s.deadlineOf(result);
         s.follow(result.reports);
         try s.notifications(at);
@@ -791,6 +826,7 @@ pub const Session = struct {
             const code = c.talk_pump(s.group, at.seconds, at.micros, null, &result);
             defer c.talk_reports_release(result.reports);
             if (code != c.TALK_OK) return error.HostError;
+            try s.answerCrossings(&result);
             s.deadlineOf(result);
             s.follow(result.reports);
         }
@@ -1680,6 +1716,7 @@ pub const Session = struct {
         var inspection: ?*c.talk_inspection = null;
         try check_(c.talk_inspect(s.group, &inspection));
         defer c.talk_inspection_release(inspection);
+        s.exposeSnapshot(inspection.?);
         const all = inspection.?.scripts[0..inspection.?.scripts_len];
         const view = for (all) |*v| {
             if (std.mem.eql(u8, v.name[0..v.name_len], "session")) break v;
@@ -1773,8 +1810,12 @@ pub const Session = struct {
         s.trace_lines.clearRetainingCapacity();
         s.admitted = false;
         s.resolved = null;
+        s.resolved_used = 0;
+        if (s.liveObjects()) try s.askResolver(saved.bytes, options);
         const code = c.talk_router_restore(s.router, s.core, saved.bytes.ptr, saved.bytes.len, &options, &group, &result, &routing);
         if (code != c.TALK_OK) return s.sayf("! {s}", .{hostErrorName(code)});
+        if (s.resolved) |r| if (s.resolved_used != r.len) return error.MalformedTranscript;
+        if (s.resolving.items.len > 0) s.recordResolved();
         defer c.talk_restore_result_release(result);
         c.talk_routing_result_release(routing);
         // The Group it replaces goes, detached from the router; the
@@ -1789,6 +1830,7 @@ pub const Session = struct {
         var handles = s.handles.valueIterator();
         while (handles.next()) |h| c.talk_value_release(h.*);
         s.handles.clearRetainingCapacity();
+        s.supplied.clearRetainingCapacity();
         s.harvest();
         s.decls = .fromOwnedSlice(try s.alloc().dupe(Decl, saved.decls));
         s.next_entry = saved.next_entry;
@@ -2305,6 +2347,7 @@ pub const Session = struct {
                 var inspection: ?*c.talk_inspection = null;
                 try check_(c.talk_inspect(s.group, &inspection));
                 defer c.talk_inspection_release(inspection);
+                s.exposeSnapshot(inspection.?);
                 for (inspection.?.scripts[0..inspection.?.scripts_len]) |view| {
                     if (!std.mem.eql(u8, view.name[0..view.name_len], "session")) continue;
                     for (view.vars[0..view.vars_len]) |p| if (std.mem.eql(u8, p.key[0..p.key_len], name)) s.valueRows(p.value);
@@ -2559,7 +2602,8 @@ pub const Session = struct {
 
     /// A recorded Object Kind: its handle, and each property's declaration
     /// as the Transcript gives it.
-    const KindInfo = struct { name: []const u8, kind: *c.talk_object_kind, props: []PropInfo };
+    /// A defined Object Kind; `text` is a live declaration's envelope.
+    const KindInfo = struct { name: []const u8, kind: *c.talk_object_kind, props: []PropInfo, text: []const u8 = "" };
     const PropInfo = struct { name: []const u8, shape: []const u8, read_only: bool, get: [2]i64, set: [2]i64, session: *Session, kind: []const u8 };
 
     fn parseJson(s: *Session, text: []const u8) ?std.json.Value {
@@ -2618,6 +2662,81 @@ pub const Session = struct {
         return error.MalformedTranscript;
     }
 
+    /// A live embedder's declaration (#2276): a `kind`, `object` or `setup`
+    /// envelope, as session-observation.md writes it. The session checks
+    /// it, applies it as a replay would, and records it; an identical
+    /// repeat is redundant and not recorded again. Inside a `prop` answer
+    /// the driver declares any identity its answer names first.
+    pub fn declare(s: *Session, text: []const u8) !void {
+        if (!s.liveObjects()) return error.NotLive;
+        const v = s.parseJson(text) orelse return error.MalformedEnvelope;
+        if (!s.canonical(v, text)) return error.MalformedEnvelope;
+        const kind = jsonText(v, "type");
+        if (std.mem.eql(u8, kind, "kind")) {
+            if (!fieldsAre(v, &.{ "name", "parentKinds", "props", "type" }, &.{"elements"})) return error.MalformedEnvelope;
+            if (s.kinds.get(jsonText(v, "name"))) |k| {
+                if (std.mem.eql(u8, k.text, text)) return;
+                return error.ConflictingKind;
+            }
+            try s.defineKind(v);
+            s.kinds.getPtr(jsonText(v, "name")).?.text = s.dupe(text);
+        } else if (std.mem.eql(u8, kind, "object")) {
+            if (!fieldsAre(v, &.{ "object", "type" }, &.{})) return error.MalformedEnvelope;
+            const ref = v.object.get("object").?;
+            if (!fieldsAre(ref, &.{ "id", "kind" }, &.{}) or jsonText(ref, "id").len == 0) return error.MalformedEnvelope;
+            if (s.kinds.get(jsonText(ref, "kind")) == null) return error.UnknownKind;
+            if (s.registered(jsonText(ref, "kind"), jsonText(ref, "id"))) return;
+            try s.registerObject(ref);
+        } else if (std.mem.eql(u8, kind, "setup")) {
+            if (!fieldsAre(v, &.{ "objects", "type" }, &.{}) or s.group != null) return error.MalformedEnvelope;
+            const objects = v.object.get("objects").?;
+            if (objects != .object) return error.MalformedEnvelope;
+            for (objects.object.values()) |ref| if (!s.registered(jsonText(ref, "kind"), jsonText(ref, "id"))) return error.UnknownObject;
+            try s.crossing(text);
+        } else return error.MalformedEnvelope;
+        s.recordEnvelope(text);
+    }
+
+    fn registered(s: *const Session, kind: []const u8, id: []const u8) bool {
+        for (s.objects.items) |o| if (std.mem.eql(u8, o.kind, kind) and std.mem.eql(u8, o.id, id)) return true;
+        return false;
+    }
+
+    /// Whether `v`, an envelope, has exactly the fields `required` and
+    /// perhaps some of `optional`.
+    fn fieldsAre(v: std.json.Value, required: []const []const u8, optional: []const []const u8) bool {
+        if (v != .object) return false;
+        for (required) |k| if (v.object.get(k) == null) return false;
+        var it = v.object.iterator();
+        next: while (it.next()) |e| {
+            for (required) |k| if (std.mem.eql(u8, k, e.key_ptr.*)) continue :next;
+            for (optional) |k| if (std.mem.eql(u8, k, e.key_ptr.*)) continue :next;
+            return false;
+        }
+        return true;
+    }
+
+    /// Whether `text` is `v` written compactly with every object's keys in
+    /// code-point order, as a declaration envelope must be.
+    fn canonical(s: *Session, v: std.json.Value, text: []const u8) bool {
+        if (!sortedKeys(v)) return false;
+        const again = std.json.Stringify.valueAlloc(s.alloc(), v, .{}) catch return false;
+        return std.mem.eql(u8, again, text);
+    }
+
+    fn sortedKeys(v: std.json.Value) bool {
+        switch (v) {
+            .object => |o| {
+                const keys = o.keys();
+                for (keys, 0..) |k, i| if (i > 0 and std.mem.order(u8, keys[i - 1], k) != .lt) return false;
+                for (o.values()) |x| if (!sortedKeys(x)) return false;
+            },
+            .array => |a| for (a.items) |x| if (!sortedKeys(x)) return false,
+            else => {},
+        }
+        return true;
+    }
+
     /// A collection's Shape, an Object Shape or a choice of them, owned.
     fn elementShape(s: *Session, shape: std.json.Value) !*c.talk_shape {
         if (shape != .object) return error.MalformedTranscript;
@@ -2638,26 +2757,31 @@ pub const Session = struct {
         return out.?;
     }
 
-    fn elementReply(context: ?*anyopaque, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) c.talk_call_end {
+    fn elementCount(context: ?*anyopaque, o: ?*c.talk_object, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
         const s: *Session = @ptrCast(@alignCast(context.?));
-        const reply = s.callbackReply() orelse return c.TALK_CALL_BROKEN;
-        return s.replyEnd(reply, result, err);
+        if (s.liveObjects()) return c.TALK_CALL_STARTED;
+        return s.replayed(crossingOf(o, "elements", "count"), result, err);
     }
 
-    fn elementCount(context: ?*anyopaque, _: ?*c.talk_object, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
-        return elementReply(context, result, err);
+    fn elementAt(context: ?*anyopaque, o: ?*c.talk_object, index: i64, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+        const s: *Session = @ptrCast(@alignCast(context.?));
+        if (s.liveObjects()) return c.TALK_CALL_STARTED;
+        var x = crossingOf(o, "elements", "at");
+        x.selector = .{ .index = index };
+        return s.replayed(x, result, err);
     }
 
-    fn elementAt(context: ?*anyopaque, _: ?*c.talk_object, _: i64, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
-        return elementReply(context, result, err);
+    fn elementFind(context: ?*anyopaque, o: ?*c.talk_object, name: [*c]const u8, name_len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+        const s: *Session = @ptrCast(@alignCast(context.?));
+        if (s.liveObjects()) return c.TALK_CALL_STARTED;
+        var x = crossingOf(o, "elements", "find");
+        x.selector = .{ .name = name[0..name_len] };
+        return s.replayed(x, result, err);
     }
 
-    fn elementFind(context: ?*anyopaque, _: ?*c.talk_object, _: [*c]const u8, _: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
-        return elementReply(context, result, err);
-    }
-
-    fn shapeOf(s: *Session, shape: std.json.Value) !*const c.talk_shape {
-        _ = s;
+    /// A property's Shape: a named one, or its data-model JSON, which the
+    /// caller releases once the kind is defined (`owned`).
+    fn shapeOf(s: *Session, shape: std.json.Value, owned: *std.ArrayList(*c.talk_shape)) !*const c.talk_shape {
         if (shape == .string) {
             const names = [_]struct { []const u8, *const fn () callconv(.c) ?*const c.talk_shape }{
                 .{ "any", c.talk_any_shape },               .{ "value", c.talk_value_shape },     .{ "nothing", c.talk_nothing_shape },
@@ -2667,14 +2791,18 @@ pub const Session = struct {
             };
             for (names) |n| if (std.mem.eql(u8, n[0], shape.string)) return n[1]().?;
         }
-        return c.talk_any_shape().?;
+        const made: *c.talk_shape = @ptrCast(northtalk.talk.shapeFromJson(shape) catch return error.MalformedTranscript);
+        try owned.append(s.alloc(), made);
+        return made;
     }
 
     fn defineKind(s: *Session, v: std.json.Value) !void {
         const name = s.dupe(jsonText(v, "name"));
-        const props_json = v.object.get("props").?.array.items;
+        const props_json = (v.object.get("props") orelse return error.MalformedTranscript).array.items;
         const infos = try s.alloc().alloc(PropInfo, props_json.len);
         const props = try s.alloc().alloc(c.talk_prop, props_json.len);
+        var shapes: std.ArrayList(*c.talk_shape) = .empty;
+        defer for (shapes.items) |x| c.talk_shape_release(x);
         for (props_json, infos, props) |p, *info, *prop| {
             const read_only = if (p.object.get("readOnly")) |r| r == .bool and r.bool else true;
             const shape_value = p.object.get("shape") orelse std.json.Value{ .string = "any" };
@@ -2684,7 +2812,7 @@ pub const Session = struct {
             prop.* = .{
                 .name = info.name.ptr,
                 .name_len = info.name.len,
-                .shape = try s.shapeOf(shape_value),
+                .shape = try s.shapeOf(shape_value, &shapes),
                 .get = propGet,
                 .set = if (read_only) null else propSet,
                 .context = info,
@@ -2715,7 +2843,16 @@ pub const Session = struct {
             };
         }
         defer if (declared != null) c.talk_shape_release(elements.shape);
-        const def: c.talk_object_kind_def = .{ .name = name.ptr, .name_len = name.len, .props = props.ptr, .props_len = props.len, .parent_kinds = null, .parent_kinds_lens = null, .parent_kinds_len = 0, .elements = if (declared != null) &elements else null };
+        // Its parent kinds, for the Host Manifest.
+        const parents_json: []const std.json.Value = if (v.object.get("parentKinds")) |p| (if (p == .array) p.array.items else return error.MalformedTranscript) else &.{};
+        const parents = try s.alloc().alloc([*c]const u8, parents_json.len);
+        const parent_lens = try s.alloc().alloc(usize, parents_json.len);
+        for (parents_json, parents, parent_lens) |x, *ptr, *len| {
+            if (x != .string) return error.MalformedTranscript;
+            ptr.* = x.string.ptr;
+            len.* = x.string.len;
+        }
+        const def: c.talk_object_kind_def = .{ .name = name.ptr, .name_len = name.len, .props = props.ptr, .props_len = props.len, .parent_kinds = if (parents.len > 0) parents.ptr else null, .parent_kinds_lens = if (parents.len > 0) parent_lens.ptr else null, .parent_kinds_len = parents.len, .elements = if (declared != null) &elements else null };
         var kind: ?*c.talk_object_kind = null;
         try check_(c.talk_define_object_kind(s.core, &def, &kind));
         try s.kinds.put(s.alloc(), name, .{ .name = name, .kind = kind.?, .props = infos });
@@ -2764,6 +2901,13 @@ pub const Session = struct {
     /// envelope says.
     fn restoreResolve(context: ?*anyopaque, kind: [*c]const u8, kind_len: usize, id: [*c]const u8, id_len: usize, native: [*c]?*anyopaque) callconv(.c) bool {
         const s: *Session = @ptrCast(@alignCast(context.?));
+        if (s.liveObjects()) {
+            for (s.resolving.items) |r| if (std.mem.eql(u8, r.kind, kind[0..kind_len]) and std.mem.eql(u8, r.id, id[0..id_len])) {
+                if (r.resolved) native.* = @ptrFromInt(1);
+                return r.resolved;
+            };
+            return false;
+        }
         if (s.resolved == null) {
             const record = s.peekCrossing() orelse return false;
             if (!std.mem.eql(u8, jsonText(record, "type"), "resolve")) return false;
@@ -2773,12 +2917,81 @@ pub const Session = struct {
         for (s.resolved.?) |r| {
             const o = r.object.get("object").?;
             if (!std.mem.eql(u8, jsonText(o, "kind"), kind[0..kind_len]) or !std.mem.eql(u8, jsonText(o, "id"), id[0..id_len])) continue;
+            s.resolved_used += 1;
             const yes = r.object.get("resolved").?;
             if (yes != .bool or !yes.bool) return false;
             native.* = @ptrFromInt(1);
             return true;
         }
         return false;
+    }
+
+    /// A live Restore's first pass, which makes nothing and writes no
+    /// Trace: the identities the save binds, which the driver resolves at
+    /// once, as the reactor's `restore` asks its Host (#2276).
+    fn askResolver(s: *Session, bytes: []const u8, options: c.talk_restore_options) !void {
+        s.resolving.clearRetainingCapacity();
+        var probe = options;
+        probe.trace = null;
+        probe.trace_context = null;
+        probe.resolve = collectResolve;
+        probe.resolve_context = s;
+        var group: ?*c.talk_group = null;
+        var result: ?*c.talk_restore_result = null;
+        var routing: ?*c.talk_routing_result = null;
+        // A checkpoint is the router's; the Group it makes goes at once.
+        _ = c.talk_router_restore(s.router, s.core, bytes.ptr, bytes.len, &probe, &group, &result, &routing);
+        c.talk_routing_result_release(routing);
+        c.talk_restore_result_release(result);
+        if (group) |g| {
+            c.talk_router_detach(s.router, g);
+            c.talk_group_release(g);
+        }
+        if (s.resolving.items.len == 0) return;
+        std.mem.sort(Resolution, s.resolving.items, {}, struct {
+            fn less(_: void, x: Resolution, y: Resolution) bool {
+                const by_kind = std.mem.order(u8, x.kind, y.kind);
+                return by_kind == .lt or (by_kind == .eq and std.mem.order(u8, x.id, y.id) == .lt);
+            }
+        }.less);
+        var out: std.Io.Writer.Allocating = .init(s.alloc());
+        try out.writer.writeAll("[");
+        for (s.resolving.items, 0..) |r, i| {
+            if (i > 0) try out.writer.writeAll(",");
+            try out.writer.writeAll("[");
+            try northtalk.encoding.quoted(&out.writer, r.kind);
+            try out.writer.writeAll(",");
+            try northtalk.encoding.quoted(&out.writer, r.id);
+            try out.writer.writeAll("]");
+        }
+        try out.writer.writeAll("]");
+        const answer = s.parseJson(s.driver.resolve.?(s.driver.context, out.written()));
+        const answers: []const std.json.Value = if (answer) |a| (if (a == .array) a.array.items else &.{}) else &.{};
+        for (s.resolving.items, 0..) |*r, i| r.resolved = i < answers.len and answers.len == s.resolving.items.len and answers[i] == .bool and answers[i].bool;
+    }
+
+    fn collectResolve(context: ?*anyopaque, kind: [*c]const u8, kind_len: usize, id: [*c]const u8, id_len: usize, native: [*c]?*anyopaque) callconv(.c) bool {
+        _ = native;
+        const s: *Session = @ptrCast(@alignCast(context.?));
+        for (s.resolving.items) |r| if (std.mem.eql(u8, r.kind, kind[0..kind_len]) and std.mem.eql(u8, r.id, id[0..id_len])) return false;
+        s.resolving.append(s.alloc(), .{ .kind = s.dupe(kind[0..kind_len]), .id = s.dupe(id[0..id_len]) }) catch {};
+        return false;
+    }
+
+    /// The live Restore's `resolve` envelope: each outcome, by kind then id.
+    fn recordResolved(s: *Session) void {
+        var out: std.Io.Writer.Allocating = .init(s.alloc());
+        const w = &out.writer;
+        w.writeAll("{\"objects\":[") catch return;
+        for (s.resolving.items, 0..) |r, i| {
+            if (i > 0) w.writeAll(",") catch return;
+            w.writeAll("{\"object\":") catch return;
+            writeRef(w, r.kind, r.id) catch return;
+            w.print(",\"resolved\":{}}}", .{r.resolved}) catch return;
+        }
+        w.writeAll("],\"type\":\"resolve\"}") catch return;
+        s.recordEnvelope(out.written());
+        s.resolving.clearRetainingCapacity();
     }
 
     /// A Value from a crossing's JSON: the Value Encoding, with each
@@ -2792,60 +3005,109 @@ pub const Session = struct {
         return @ptrCast(out);
     }
 
-    /// A Value exposure: each Function Value leaf, depth first, binds the
-    /// handle its recorded `function` envelope names.
-    fn expose(s: *Session, values: []const ?*const c.talk_value) void {
-        for (values) |v| s.exposeOne(v orelse continue);
+    /// One step of a `function` record's `path`: a list index, or a map
+    /// key or record field name.
+    const Step = union(enum) { index: usize, key: []const u8 };
+
+    /// Starts a Value exposure, numbered in observation order from 1.
+    fn exposure(s: *Session) u64 {
+        s.exposures += 1;
+        return s.exposures;
     }
 
-    fn exposeOne(s: *Session, maybe: ?*const c.talk_value) void {
+    /// A callback's arguments, as one exposure whose paths start at the
+    /// argument list.
+    fn expose(s: *Session, values: []const ?*const c.talk_value) void {
+        const n = s.exposure();
+        for (values, 0..) |v, i| s.exposeAt(v, n, &.{.{ .index = i }});
+    }
+
+    /// Each Function Value leaf under `maybe`, depth first and in order,
+    /// at `prefix` and below: a replay binds the handle its recorded
+    /// `function` envelope names, and a live session records one.
+    fn exposeAt(s: *Session, maybe: ?*const c.talk_value, n: u64, at: []const Step) void {
         const root = maybe orelse return;
-        // Depth first and in order, from a heap work list: children are
-        // pushed last first.
-        var stack: std.ArrayList(*const northtalk.value.Value) = .empty;
-        stack.append(s.alloc(), @ptrCast(@alignCast(root))) catch return;
-        while (stack.pop()) |value| switch (value.data) {
-            .function => {
-                const record = s.peekCrossing() orelse continue;
-                if (!std.mem.eql(u8, jsonText(record, "type"), "function")) continue;
-                s.takeCrossing();
-                const v: *c.talk_value = @ptrCast(@constCast(value));
-                c.talk_value_retain(v);
-                s.handles.put(s.alloc(), s.dupe(jsonText(record, "handle")), v) catch {};
-            },
+        const Item = struct { value: *const northtalk.value.Value, path: []const Step };
+        var stack: std.ArrayList(Item) = .empty;
+        stack.append(s.alloc(), .{ .value = @ptrCast(@alignCast(root)), .path = at }) catch return;
+        while (stack.pop()) |item| switch (item.value.data) {
+            .function => s.functionLeaf(item.value, n, item.path),
             .list => |items| {
                 var i = items.len;
                 while (i > 0) {
                     i -= 1;
-                    stack.append(s.alloc(), items[i]) catch return;
+                    const path = std.mem.concat(s.alloc(), Step, &.{ item.path, &.{.{ .index = i }} }) catch return;
+                    stack.append(s.alloc(), .{ .value = items[i], .path = path }) catch return;
                 }
             },
             .map => |pairs| {
                 var i = pairs.len;
                 while (i > 0) {
                     i -= 1;
-                    stack.append(s.alloc(), pairs.at(i).value) catch return;
+                    const pair = pairs.at(i);
+                    const path = std.mem.concat(s.alloc(), Step, &.{ item.path, &.{.{ .key = pair.key }} }) catch return;
+                    stack.append(s.alloc(), .{ .value = pair.value, .path = path }) catch return;
                 }
             },
             else => {},
         };
     }
 
-    /// A report's Values, as one exposure.
+    fn functionLeaf(s: *Session, value: *const northtalk.value.Value, n: u64, path: []const Step) void {
+        const v: *c.talk_value = @ptrCast(@constCast(value));
+        var handle: []const u8 = undefined;
+        if (s.liveObjects()) {
+            s.handle_count += 1;
+            handle = s.print("f{d}", .{s.handle_count});
+            var out: std.Io.Writer.Allocating = .init(s.alloc());
+            const w = &out.writer;
+            w.print("{{\"exposure\":{d},\"handle\":\"{s}\",\"path\":[", .{ n, handle }) catch return;
+            for (path, 0..) |step, i| {
+                if (i > 0) w.writeAll(",") catch return;
+                switch (step) {
+                    .index => |x| w.print("{d}", .{x}) catch return,
+                    .key => |k| northtalk.encoding.quoted(w, k) catch return,
+                }
+            }
+            w.writeAll("],\"type\":\"function\"}") catch return;
+            s.recordEnvelope(out.written());
+        } else {
+            const record = s.peekCrossing() orelse return;
+            if (!std.mem.eql(u8, jsonText(record, "type"), "function")) return;
+            s.takeCrossing();
+            handle = s.dupe(jsonText(record, "handle"));
+        }
+        c.talk_value_retain(v);
+        s.handles.put(s.alloc(), handle, v) catch {};
+        s.supplied.put(s.alloc(), @intFromPtr(value), handle) catch {};
+    }
+
+    /// A report, as one exposure whose paths start at the report.
     fn exposeReport(s: *Session, r: c.talk_report) void {
+        const n = s.exposure();
         switch (r.kind) {
             c.TALK_REPORT_RUN_STARTED => {
                 const x = r.as.run_started;
-                s.exposeOne(x.function);
-                for (x.args[0..x.args_len]) |a| s.exposeOne(a);
+                s.exposeAt(x.function, n, &.{.{ .key = "fn" }});
+                for (x.args[0..x.args_len], 0..) |a, i| s.exposeAt(a, n, &.{ .{ .key = "args" }, .{ .index = i } });
             },
             c.TALK_REPORT_RUN_END => {
                 const x = r.as.run_end;
-                s.exposeOne(x.result);
-                if (x.@"error") |e| s.exposeOne(e.*.data);
+                s.exposeAt(x.result, n, &.{.{ .key = "result" }});
+                if (x.@"error") |e| s.exposeAt(e.*.data, n, &.{ .{ .key = "error" }, .{ .key = "data" } });
             },
-            c.TALK_REPORT_UNHANDLED => for (r.as.unhandled.args[0..r.as.unhandled.args_len]) |a| s.exposeOne(a),
+            c.TALK_REPORT_UNHANDLED => for (r.as.unhandled.args[0..r.as.unhandled.args_len], 0..) |a, i| s.exposeAt(a, n, &.{ .{ .key = "message" }, .{ .key = "args" }, .{ .index = i } }),
             else => {},
+        }
+    }
+
+    /// A Script Snapshot's variables, as one exposure whose paths start at
+    /// the Script names.
+    fn exposeSnapshot(s: *Session, inspection: *const c.talk_inspection) void {
+        const n = s.exposure();
+        for (inspection.scripts[0..inspection.scripts_len]) |view| {
+            const script = view.name[0..view.name_len];
+            for (view.vars[0..view.vars_len]) |p| s.exposeAt(p.value, n, &.{ .{ .key = script }, .{ .key = p.key[0..p.key_len] } });
         }
     }
 
@@ -2898,15 +3160,20 @@ pub const Session = struct {
     }
 
     /// The crossings a property callback recorded, up to its end: objects
-    /// it registered and actions it made, then its reply.
-    fn callbackReply(s: *Session) ?std.json.Value {
-        const begin = s.peekCrossing() orelse return null;
-        if (!std.mem.eql(u8, jsonText(begin, "type"), "property-begin")) return null;
+    /// it registered and actions it made, then its reply. Its
+    /// `property-begin` must be exactly `begin`, what a live session
+    /// would have recorded.
+    fn callbackReply(s: *Session, begin: []const u8) ?std.json.Value {
+        const text = s.driver.crossing(s.driver.context) orelse return null;
+        if (!std.mem.eql(u8, text, begin)) return null;
         s.takeCrossing();
         while (s.peekCrossing()) |x| {
             const t = jsonText(x, "type");
             s.takeCrossing();
-            if (std.mem.eql(u8, t, "property-end")) return x.object.get("reply");
+            if (std.mem.eql(u8, t, "property-end")) {
+                if (jsonInt(x, "crossing") != s.crossed) return null;
+                return x.object.get("reply");
+            }
             if (std.mem.eql(u8, t, "object")) s.registerObject(x.object.get("object").?) catch {};
             if (std.mem.eql(u8, t, "kind")) s.defineKind(x) catch {};
             if (std.mem.eql(u8, t, "input")) {
@@ -2918,6 +3185,7 @@ pub const Session = struct {
     }
 
     fn replyEnd(s: *Session, reply: std.json.Value, result: ?[*c]?*c.talk_value, err: [*c]c.talk_script_error) c.talk_call_end {
+        if (reply != .object) return c.TALK_CALL_BROKEN;
         if (reply.object.get("value")) |v| {
             const value = (s.valueOf(v) catch return c.TALK_CALL_BROKEN) orelse return c.TALK_CALL_BROKEN;
             if (result) |r| r.* = value else c.talk_value_release(value);
@@ -2934,22 +3202,199 @@ pub const Session = struct {
         return c.TALK_CALL_BROKEN;
     }
 
-    fn propGet(context: ?*anyopaque, o: ?*c.talk_object, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
-        _ = o;
-        const info: *PropInfo = @ptrCast(@alignCast(context.?));
-        const s = info.session;
-        const reply = s.callbackReply() orelse return c.TALK_CALL_BROKEN;
+    /// What a crossing's `selector` is: `at`'s index or `find`'s name.
+    const Selector = union(enum) { index: i64, name: []const u8 };
+
+    /// One property or collection callback, as its `property-begin` and
+    /// its `prop` need describe it.
+    const Crossing = struct {
+        kind: []const u8,
+        id: []const u8,
+        property: []const u8,
+        operation: []const u8,
+        value: ?*const c.talk_value = null,
+        selector: ?Selector = null,
+    };
+
+    fn crossingOf(o: ?*c.talk_object, property: []const u8, operation: []const u8) Crossing {
+        const object: *const northtalk.machine.objects.Object = @ptrCast(@alignCast(o.?));
+        return .{ .kind = object.kind.name, .id = object.id, .property = property, .operation = operation };
+    }
+
+    /// A Value's encoding in a crossing: each Function Value as the handle
+    /// its last exposure gave it.
+    fn writeValue(s: *Session, w: *std.Io.Writer, v: *const c.talk_value) !void {
+        const value: *const northtalk.value.Value = @ptrCast(@alignCast(v));
+        try northtalk.encoding.writeWith(w, value, .{ .context = s, .write = writeFunction });
+    }
+
+    fn writeFunction(context: ?*anyopaque, w: *std.Io.Writer, v: *const northtalk.value.Value) northtalk.encoding.Error!void {
+        const s: *Session = @ptrCast(@alignCast(context.?));
+        const handle = s.supplied.get(@intFromPtr(v)) orelse return error.NotEncodable;
+        try w.writeAll("{\"$sessionFunction\":");
+        try northtalk.encoding.quoted(w, handle);
+        try w.writeAll("}");
+    }
+
+    fn writeRef(w: *std.Io.Writer, kind: []const u8, id: []const u8) !void {
+        try w.writeAll("{\"id\":");
+        try northtalk.encoding.quoted(w, id);
+        try w.writeAll(",\"kind\":");
+        try northtalk.encoding.quoted(w, kind);
+        try w.writeAll("}");
+    }
+
+    fn writeSelector(w: *std.Io.Writer, x: Selector) !void {
+        switch (x) {
+            .index => |i| try w.print("{d}", .{i}),
+            .name => |t| try northtalk.encoding.quoted(w, t),
+        }
+    }
+
+    /// The crossing's `property-begin` envelope, numbered `n`.
+    fn beginText(s: *Session, n: u64, x: Crossing) ![]const u8 {
+        var out: std.Io.Writer.Allocating = .init(s.alloc());
+        const w = &out.writer;
+        try w.print("{{\"crossing\":{d},\"object\":", .{n});
+        try writeRef(w, x.kind, x.id);
+        try w.writeAll(",\"operation\":");
+        try northtalk.encoding.quoted(w, x.operation);
+        try w.writeAll(",\"property\":");
+        try northtalk.encoding.quoted(w, x.property);
+        if (x.selector) |sel| {
+            try w.writeAll(",\"selector\":");
+            try writeSelector(w, sel);
+        }
+        try w.writeAll(",\"type\":\"property-begin\"");
+        if (x.value) |v| {
+            try w.writeAll(",\"value\":");
+            try s.writeValue(w, v);
+        }
+        try w.writeAll("}");
+        return out.written();
+    }
+
+    /// The crossing as chapter 9's `prop` need.
+    fn needText(s: *Session, x: Crossing) ![]const u8 {
+        var out: std.Io.Writer.Allocating = .init(s.alloc());
+        const w = &out.writer;
+        try w.writeAll("{\"m\":\"prop\",\"object\":{\"$object\":[");
+        try northtalk.encoding.quoted(w, x.kind);
+        try w.writeAll(",");
+        try northtalk.encoding.quoted(w, x.id);
+        try w.writeAll("]},\"prop\":");
+        try northtalk.encoding.quoted(w, x.property);
+        if (x.value) |v| {
+            try w.writeAll(",\"value\":");
+            try s.writeValue(w, v);
+        }
+        if (x.selector != null or std.mem.eql(u8, x.property, "elements")) {
+            try w.writeAll(",\"op\":");
+            try northtalk.encoding.quoted(w, x.operation);
+        }
+        if (x.selector) |sel| {
+            try w.writeAll(",\"selector\":");
+            try writeSelector(w, sel);
+        }
+        try w.writeAll("}");
+        return out.written();
+    }
+
+    /// A replayed callback: the recorded reply to exactly this crossing.
+    fn replayed(s: *Session, x: Crossing, result: ?[*c]?*c.talk_value, err: [*c]c.talk_script_error) c.talk_call_end {
+        s.crossed += 1;
+        const begin = s.beginText(s.crossed, x) catch return c.TALK_CALL_BROKEN;
+        const reply = s.callbackReply(begin) orelse return c.TALK_CALL_BROKEN;
         return s.replyEnd(reply, result, err);
     }
 
-    fn propSet(context: ?*anyopaque, o: ?*c.talk_object, v: ?*const c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
-        _ = o;
+    fn propGet(context: ?*anyopaque, o: ?*c.talk_object, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
         const info: *PropInfo = @ptrCast(@alignCast(context.?));
         const s = info.session;
+        // Live, the Pump pauses here and `answerCrossings` asks the driver.
+        if (s.liveObjects()) return c.TALK_CALL_STARTED;
+        return s.replayed(crossingOf(o, info.name, "get"), result, err);
+    }
+
+    fn propSet(context: ?*anyopaque, o: ?*c.talk_object, v: ?*const c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+        const info: *PropInfo = @ptrCast(@alignCast(context.?));
+        const s = info.session;
+        if (s.liveObjects()) return c.TALK_CALL_STARTED;
         // The setter's argument is an exposure, before the callback.
         s.expose(&.{v});
-        const reply = s.callbackReply() orelse return c.TALK_CALL_BROKEN;
-        return s.replyEnd(reply, null, err);
+        var x = crossingOf(o, info.name, "set");
+        x.value = v;
+        return s.replayed(x, null, err);
+    }
+
+    /// Each crossing a live Pump paused at (#2276): its `property-begin`,
+    /// the driver's answer to its `prop` need, and its `property-end`; then
+    /// the Pump goes on, until it ends.
+    fn answerCrossings(s: *Session, result: *c.talk_pump_result) !void {
+        while (result.state == c.TALK_CROSSING) {
+            var pause: c.talk_crossing = undefined;
+            if (!c.talk_group_crossing(s.group, &pause)) return error.HostError;
+            const operation: []const u8 = switch (pause.op) {
+                c.TALK_CROSSING_GET => "get",
+                c.TALK_CROSSING_SET => "set",
+                c.TALK_CROSSING_COUNT => "count",
+                c.TALK_CROSSING_AT => "at",
+                else => "find",
+            };
+            var x = crossingOf(pause.object, pause.prop[0..pause.prop_len], operation);
+            switch (pause.op) {
+                c.TALK_CROSSING_SET => {
+                    x.value = pause.value;
+                    s.expose(&.{pause.value});
+                },
+                c.TALK_CROSSING_AT => x.selector = .{ .index = pause.index },
+                c.TALK_CROSSING_FIND => x.selector = .{ .name = pause.name[0..pause.name_len] },
+                else => {},
+            }
+            s.crossed += 1;
+            s.recordEnvelope(try s.beginText(s.crossed, x));
+            const answered = s.driver.prop.?(s.driver.context, try s.needText(x));
+            const reply = s.parseJson(answered) orelse std.json.Value{ .null = {} };
+            const valid = validReply(reply, pause.op == c.TALK_CROSSING_SET);
+            var end: std.Io.Writer.Allocating = .init(s.alloc());
+            try end.writer.print("{{\"crossing\":{d},\"reply\":", .{s.crossed});
+            if (valid) try std.json.Stringify.value(reply, .{}, &end.writer) else try end.writer.writeAll("{\"hostError\":true}");
+            try end.writer.writeAll(",\"type\":\"property-end\"}");
+            s.recordEnvelope(end.written());
+            var value: ?*c.talk_value = null;
+            var err = std.mem.zeroes(c.talk_script_error);
+            const ended: c.talk_call_end = if (valid) s.replyEnd(reply, if (pause.op == c.TALK_CROSSING_SET) null else &value, &err) else c.TALK_CALL_BROKEN;
+            try check_(c.talk_crossing_answer(s.group, ended, value, &err, result));
+        }
+    }
+
+    /// Whether `reply` is exactly one `prop-result` alternative a Get (or a
+    /// collection call) or a Set may give.
+    fn validReply(reply: std.json.Value, set: bool) bool {
+        if (reply != .object or reply.object.count() != 1) return false;
+        if (reply.object.get("value") != null) return !set;
+        if (reply.object.get("ok")) |x| return set and x == .bool and x.bool;
+        if (reply.object.get("hostError")) |x| return x == .bool and x.bool;
+        const f = reply.object.get("fail") orelse return false;
+        if (f != .object) return false;
+        const code = f.object.get("code") orelse return false;
+        if (code != .string) return false;
+        var it = f.object.iterator();
+        while (it.next()) |e| {
+            const k = e.key_ptr.*;
+            if (std.mem.eql(u8, k, "message")) {
+                if (e.value_ptr.* != .string) return false;
+            } else if (!std.mem.eql(u8, k, "code") and !std.mem.eql(u8, k, "data")) return false;
+        }
+        return true;
+    }
+
+    fn liveObjects(s: *const Session) bool {
+        return s.driver.prop != null;
+    }
+
+    fn recordEnvelope(s: *Session, envelope: []const u8) void {
+        if (s.driver.record) |f| f(s.driver.context, envelope);
     }
 
     /// An object's rows: its kind, id and whether it is disposed, then each
