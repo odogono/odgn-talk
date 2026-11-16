@@ -923,6 +923,10 @@ _Avoid_: timestamp, date (unqualified)
 A calendar date with an optional time of day, and no time zone attached, e.g. `2026-09-27`. A date-only Civil Date is never equal to one with a time of day, and can't be ordered against it.
 _Avoid_: local date, naive date, date (unqualified)
 
+**Zone Rules**:
+A plain value holding a named time zone's offsets from UTC over a window of Instants, copied from the Host's zone data, which lets a Script convert between Instants and Civil Dates in that zone without a Grant.
+_Avoid_: zone value, timezone, tz, zone (unqualified)
+
 ## Text construction
 
 **Raw Text Literal**:
