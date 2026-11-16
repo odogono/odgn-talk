@@ -159,7 +159,7 @@ pub fn call(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value, rais
         return model.text(gpa, nfc) catch error.OutOfMemory;
     }
     if (dateField(name)) |field| return dateValue(gpa, name, field, args[0], raised);
-    if (std.mem.eql(u8, name, "toCivil") or std.mem.eql(u8, name, "toInstant")) return civilOrInstant(a, gpa, name, args, raised);
+    if (std.mem.eql(u8, name, "toCivil") or std.mem.eql(u8, name, "toInstant")) return civilOrInstant(a, gpa, name, args, raised, m);
     if (std.mem.startsWith(u8, name, "fromFloat") or std.mem.startsWith(u8, name, "toFloat")) return float(gpa, name, args, raised);
     if (std.mem.startsWith(u8, name, "bit")) return bits(gpa, name, args, raised);
     if (std.mem.eql(u8, name, "conforms") or std.mem.eql(u8, name, "check") or std.mem.eql(u8, name, "explain")) return shapeCall(a, gpa, name, args, raised, m, null);
@@ -573,12 +573,12 @@ fn checkMinutes(n: i64) ?i64 {
     return n;
 }
 
-fn civilOrInstant(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value, raised: *Raised) Error!*Value {
+fn civilOrInstant(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value, raised: *Raised, m: *costs.Measures) Error!*Value {
     const civil = std.mem.eql(u8, name, "toCivil");
     const x = args[0];
     if (civil and x.data != .instant) return wrongKind(raised, gpa, "instant", x);
     if (!civil and x.data != .civil_date) return wrongKind(raised, gpa, "civil date", x);
-    if (args[1].data != .quantity) return wrongKind(raised, gpa, "quantity", args[1]);
+    if (args[1].data == .map) return zoneConvert(a, gpa, name, civil, args, raised, m);
     const offset = offsetSeconds(a, args[1]) orelse return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, args[1]);
     if (civil) {
         const t = x.data.instant;
@@ -588,7 +588,133 @@ fn civilOrInstant(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value
     }
     const f = x.data.civil_date;
     if (!f.has_time) return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, x);
+    // A disambiguation applies only to Zone Rules (chapter 7).
+    if (args.len > 2 and args[2].data != .nothing) return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, args[2]);
     const t: model.dates.Instant = .{ .seconds = model.dates.seconds(f) - offset, .micros = f.microsecond };
+    model.dates.validateInstant(t) catch return outOfRange(gpa, t.seconds, raised);
+    return model.scalar(gpa, .{ .instant = t }) catch error.OutOfMemory;
+}
+
+/// Zone Rules, checked whole: each change's start and offset in
+/// microseconds, and the window's exclusive end (chapter 7, Zone Rules).
+const ZoneRules = struct {
+    zone: []const u8,
+    starts: []i64,
+    offsets: []i64,
+    until: i64,
+
+    fn outside(self: ZoneRules, us: i64) bool {
+        return us < self.starts[0] or us >= self.until;
+    }
+    /// The offset in effect at `us`, inside the window.
+    fn offsetAt(self: ZoneRules, us: i64) i64 {
+        var k: usize = 0;
+        while (k + 1 < self.starts.len and self.starts[k + 1] <= us) k += 1;
+        return self.offsets[k];
+    }
+};
+
+fn instantMicros(t: model.dates.Instant) i64 {
+    return t.seconds * 1_000_000 + t.micros;
+}
+
+fn exactKeys(v: *const Value, keys: []const []const u8) bool {
+    if (v.data != .map or v.data.map.len != keys.len) return false;
+    for (keys) |k| if (v.get(k) == null) return false;
+    return true;
+}
+
+/// `scanned` is the number of changes whenever `changes` is a list, so a
+/// malformed map is charged as a well-formed one of its length would be.
+fn zoneRulesOf(a: Allocator, gpa: Allocator, name: []const u8, v: *Value, raised: *Raised, m: *costs.Measures) Error!ZoneRules {
+    const bad = struct {
+        fn f(r: *Raised, g: Allocator, n: []const u8, value: *Value) Error {
+            return fill(r, g, "out of domain", &.{.{ "function", n }}, value);
+        }
+    }.f;
+    if (!exactKeys(v, &.{ "zone", "until", "changes" })) return bad(raised, gpa, name, v);
+    const zone = v.get("zone").?;
+    const until = v.get("until").?;
+    const changes = v.get("changes").?;
+    if (changes.data == .list) m.scanned = changes.data.list.len;
+    if (zone.data != .text or until.data != .instant or changes.data != .list or changes.data.list.len == 0) return bad(raised, gpa, name, v);
+    const items = changes.data.list;
+    const starts = a.alloc(i64, items.len) catch return error.OutOfMemory;
+    const offsets = a.alloc(i64, items.len) catch return error.OutOfMemory;
+    for (items, 0..) |change, k| {
+        if (!exactKeys(change, &.{ "at", "offset" })) return bad(raised, gpa, name, v);
+        const at = change.get("at").?;
+        if (at.data != .instant) return bad(raised, gpa, name, v);
+        const seconds = offsetSeconds(a, change.get("offset").?) orelse return bad(raised, gpa, name, v);
+        starts[k] = instantMicros(at.data.instant);
+        offsets[k] = seconds * 1_000_000;
+        if (k > 0 and starts[k] <= starts[k - 1]) return bad(raised, gpa, name, v);
+    }
+    const end = instantMicros(until.data.instant);
+    if (starts[items.len - 1] >= end) return bad(raised, gpa, name, v);
+    return .{ .zone = zone.data.text, .starts = starts, .offsets = offsets, .until = end };
+}
+
+fn instantOfMicros(us: i64) model.dates.Instant {
+    return .{ .seconds = @divFloor(us, 1_000_000), .micros = @intCast(@mod(us, 1_000_000)) };
+}
+
+fn zoneConvert(a: Allocator, gpa: Allocator, name: []const u8, civil: bool, args: []*Value, raised: *Raised, m: *costs.Measures) Error!*Value {
+    const x = args[0];
+    if (civil) {
+        const rules = try zoneRulesOf(a, gpa, name, args[1], raised, m);
+        const i = instantMicros(x.data.instant);
+        if (rules.outside(i)) return fill(raised, gpa, "out of range", &.{.{ "field", "zone" }}, x);
+        const local = instantOfMicros(i + rules.offsetAt(i));
+        if (yearOf(local.seconds) < 1 or yearOf(local.seconds) > 9999) return outOfRange(gpa, local.seconds, raised);
+        return model.scalar(gpa, .{ .civil_date = model.dates.fields(local) }) catch error.OutOfMemory;
+    }
+    const f = x.data.civil_date;
+    if (!f.has_time) return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, x);
+    const rules = try zoneRulesOf(a, gpa, name, args[1], raised, m);
+    const how: ?*Value = if (args.len > 2 and args[2].data != .nothing) args[2] else null;
+    const choice: []const u8 = if (how) |h| (if (h.data == .text) h.data.text else "") else "compatible";
+    const words = [_][]const u8{ "compatible", "earlier", "later", "reject" };
+    var known = false;
+    for (words) |w| known = known or std.mem.eql(u8, w, choice);
+    if (!known) return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, how.?);
+    const local = model.dates.seconds(f) * 1_000_000 + f.microsecond;
+    for (rules.offsets) |o| if (rules.outside(local - o)) return fill(raised, gpa, "out of range", &.{.{ "field", "zone" }}, x);
+    var candidates: [2]i64 = undefined;
+    var n: usize = 0;
+    var earliest: i64 = std.math.maxInt(i64);
+    var latest: i64 = std.math.minInt(i64);
+    for (rules.starts, rules.offsets, 0..) |start, o, k| {
+        const t = local - o;
+        const end = if (k + 1 < rules.starts.len) rules.starts[k + 1] else rules.until;
+        if (start <= t and t < end) {
+            if (n < candidates.len) candidates[n] = t;
+            n += 1;
+            earliest = @min(earliest, t);
+            latest = @max(latest, t);
+        }
+    }
+    const answer: i64 = if (n == 1) candidates[0] else blk: {
+        if (std.mem.eql(u8, choice, "reject")) {
+            raised.code = "ambiguous time";
+            raised.fields[0] = .{ .key = "civil", .value = x.retain() };
+            raised.fields[1] = .{ .key = "zone", .value = model.text(gpa, rules.zone) catch return error.OutOfMemory };
+            raised.len = 2;
+            return error.Raised;
+        }
+        if (n > 1) break :blk if (std.mem.eql(u8, choice, "later")) latest else earliest;
+        // A gap: the change where the offset rises from o1 to o2 past `local`.
+        var j: usize = 1;
+        while (j < rules.starts.len) : (j += 1) {
+            const o1 = rules.offsets[j - 1];
+            const o2 = rules.offsets[j];
+            if (local - o2 < rules.starts[j] and rules.starts[j] <= local - o1) {
+                break :blk if (std.mem.eql(u8, choice, "earlier")) local - o2 else local - o1;
+            }
+        }
+        unreachable;
+    };
+    const t = instantOfMicros(answer);
     model.dates.validateInstant(t) catch return outOfRange(gpa, t.seconds, raised);
     return model.scalar(gpa, .{ .instant = t }) catch error.OutOfMemory;
 }

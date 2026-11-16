@@ -1,0 +1,61 @@
+# Unblessed: Zone Rules in toCivil and toInstant (#2254); first blessing awaits human review.
+
+> load zones identity=909a63d58f3cc9e551eb2e613b57a3d41b8b9d3c7886b7b7b51f1df46b60a66b
+> deliver d1 to=zones message=go
+> deliver d2 to=zones message=night args=[2026-07-01T21:30:00Z, {zone: "Europe/London", until: 2027-01-01T00:00:00Z, changes: [{at: 2026-01-01T00:00:00Z, offset: 0 s}, {at: 2026-03-29T01:00:00Z, offset: 1 hr}, {at: 2026-10-25T01:00:00Z, offset: 0 s}]}]
+> deliver d3 to=zones message=night args=[2026-02-01T21:30:00Z, {zone: "Europe/London", until: 2027-01-01T00:00:00Z, changes: [{at: 2026-01-01T00:00:00Z, offset: 0 s}, {at: 2026-03-29T01:00:00Z, offset: 1 hr}, {at: 2026-10-25T01:00:00Z, offset: 0 s}]}]
+> deliver d4 to=zones message=reject
+> deliver d5 to=zones message=atUntil
+> deliver d6 to=zones message=early
+> deliver d7 to=zones message=edge
+> deliver d8 to=zones message=empty
+> deliver d9 to=zones message=unsorted
+> deliver d10 to=zones message=extra
+> deliver d11 to=zones message=badOffset
+> deliver d12 to=zones message=closed
+> deliver d13 to=zones message=fixedWord
+> deliver d14 to=zones message=unknownWord
+> pump clock=2026-09-30T09:00:00Z
+seg zones/r1 start delivery=d1 handler=go clause=1 fuel=1051 alloc=12189 state=1746 end=return
+run zones/r1 outcome=completed delivery=d1 handler=go fuel=1051 alloc=12189
+seg zones/r2 start delivery=d2 handler=night clause=1 fuel=32 alloc=16 state=1173 end=return
+run zones/r2 outcome=completed delivery=d2 handler=night value="night" fuel=32 alloc=16
+seg zones/r3 start delivery=d3 handler=night clause=2 fuel=38 alloc=16 state=600 end=return
+run zones/r3 outcome=completed delivery=d3 handler=night value="day" fuel=38 alloc=16
+raise zones/r4 code="ambiguous time" at=zones:107 pos=46:10
+seg zones/r4 start delivery=d4 handler=reject clause=1 fuel=122 alloc=1317 state=568 end=error
+run zones/r4 outcome=errored delivery=d4 handler=reject error={code: "ambiguous time", civil: 2026-03-29T01:30:00, zone: "Europe/London", at: {unit: "zones", handler: "reject", line: 46, column: 10}} fuel=122 alloc=1317
+raise zones/r5 code="out of range" at=zones:115 pos=50:10
+seg zones/r5 start delivery=d5 handler=atUntil clause=1 fuel=110 alloc=1317 state=1095 end=error
+run zones/r5 outcome=errored delivery=d5 handler=atUntil error={code: "out of range", field: "zone", value: 2027-01-01T00:00:00Z, at: {unit: "zones", handler: "atUntil", line: 50, column: 10}} fuel=110 alloc=1317
+raise zones/r6 code="out of range" at=zones:123 pos=54:10
+seg zones/r6 start delivery=d6 handler=early clause=1 fuel=110 alloc=1317 state=1590 end=error
+run zones/r6 outcome=errored delivery=d6 handler=early error={code: "out of range", field: "zone", value: 2025-12-31T23:59:59Z, at: {unit: "zones", handler: "early", line: 54, column: 10}} fuel=110 alloc=1317
+raise zones/r7 code="out of range" at=zones:131 pos=59:10
+seg zones/r7 start delivery=d7 handler=edge clause=1 fuel=121 alloc=1317 state=2083 end=error
+run zones/r7 outcome=errored delivery=d7 handler=edge error={code: "out of range", field: "zone", value: 2026-01-01T00:30:00, at: {unit: "zones", handler: "edge", line: 59, column: 10}} fuel=121 alloc=1317
+raise zones/r8 code="out of domain" at=zones:143 pos=63:10
+seg zones/r8 start delivery=d8 handler=empty clause=1 fuel=45 alloc=201 state=2574 end=error
+run zones/r8 outcome=errored delivery=d8 handler=empty error={code: "out of domain", function: "toCivil", value: {zone: "X", until: 2027-01-01T00:00:00Z, changes: []}, at: {unit: "zones", handler: "empty", line: 63, column: 10}} fuel=45 alloc=201
+raise zones/r9 code="out of domain" at=zones:169 pos=69:10
+seg zones/r9 start delivery=d9 handler=unsorted clause=1 fuel=144 alloc=2061 state=3252 end=error
+run zones/r9 outcome=errored delivery=d9 handler=unsorted error={code: "out of domain", function: "toCivil", value: {zone: "Europe/London", until: 2027-01-01T00:00:00Z, changes: [{at: 2026-03-29T01:00:00Z, offset: 1 hr}, {at: 2026-01-01T00:00:00Z, offset: 0 s}]}, at: {unit: "zones", handler: "unsorted", line: 69, column: 10}} fuel=144 alloc=2061
+raise zones/r10 code="out of domain" at=zones:187 pos=75:10
+seg zones/r10 start delivery=d10 handler=extra clause=1 fuel=118 alloc=1344 state=4278 end=error
+run zones/r10 outcome=errored delivery=d10 handler=extra error={code: "out of domain", function: "toCivil", value: {zone: "Europe/London", until: 2027-01-01T00:00:00Z, changes: [{at: 2026-01-01T00:00:00Z, offset: 0 s}, {at: 2026-03-29T01:00:00Z, offset: 1 hr}, {at: 2026-10-25T01:00:00Z, offset: 0 s}], dst: "yes"}, at: {unit: "zones", handler: "extra", line: 75, column: 10}} fuel=118 alloc=1344
+raise zones/r11 code="out of domain" at=zones:219 pos=81:10
+seg zones/r11 start delivery=d11 handler=badOffset clause=1 fuel=151 alloc=1957 state=5520 end=error
+run zones/r11 outcome=errored delivery=d11 handler=badOffset error={code: "out of domain", function: "toCivil", value: {zone: "Europe/London", until: 2027-01-01T00:00:00Z, changes: [{at: 2026-01-01T00:00:00Z, offset: 0 s}, {at: 2026-03-29T01:00:00Z, offset: 30 s}, {at: 2026-10-25T01:00:00Z, offset: 0 s}]}, at: {unit: "zones", handler: "badOffset", line: 81, column: 10}} fuel=151 alloc=1957
+raise zones/r12 code="out of domain" at=zones:238 pos=87:10
+seg zones/r12 start delivery=d12 handler=closed clause=1 fuel=131 alloc=1357 state=6708 end=error
+run zones/r12 outcome=errored delivery=d12 handler=closed error={code: "out of domain", function: "toCivil", value: {zone: "Europe/London", until: 2026-10-25T01:00:00Z, changes: [{at: 2026-01-01T00:00:00Z, offset: 0 s}, {at: 2026-03-29T01:00:00Z, offset: 1 hr}, {at: 2026-10-25T01:00:00Z, offset: 0 s}]}, at: {unit: "zones", handler: "closed", line: 87, column: 10}} fuel=131 alloc=1357
+raise zones/r13 code="out of domain" at=zones:247 pos=91:10
+seg zones/r13 start delivery=d13 handler=fixedWord clause=1 fuel=39 alloc=16 state=7893 end=error
+run zones/r13 outcome=errored delivery=d13 handler=fixedWord error={code: "out of domain", function: "toInstant", value: "later", at: {unit: "zones", handler: "fixedWord", line: 91, column: 10}} fuel=39 alloc=16
+raise zones/r14 code="out of domain" at=zones:256 pos=95:10
+seg zones/r14 start delivery=d14 handler=unknownWord clause=1 fuel=122 alloc=1317 state=8401 end=error
+run zones/r14 outcome=errored delivery=d14 handler=unknownWord error={code: "out of domain", function: "toInstant", value: "nearest", at: {unit: "zones", handler: "unknownWord", line: 95, column: 10}} fuel=122 alloc=1317
+pumped state=idle fuel=2334
+
+> vars
+vars zones winter=2026-02-01T12:00:00 summer=2026-07-01T22:30:00 late=true back=2026-07-01T21:30:00Z gap=[2026-03-29T01:30:00Z, 2026-03-29T00:30:00Z, 2026-03-29T01:30:00Z] overlap=[2026-10-25T00:30:00Z, 2026-10-25T00:30:00Z, 2026-10-25T01:30:00Z] fixed=2026-03-29T00:30:00Z

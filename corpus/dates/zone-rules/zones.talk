@@ -1,0 +1,96 @@
+-- zones.talk: the zone-rules case. The window is 2026, UTC+0 in winter
+-- and UTC+1 from 29 March 01:00Z to 25 October 01:00Z.
+
+script variable winter
+script variable summer
+script variable late
+script variable back
+script variable gap
+script variable overlap
+script variable fixed
+
+function london
+  return {zone: "Europe/London", until: "2027-01-01T00:00:00Z" as instant,
+    changes: [{at: "2026-01-01T00:00:00Z" as instant, offset: 0 s},
+      {at: "2026-03-29T01:00:00Z" as instant, offset: 1 hr},
+      {at: "2026-10-25T01:00:00Z" as instant, offset: 0 s}]}
+end london
+
+function local t
+  return t as civil date
+end local
+
+on go
+  put toCivil("2026-02-01T12:00:00Z" as instant, london()) into winter
+  put toCivil("2026-07-01T21:30:00Z" as instant, london()) into summer
+  put hour(summer) >= 22 into late
+  put toInstant(summer, london()) into back
+  put [toInstant(local("2026-03-29T01:30:00"), london()),
+    toInstant(local("2026-03-29T01:30:00"), london(), "earlier"),
+    toInstant(local("2026-03-29T01:30:00"), london(), "later")] into gap
+  put [toInstant(local("2026-10-25T01:30:00"), london()),
+    toInstant(local("2026-10-25T01:30:00"), london(), "earlier"),
+    toInstant(local("2026-10-25T01:30:00"), london(), "later")] into overlap
+  put toInstant(local("2026-03-29T01:30:00"), 1 hr) into fixed
+end go
+
+on night t, z where hour(toCivil(t, z)) >= 22
+  return "night"
+end night
+
+on night t, z
+  return "day"
+end night
+
+on reject
+  return toInstant(local("2026-03-29T01:30:00"), london(), "reject")
+end reject
+
+on atUntil
+  return toCivil("2027-01-01T00:00:00Z" as instant, london())
+end atUntil
+
+on early
+  return toCivil("2025-12-31T23:59:59Z" as instant, london())
+end early
+
+on edge
+  -- 00:30 read at UTC+1 is before the window opens.
+  return toInstant(local("2026-01-01T00:30:00"), london())
+end edge
+
+on empty
+  return toCivil("2026-02-01T12:00:00Z" as instant, {zone: "X", until: "2027-01-01T00:00:00Z" as instant, changes: []})
+end empty
+
+on unsorted
+  put london() into z
+  put [item 2 of the changes of z, item 1 of the changes of z] into the changes of z
+  return toCivil("2026-07-01T12:00:00Z" as instant, z)
+end unsorted
+
+on extra
+  put london() into z
+  put "yes" into the dst of z
+  return toCivil("2026-07-01T12:00:00Z" as instant, z)
+end extra
+
+on badOffset
+  put london() into z
+  put 30 s into the offset of item 2 of the changes of z
+  return toCivil("2026-02-01T12:00:00Z" as instant, z)
+end badOffset
+
+on closed
+  put london() into z
+  put "2026-10-25T01:00:00Z" as instant into the until of z
+  return toCivil("2026-02-01T12:00:00Z" as instant, z)
+end closed
+
+on fixedWord
+  return toInstant(local("2026-03-29T01:30:00"), 1 hr, "later")
+end fixedWord
+
+on unknownWord
+  return toInstant(local("2026-03-29T01:30:00"), london(), "nearest")
+end unknownWord
