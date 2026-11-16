@@ -19,7 +19,7 @@ A Host may now give a Script **Zone Rules**: a plain map copied from the Host's 
 **Considered**
 
 - *An immediate Operation called inside an expression*, such as `(ask calendar to offset t, zone)`. Rejected here: it lets expressions have effects, against why `ask` is a statement, and Guards still couldn't use it.
-- *A new value kind only the Host can build.* Rejected: it needs a type, display form, save-format tag, Shape kind and boundary conversion in every Core, to gain one-time validation and protection against forgery that only misleads the forging Script.
+- *A new value kind only the Host can build.* Rejected: it needs a type, display form, save-format tag, Shape kind and boundary conversion in every Core, to gain one-time validation and protection against forgery that only misleads the forging Script. Checking the whole map makes a call's cost grow with the window, about 10 Fuel plus 2 per change, so a wide window makes every call dearer. If that ever matters, a kind checked once at construction, with a lookup by binary search, becomes worth its cost.
 - *Functions in the `date` Library over the map.* Rejected, because Guards can't call them.
 - *Using the nearest offset, or computing from the zone's rule for later years, outside the window.* Rejected: the first gives wrong answers silently, and the second needs a rule parser for a window the Host can simply widen.
 - *A `calendar` Operation that returns Zone Rules.* Left for later: every Host offering `calendar` would have to implement it, and so far the Hosts that need Zone Rules pass them in.
