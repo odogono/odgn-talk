@@ -4,6 +4,8 @@ status: accepted
 
 # A Peer may travel inside a Remote Send, and holding it is authority
 
+Amended by [ADR 0181](0181-the-peer-router-owns-peer-exposure-lifetime-guarded-by-peer-kit.md): revoking or disabling the Grant that made a Peer Exposure also withdraws it, and each Host's Peer Router carries that Lifetime, checked by `corpus/peer-kit`.
+
 Under [ADR 0153](0153-a-send-to-a-peer-is-a-remote-send-answered-like-an-operation.md) a Peer never leaves its Group, so a server can't push to a client, and a client can't hand a server a channel to call back on, without inventing a name that anyone could `reach`. Erlang passes pids and E passes far references, and both get two-way conversations, delegation and callbacks from that one move. So a Peer may now travel inside a Remote Send, and holding one is permission to send to it, as in object-capability systems such as E, OCapN and Cap'n Proto.
 
 ```talk

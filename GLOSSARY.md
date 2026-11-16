@@ -165,12 +165,20 @@ One HTTP request and its response, delivered to the Script whose Serve Registrat
 _Avoid_: request (alone), connection, context
 
 **Peer**:
-A Host Object that stands for one Exposed Script in another Script Group, on this Host or another, got from a `peer` Grant or handed over in a Remote Send. Holding one is permission to send to it, and it travels only inside Remote Sends.
+A Host Object that stands for one Peer Exposure of a Script in another Script Group, on this Host or another, got from a `peer` Grant or handed over in a Remote Send. Holding one is permission to send to it, and it travels only inside Remote Sends.
 _Avoid_: node, remote, pid, proxy, Peer Language (that is a benchmark's comparison language)
 
 **Exposed Script**:
 A Script that has opted in, through its own `peer` Grant, to receiving Remote Sends: under a logical name by which Scripts in other Groups may reach it, or unnamed, through a Peer it hands out. A Script that isn't exposed can't receive a Remote Send.
 _Avoid_: exported Script, published Script, served Script, Exposure (that is a Value Exposure)
+
+**Peer Exposure**:
+One way in to an Exposed Script: under a logical name, or unnamed and reached only through the Peers made for it. A Script has as many as it has names and unnamed `expose`s, and each lasts until it is withdrawn or its Lifetime ends, keeping its identity across a Restore.
+_Avoid_: exposure (alone; that is a Value Exposure), endpoint, export, Peer Registration
+
+**Peer Router**:
+The Host component that holds a Host's Peer Exposures, routes Remote Sends to them and withdraws and restores them over their Lifetime. Moving the bytes is its links' job.
+_Avoid_: peer table, exposure table, broker
 
 **Remote Send**:
 A `send` whose receiver is a Peer. It is delivered at most once, arrives at the Exposed Script as an ordinary Delivery, and with `and wait` gets the Run's return value as its reply.
