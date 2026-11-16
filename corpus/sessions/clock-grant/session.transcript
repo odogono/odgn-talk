@@ -1,0 +1,19 @@
+# Unblessed: the built-in clock granted with :grant (#2275); first blessing awaits human review.
+# The built-in clock takes no binding, and reads each Pump's Clock reading.
+> :grant time clock now
+! bad arguments
+> :grant time clock
+> :clock virtual 2026-09-30T10:00:00Z
+> on reading
+|   ask time to now
+|   say it
+| end reading
+> reading
+2026-09-30T10:00:00Z
+> on later
+|   wait 5 s
+|   reading
+| end later
+> send later to session
+> :clock advance 5 s
+[session/r3] 2026-09-30T10:00:05Z

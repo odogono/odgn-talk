@@ -458,6 +458,10 @@ pub const Session = struct {
         var def: ?*c.talk_capability_def = null;
         if (std.mem.eql(u8, capability, "store")) {
             def = try s.stores.capability(s.core);
+        } else if (std.mem.eql(u8, capability, "clock")) {
+            // `now` reads the Pump's Clock reading, at no cost.
+            const costs = [_]c.talk_named_cost{.{ .name = "now", .name_len = 3, .cost = .{ .fuel = 0, .alloc = 0 } }};
+            try check_(c.talk_clock_capability(s.core, &.{ .entries = &costs, .len = 1 }, &def));
         } else if (std.mem.eql(u8, capability, "user")) {
             const costs = [_]c.talk_named_cost{ .{ .name = "confirm", .name_len = 7, .cost = .{ .fuel = 0, .alloc = 0 } }, .{ .name = "choose", .name_len = 6, .cost = .{ .fuel = 0, .alloc = 0 } }, .{ .name = "enter", .name_len = 5, .cost = .{ .fuel = 0, .alloc = 0 } }, .{ .name = "notify", .name_len = 6, .cost = .{ .fuel = 0, .alloc = 0 } } };
             const impl: c.talk_user_impl = .{ .context = s, .confirm = userPrompt, .choose = userPrompt, .enter = userPrompt, .notify = userNotify };
@@ -1447,7 +1451,7 @@ pub const Session = struct {
             if (std.mem.eql(u8, m.capability, capability)) break true;
         } else false;
         const is_store = std.mem.eql(u8, capability, "store");
-        const builtin = std.mem.eql(u8, capability, "user") or is_store;
+        const builtin = std.mem.eql(u8, capability, "clock") or std.mem.eql(u8, capability, "user") or is_store;
         if (!mocked and !builtin) return s.say("! bad arguments");
         // Only `calendar`, `locale` and `store` take a binding.
         if (args.len == 3 and !is_store) return s.say("! bad arguments");

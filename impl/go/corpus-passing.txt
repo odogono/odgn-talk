@@ -389,6 +389,7 @@ sessions/apropos
 sessions/argument-labels
 sessions/basics
 sessions/cancel
+sessions/clock-grant
 sessions/decomposed-source
 sessions/describe
 sessions/export-and-library
