@@ -627,12 +627,16 @@ export const fuelRates = [
   {
     "key": "builtin.toCivil",
     "fixed": 10,
-    "open": []
+    "open": [
+      "2 * scanned"
+    ]
   },
   {
     "key": "builtin.toInstant",
     "fixed": 10,
-    "open": []
+    "open": [
+      "2 * scanned"
+    ]
   },
   {
     "key": "catch-accept",

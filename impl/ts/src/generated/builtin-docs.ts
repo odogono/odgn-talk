@@ -254,11 +254,11 @@ export const builtinDocs: Readonly<Record<string, { call: string; gives: string 
   },
   "toCivil": {
     "call": "toCivil(i, offset)",
-    "gives": "The date-time on the wall clock at `offset` from UTC at the Instant `i`"
+    "gives": "The date-time on the wall clock at the Instant `i`, at `offset` from UTC or under the Zone Rules `offset`"
   },
   "toInstant": {
-    "call": "toInstant(c, offset)",
-    "gives": "The Instant at which the wall clock at `offset` from UTC reads the date-time `c`"
+    "call": "toInstant(c, offset, disambiguation = nothing)",
+    "gives": "The Instant at which the wall clock, at `offset` from UTC or under the Zone Rules `offset`, reads the date-time `c`"
   },
   "pi": {
     "call": "3.141592653589793238462643383279503",

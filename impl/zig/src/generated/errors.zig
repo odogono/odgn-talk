@@ -383,10 +383,11 @@ pub const errors: ErrorsTable = .{
                 "civil",
                 "zone",
             },
-            .raised_when = "`toInstant` with `\"reject\"` meets a DST gap or overlap; the Host fails with it",
+            .raised_when = "`toInstant` with `\"reject\"` meets a DST gap or overlap; the Host fails with it from `calendar`, and the Core raises it from the `toInstant` Built-in given Zone Rules",
             .sources = &.{
                 "ADR 0023",
                 "ADR 0033",
+                "ADR 0179",
             },
             .message = "{civil} is ambiguous, or doesn't exist, in {zone}",
         },

@@ -384,10 +384,11 @@ var Errors = ErrorsTable{
 				"civil",
 				"zone",
 			},
-			RaisedWhen: "`toInstant` with `\"reject\"` meets a DST gap or overlap; the Host fails with it",
+			RaisedWhen: "`toInstant` with `\"reject\"` meets a DST gap or overlap; the Host fails with it from `calendar`, and the Core raises it from the `toInstant` Built-in given Zone Rules",
 			Sources: []string{
 				"ADR 0023",
 				"ADR 0033",
+				"ADR 0179",
 			},
 			Message: "{civil} is ambiguous, or doesn't exist, in {zone}",
 		},

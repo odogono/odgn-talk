@@ -120,6 +120,10 @@ var Costs = CostsTable{
 			Issue:  "#1754",
 			Change: "A fired `wait for` writes its bound values into their slots when it fires, and while its Run is ready its event retains only its message, so Persistent State counts each bound value once, in place of what its slot held, with no extra slot per bind; Cost Model 0 remains provisional",
 		},
+		CostsTableChangeEntry{
+			Issue:  "#2252",
+			Change: "`toCivil` and `toInstant` charge 2 Fuel per change in Zone Rules given as their offset, on top of their base; a fixed offset costs as before; Cost Model 0 remains provisional",
+		},
 	},
 	Measure: CostsTableMeasure{
 		Size:       "the logical size of the value, as the [[size]] table gives it",
@@ -774,13 +778,15 @@ var Costs = CostsTable{
 		},
 		CostsTableRateEntry{
 			Key:   "builtin.toCivil",
-			Fuel:  "10",
+			Fuel:  "10 + 2 * scanned",
 			Alloc: "size(result)",
+			Input: "`scanned` is the number of changes in Zone Rules given as `offset`, each checked and compared, and 0 for a fixed offset",
 		},
 		CostsTableRateEntry{
 			Key:   "builtin.toInstant",
-			Fuel:  "10",
+			Fuel:  "10 + 2 * scanned",
 			Alloc: "size(result)",
+			Input: "`scanned` is the number of changes in Zone Rules given as `offset`, each checked and compared, and 0 for a fixed offset",
 		},
 		CostsTableRateEntry{
 			Key:  "catch-accept",

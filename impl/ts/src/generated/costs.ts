@@ -220,9 +220,9 @@ export const makeCostRates = (measure: Measure): readonly ((m: Measured, into?: 
   // builtin.hasTime
   (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 2; into.alloc = 0; return into; },
   // builtin.toCivil
-  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 10; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 10 + Math.ceil((2 * (m.scanned ?? 0)) / 1); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // builtin.toInstant
-  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 10; into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
+  (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 10 + Math.ceil((2 * (m.scanned ?? 0)) / 1); into.alloc = Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1); return into; },
   // catch-accept
   (m, into = { fuel: 0, alloc: 0 }) => { into.fuel = 1; into.alloc = 0; return into; },
   // catch-next

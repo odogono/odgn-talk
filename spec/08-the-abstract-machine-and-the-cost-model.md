@@ -1209,8 +1209,8 @@ Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-bu
 | `isoWeek` | `6` | 0 |  |
 | `isoWeekYear` | `6` | 0 |  |
 | `hasTime` | `2` | 0 |  |
-| `toCivil` | `10` | `size(result)` |  |
-| `toInstant` | `10` | `size(result)` |  |
+| `toCivil` | `10 + 2 * scanned` | `size(result)` | `scanned` is the number of changes in Zone Rules given as `offset`, each checked and compared, and 0 for a fixed offset |
+| `toInstant` | `10 + 2 * scanned` | `size(result)` | `scanned` is the number of changes in Zone Rules given as `offset`, each checked and compared, and 0 for a fixed offset |
 | `offerAvailable` | `3 + utf8(x1) / 16` | 0 |  |
 
 <!-- end -->
@@ -1242,6 +1242,7 @@ Cost Model 0 is provisional, so it changes in place, and each change is listed i
 | [#1350](https://github.com/odogono/odgn-talk/issues/1350) | Joins reserve 1 Fuel per started local Result Target and 3 per started Script Variable Result Target at successful completion, after answer conversion and charging and before any target write; no registration charge, extra allocation or descriptor logical size; Cost Model 0 remains provisional |
 | [#1627](https://github.com/odogono/odgn-talk/issues/1627) | Add list-elements for `the elements of o` and element Whose Clauses, at a 3-Fuel base, then each collection callback's declared cost and result conversion, then items(result) Fuel and size(result) allocation for the list; Cost Model 0 remains provisional. |
 | [#1754](https://github.com/odogono/odgn-talk/issues/1754) | A fired `wait for` writes its bound values into their slots when it fires, and while its Run is ready its event retains only its message, so Persistent State counts each bound value once, in place of what its slot held, with no extra slot per bind; Cost Model 0 remains provisional |
+| [#2252](https://github.com/odogono/odgn-talk/issues/2252) | `toCivil` and `toInstant` charge 2 Fuel per change in Zone Rules given as their offset, on top of their base; a fixed offset costs as before; Cost Model 0 remains provisional |
 
 <!-- end -->
 
