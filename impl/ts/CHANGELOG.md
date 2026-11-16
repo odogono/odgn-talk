@@ -7,6 +7,14 @@ tracked separately in the Spec's Data Files.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-16
+
+### Added
+
+- **ts:** `zoneRules(zone, from, until)` builds Zone Rules from the runtime's `Intl` zone data, for `toCivil` and `toInstant` to convert in a named zone without a Grant.
+- **ts:** The TS Core's `toCivil` and `toInstant` convert in a named time zone given Zone Rules.
+- **spec:** `toCivil` and `toInstant` convert in a named time zone without a Grant, given Zone Rules that the Host builds from its zone data.
+
 ## [0.8.0] - 2026-11-13
 
 ### Added
