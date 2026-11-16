@@ -12,3 +12,5 @@ golang.org/x/text v0.43.0 h1:1QivrlhwAsnMOcqgOdl9my7s9OyZl8O5/UGUTJVXoWc=
 golang.org/x/text v0.43.0/go.mod h1:hbSIYA/amXcRXTFSZqh8tWHEoqRvvbKPJ2uz/KU+a+s=
 northtalk.org/go v0.2.0 h1:zhnFDG+AvnzdoQDzG4+qL4T5T3pAoUWLAwanTDYhlzg=
 northtalk.org/go v0.2.0/go.mod h1:Os+6PinfsNFVZPvZoDrflYB56TG/zUcjtoLjYG9NHZs=
+northtalk.org/go v0.3.0 h1:phbSGE8NQJNxrAE+QdLGplxcZpb/IF3awwAGdI+W2Vc=
+northtalk.org/go v0.3.0/go.mod h1:Os+6PinfsNFVZPvZoDrflYB56TG/zUcjtoLjYG9NHZs=
