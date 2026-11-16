@@ -1,0 +1,34 @@
+# Several Groups on one Host: Remote Sends between them, and a discarded Group's exposures. A router that serves one Group skips this file.
+groups = { g = ["a"], h = ["x"] }
+
+[[sequence]]
+name = "Remote Sends cross between Groups"
+groups = { g = ["a"], h = ["x"] }
+steps = [
+  { do = "expose", name = "inbox", as = "p" },
+  { do = "post", group = "h", script = "x", peer = "p", message = "ping", args = "[1]", deliveries = [
+    { kind = "deliver", message = "ping", args = "[1]" },
+  ] },
+  { do = "call", group = "h", script = "x", peer = "p", message = "ask", args = "[]", deliveries = [
+    { kind = "request", message = "ask", args = "[]" },
+  ] },
+  { do = "expose", group = "h", script = "x", name = "inbox", error = '{code: "name in use"}' },
+]
+
+[[sequence]]
+name = "detaching a Group withdraws its exposures and frees their names"
+groups = { g = ["a", "b"], h = ["x"] }
+steps = [
+  { do = "expose", name = "inbox", as = "p" },
+  { do = "expose", as = "u" },
+  { do = "expose", script = "b", as = "v" },
+  { do = "expose", group = "h", script = "x", name = "other", as = "q" },
+  { do = "detach" },
+  { do = "call", group = "h", script = "x", peer = "p", message = "ask", args = "[]", error = '{code: "send failed", reason: "not exposed"}' },
+  { do = "call", group = "h", script = "x", peer = "u", message = "ask", args = "[]", error = '{code: "send failed", reason: "not exposed"}' },
+  { do = "call", group = "h", script = "x", peer = "v", message = "ask", args = "[]", error = '{code: "send failed", reason: "not exposed"}' },
+  { do = "post", group = "h", script = "x", peer = "q", message = "ping", args = "[]", deliveries = [
+    { group = "h", script = "x", kind = "deliver", message = "ping", args = "[]" },
+  ] },
+  { do = "expose", group = "h", script = "x", name = "inbox", as = "r" },
+]

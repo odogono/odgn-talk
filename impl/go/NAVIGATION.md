@@ -12,7 +12,7 @@ All commands below run from the repository root. See the
 [Spec change-impact guide](../../docs/agents/spec-changes.md) when changing Data
 Files, grammar, or lowering.
 
-The module is `northtalk.org/go` ([ADR 0148](../../docs/adr/0148-the-go-embedding-publishes-as-northtalk-org-go.md)). Its supported packages are the root, `driver`, `session`, `store` and `notify`; put anything else under `internal/`. The root `go.work` joins the Go modules, so check tidiness with `tools/go/tidy-check.sh impl/go`, not `go mod tidy`.
+The module is `northtalk.org/go` ([ADR 0148](../../docs/adr/0148-the-go-embedding-publishes-as-northtalk-org-go.md)). Its supported packages are the root, `driver`, `session`, `store`, `notify` and `peer`; put anything else under `internal/`. The root `go.work` joins the Go modules, so check tidiness with `tools/go/tidy-check.sh impl/go`, not `go mod tidy`.
 
 ## Language, lowering and execution
 
@@ -139,6 +139,13 @@ The Go module runs the embedded Zig Core, with no Go parser, checker, compiler o
 - Rules: [The HTTP router](../../spec/09-embedding.md#the-http-router), [HTTP Exchanges](../../spec/07-libraries-and-the-standard-library.md#http-exchanges), [Fetching](../../spec/07-libraries-and-the-standard-library.md#fetching), [ADR 0151](../../docs/adr/0151-http-fetch-makes-one-buffered-request-to-an-origin-the-grant-allows.md)
 - Tests and cases: [http kit](../../corpus/http-kit/) and [its runner](internal/httphost/kit_test.go), [fetch tests](internal/httphost/fetch_test.go) against local HTTP servers and the shared [TLS fixtures](../ts/tests/fixtures/http-tls/)
 - First check: `go -C impl/go test -race ./internal/httphost`
+
+## Peer Router
+
+- Implementation: [router](peer/router.go), the [`peer` Capability](peer_capability.go)
+- Rules: [The peer router](../../spec/09-embedding.md#the-peer-router), [ADR 0181](../../docs/adr/0181-the-peer-router-owns-peer-exposure-lifetime-guarded-by-peer-kit.md)
+- Tests and cases: [peer kit](../../corpus/peer-kit/) and [its runner](peer/kit_test.go), [real-Group tests](peer/router_test.go)
+- First check: `go -C impl/go test -race ./peer`
 
 ## Notification router
 

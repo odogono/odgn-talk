@@ -1,4 +1,4 @@
-package peers
+package peer
 
 import (
 	"testing"
@@ -80,7 +80,7 @@ type world struct {
 
 func setUp(t *testing.T) *world {
 	core := talk.New()
-	router := New(core)
+	router := New(core, Options{})
 	costs := talk.Costs{}
 	for _, name := range []string{"expose", "unexpose", "reach", "post", "call", "caller"} {
 		costs[name] = talk.Cost{Fuel: 3}
@@ -199,7 +199,7 @@ func TestRefusedAndUnexposedNames(t *testing.T) {
 // `reach`, so a send to the Peer it reached still works (chapter 7).
 func TestGrantsAsUsedKeepsRemoteSends(t *testing.T) {
 	core := talk.New()
-	router := New(core)
+	router := New(core, Options{})
 	costs := talk.Costs{}
 	for _, name := range []string{"expose", "unexpose", "reach", "post", "call", "caller"} {
 		costs[name] = talk.Cost{Fuel: 3}
