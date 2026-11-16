@@ -275,8 +275,10 @@ typedef struct talk_object_elements {
 
 Each successful callback returns `TALK_CALL_ANSWERED` and an owned result
 reference, including for Nothing. Script errors use `TALK_CALL_FAILED` and
-the error output, as immediate Operations do. `TALK_CALL_STARTED`,
-`TALK_CALL_LIMITED` and `TALK_CALL_BROKEN` are Host errors.
+the error output, as immediate Operations do. Inside `talk_pump`,
+`TALK_CALL_STARTED` pauses the Pump at the crossing, as a property's Get
+does, until `talk_crossing_answer` (#2276). Anywhere else it, like
+`TALK_CALL_LIMITED` and `TALK_CALL_BROKEN`, is a Host error.
 The find name is borrowed UTF-8 for that callback, with its explicit byte
 length. Copy declaration metadata at registration, retaining callback/context
 pointers under the same lifetime rules as properties. Adding a field changes

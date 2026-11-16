@@ -1867,6 +1867,149 @@ static int object_elements_test(void) {
     return bad;
 }
 
+/* A Crossing Pause (#2276): a property or collection callback that returns
+ * TALK_CALL_STARTED in talk_pump pauses it, and talk_crossing_answer goes on
+ * with it. The Trace is the one immediate answers give. */
+static bool crossing_defers = false;
+static int64_t crossing_level = 0;
+static talk_call_end crossing_get(void *context, talk_object *o, talk_value **result, talk_script_error *error) {
+    (void)context; (void)o; (void)error;
+    if (crossing_defers) return TALK_CALL_STARTED;
+    return talk_int(crossing_level, result) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_BROKEN;
+}
+static talk_call_end crossing_set(void *context, talk_object *o, const talk_value *v, talk_script_error *error) {
+    (void)context; (void)o; (void)error;
+    if (crossing_defers) return TALK_CALL_STARTED;
+    const talk_decimal *d = NULL;
+    return talk_value_as_dec(v, &d) && talk_decimal_int64(d, &crossing_level) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_BROKEN;
+}
+static talk_call_end crossing_count(void *context, talk_object *o, talk_value **result, talk_script_error *error) {
+    (void)context; (void)o; (void)result;
+    if (crossing_defers) return TALK_CALL_STARTED;
+    error->code = "empty";
+    error->code_len = 5;
+    return TALK_CALL_FAILED;
+}
+static talk_call_end crossing_at(void *context, talk_object *o, int64_t index, talk_value **result, talk_script_error *error) {
+    (void)context; (void)o; (void)index; (void)error;
+    return talk_nothing(result) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_BROKEN;
+}
+static talk_call_end crossing_find(void *context, talk_object *o, const char *name, size_t name_len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)o; (void)name; (void)name_len; (void)error;
+    return talk_nothing(result) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_BROKEN;
+}
+
+static const char *crossing_source = "on go\n  put the level of g into a\n  set the level of g to a + 1\n  try\n    put the number of elements of g into n\n  catch e\n    return [a, the level of g, e's code]\n  end try\nend go\n";
+
+/* Runs crossing_source once; with defers, answers each pause as the
+ * immediate callbacks would. Its Trace is in trace. */
+static int crossing_run(bool defers, int *pauses, char *pumped_trace) {
+    crossing_defers = defers;
+    crossing_level = 4;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_object_kind_def tile_def = {"tile", 4, NULL, 0, NULL, NULL, 0, NULL};
+    talk_object_kind *tile = NULL;
+    int bad = talk_define_object_kind(core, &tile_def, &tile) != TALK_OK;
+    talk_shape *tile_shape = NULL;
+    bad |= talk_object_shape(tile, &tile_shape) != TALK_OK;
+    talk_prop props[] = {{"level", 5, talk_any_shape(), crossing_get, crossing_set, NULL, {1, 0}, {1, 0}}};
+    talk_object_elements elements = {tile_shape, crossing_count, crossing_at, crossing_find, NULL, {1, 0}, {1, 0}, {1, 0}};
+    talk_object_kind_def def = {"gauge", 5, props, 1, NULL, NULL, 0, &elements};
+    talk_object_kind *gauge = NULL;
+    bad |= talk_define_object_kind(core, &def, &gauge) != TALK_OK;
+    talk_shape_release(tile_shape);
+    talk_object *g = NULL;
+    bad |= talk_group_object(group, gauge, "g", 1, NULL, &g) != TALK_OK;
+    talk_load_object bound[] = {{"g", 1, g}};
+    talk_load_options load = {"s", 1, crossing_source, strlen(crossing_source), NULL, 0, false, NULL, bound, 1, NULL, false};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message go = {"go", 2, NULL, 0, NULL};
+    talk_pending *pending = NULL;
+    bad |= talk_script_request(script, &go, NULL, &pending) != TALK_OK;
+    talk_pump_result pumped = {0};
+    bad |= talk_pump(group, 1790000000, 0, NULL, &pumped) != TALK_OK;
+    talk_crossing x;
+    while (pumped.state == TALK_CROSSING) {
+        (*pauses)++;
+        if (!talk_group_crossing(group, &x)) return 1;
+        /* The Group refuses other worker calls until the answer. */
+        bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_REENTRANT_CALL;
+        talk_value *v = NULL;
+        talk_script_error e = {0};
+        talk_call_end end = TALK_CALL_ANSWERED;
+        if (x.op == TALK_CROSSING_GET) {
+            bad |= x.prop_len != 5 || memcmp(x.prop, "level", 5) != 0 || x.value != NULL;
+            bad |= talk_int(crossing_level, &v) != TALK_OK;
+        } else if (x.op == TALK_CROSSING_SET) {
+            const talk_decimal *d = NULL;
+            bad |= x.value == NULL || !talk_value_as_dec(x.value, &d) || talk_decimal_int64(d, &crossing_level) != TALK_OK;
+        } else if (x.op == TALK_CROSSING_COUNT) {
+            bad |= x.prop_len != 8 || memcmp(x.prop, "elements", 8) != 0;
+            e.code = "empty";
+            e.code_len = 5;
+            end = TALK_CALL_FAILED;
+        } else {
+            bad = 1;
+        }
+        bad |= x.object != g;
+        memset(&pumped, 0, sizeof pumped);
+        bad |= talk_crossing_answer(group, end, v, &e, &pumped) != TALK_OK;
+    }
+    bad |= talk_group_crossing(group, &x);
+    bad |= talk_crossing_answer(group, TALK_CALL_ANSWERED, NULL, NULL, NULL) != TALK_UNKNOWN_CALL;
+    bad |= pumped.state != TALK_IDLE || pumped.fuel_used <= 0;
+    talk_reports_release(pumped.reports);
+    bad |= !talk_pending_done(pending);
+    talk_value *r = NULL;
+    talk_owned_bytes shown = {0};
+    bad |= talk_pending_result(pending, &r) != TALK_OK || talk_value_string(r, &shown) != TALK_OK;
+    bad |= shown.len != 15 || memcmp(shown.data, "[4, 5, \"empty\"]", 15) != 0;
+    talk_owned_bytes_release(&shown);
+    talk_value_release(r);
+    talk_pending_release(pending);
+    memcpy(pumped_trace, trace, sizeof trace);
+    /* Outside talk_pump, TALK_CALL_STARTED stays host error. */
+    talk_pending *combined = NULL;
+    talk_pump_result once = {0};
+    bad |= talk_script_request_pump(script, &go, 1790000001, 0, NULL, NULL, &combined, &once) != TALK_OK;
+    bad |= once.state != TALK_IDLE;
+    talk_reports_release(once.reports);
+    talk_pending_release(combined);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
+/* Drops each refused Pump's two records from t, in place. */
+static void drop_refused_pumps(char *t) {
+    const char *refused = "> pump clock=2026-09-21T14:13:20Z\nrefused code=\"reentrant call\"\n";
+    size_t n = strlen(refused);
+    char *at;
+    while ((at = strstr(t, refused)) != NULL) memmove(at, at + n, strlen(at + n) + 1);
+}
+
+static int crossing_pause_test(void) {
+    static char immediate[sizeof trace], deferred[sizeof trace];
+    int pauses = 0;
+    int bad = crossing_run(false, &pauses, immediate);
+    bad |= pauses != 0;
+    bad |= crossing_run(true, &pauses, deferred);
+    bad |= pauses != 4;
+    bad |= strstr(deferred, "refused code=\"reentrant call\"") == NULL;
+    drop_refused_pumps(deferred);
+    bad |= strcmp(immediate, deferred) != 0;
+    bad |= strstr(trace, "raise s/r2 code=\"host error\"") == NULL;
+    if (bad) fprintf(stderr, "pauses %d\nimmediate:\n%s\ndeferred:\n%s\nafter:\n%s", pauses, immediate, deferred, trace);
+    return bad;
+}
+
 /* The C Host receives the actual Function Value in error metadata. */
 static int function_error_during_test(void) {
     talk_core *core = talk_new();
@@ -3552,6 +3695,7 @@ int main(void) {
     expect(function_error_during_test() == 0, "Function error during retains fn and arguments through talk.h");
     expect(function_call_test() == 0, "Function Value calls refuse loose overrides and full or stopped Homes as talk.go does");
     expect(object_elements_test() == 0, "Object Collections are checked and copied at registration and answer their callbacks");
+    expect(crossing_pause_test() == 0, "a deferred property or collection callback pauses talk_pump until talk_crossing_answer");
     expect(object_path_test() == 0, "Host Object costs, owners, full climbs and stopped receivers follow talk.go and talk.ts");
     expect(negative_override_test() == 0, "a negative override is refused with its input and refused records");
     expect(decision_cancel_test() == 0, "cancelling a Decision by delivery or broadcast id spares sealed recipients and does nothing after the seal");

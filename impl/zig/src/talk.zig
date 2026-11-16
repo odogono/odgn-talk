@@ -507,7 +507,66 @@ pub const Message = extern struct {
     limits: ?*const LimitOverride = null,
 };
 
-pub const GroupState = enum(c_int) { idle, sliced, stopped, rewound };
+pub const GroupState = enum(c_int) { idle, sliced, stopped, rewound, crossing };
+
+/// Which callback a Crossing Pause stopped at.
+pub const CrossingOp = enum(c_int) { get, set, count, at, find };
+
+/// A Crossing Pause as the Host reads it; it borrows from the Group.
+pub const CrossingInfo = extern struct {
+    object: *objects.Object,
+    prop: [*]const u8,
+    prop_len: usize,
+    op: CrossingOp,
+    index: i64,
+    name: [*]const u8,
+    name_len: usize,
+    value: ?*const Value,
+};
+
+/// A property or collection callback that returned TALK_CALL_STARTED in
+/// talk_pump (#2276): the Pump is paused at it until the Host answers.
+const Crossing = struct {
+    object: *objects.Object,
+    /// The property's name, borrowed from its Kind; `elements` for a
+    /// collection.
+    prop: []const u8,
+    op: CrossingOp,
+    /// `at`'s index.
+    index: i64 = 0,
+    /// `find`'s name, owned.
+    name: []u8 = &.{},
+    /// A set's value, retained.
+    value: ?*Value = null,
+    /// What talk_crossing_answer gave, until the resumed Pump makes the
+    /// crossing again and takes it.
+    answer: ?objects.Result = null,
+
+    fn release(x: *Crossing, gpa: std.mem.Allocator) void {
+        if (x.name.len > 0) gpa.free(x.name);
+        if (x.value) |v| v.release();
+        if (x.answer) |r| releaseResult(gpa, r);
+    }
+};
+
+fn releaseResult(gpa: std.mem.Allocator, r: objects.Result) void {
+    switch (r) {
+        .value => |v| v.release(),
+        .failed => |f| {
+            gpa.free(f.code);
+            if (f.message) |t| gpa.free(t);
+            if (f.data) |d| d.release();
+        },
+        else => {},
+    }
+}
+
+/// talk_pump's reading, options and fuel so far, kept across a Crossing
+/// Pause.
+const Pumping = struct { clock: model.dates.Instant, slice: u64, cap: u64, fuel: u64 = 0 };
+
+/// The Group whose talk_pump may pause at a crossing on this thread.
+threadlocal var deferring: ?*Group = null;
 
 pub const PumpOptions = extern struct { fuel_slice: i64, fuel_cap: i64 };
 
@@ -543,6 +602,22 @@ pub const Group = struct {
     /// names they point into.
     grants: std.ArrayList(ScriptGrant) = .empty,
     grant_operations: std.ArrayList(Id) = .empty,
+    /// The crossing a paused talk_pump waits at, if any.
+    crossing: ?Crossing = null,
+    /// The talk_pump in progress, paused or not.
+    pumping: ?Pumping = null,
+
+    /// Forgets the crossing, answered or not.
+    fn dropCrossing(g: *Group) void {
+        if (g.crossing) |*x| x.release(g.group.gpa);
+        g.crossing = null;
+    }
+
+    /// Forgets an answer the resumed Pump didn't take, as when a Stop
+    /// landed at the pause and the crossing was never made again.
+    fn dropAnswered(g: *Group) void {
+        if (g.crossing) |x| if (x.answer != null) g.dropCrossing();
+    }
 
     fn owns(g: *Group, o: *const objects.Object) bool {
         for (g.group.objects.items) |x| if (x == o) return true;
@@ -1114,6 +1189,7 @@ export fn talk_name(g: *const Group, s: *[*]const u8, len: *usize) void {
 export fn talk_group_release(g: ?*Group) void {
     const group = g orelse return;
     const gpa = group.core.gpa;
+    group.dropCrossing();
     group.group.deinit();
     group.out.deinit();
     group.memory.deinit(); // Cached Value nodes go back last.
@@ -1433,32 +1509,62 @@ export fn talk_pump(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions
     const code = checkPumpWorker(g, seconds, micros, o);
     if (code != .ok) return code;
     defer g.flush();
-    return pumpOwned(g, seconds, micros, o, out);
+    return pumpOwned(g, seconds, micros, o, out, true);
 }
 
 fn pumpState(g: *Group) GroupState {
     return if (g.group.stoppedState()) .stopped else if (g.group.rewound) .rewound else if (g.group.sliced) .sliced else .idle;
 }
 
-fn pumpOwned(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions, out: ?*PumpResult) HostErrorCode {
+/// Runs a Pump. With `may_pause`, a property or collection callback that
+/// returns TALK_CALL_STARTED pauses it, and `out` says TALK_CROSSING;
+/// otherwise that is host error.
+fn pumpOwned(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions, out: ?*PumpResult, may_pause: bool) HostErrorCode {
     if (g.memory.refused) return .out_of_memory;
     const clock = model.dates.Instant{ .seconds = seconds, .micros = micros };
     model.dates.validateInstant(clock) catch return .invalid_value;
     const options = pumpOptions(o);
     if (options.fuel_slice < 0 or options.fuel_cap < 0) return .invalid_value;
     g.group.answered_starting.store(false, .release);
-    g.group.pumpOwned(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return status(err);
-    // A C Host answers inside its calls, so a crossing pause here is only
-    // `defer_crossings`' (a testing aid): take the Pump up again at once.
-    while (g.group.pumpPaused()) g.group.resumePump() catch |err| return status(err);
-    // An answer given during its Start waits for the next Pump, so run it
-    // now: a Host waiting on events would otherwise never take it (#1509).
-    var fuel = g.group.pump_fuel;
-    while (pumpState(g) == .idle and g.group.answered_starting.swap(false, .acq_rel)) {
-        g.group.pumpOwned(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return status(err);
-        while (g.group.pumpPaused()) g.group.resumePump() catch |err| return status(err);
-        fuel += g.group.pump_fuel;
+    g.pumping = .{ .clock = clock, .slice = @intCast(options.fuel_slice), .cap = @intCast(options.fuel_cap) };
+    const previous = deferring;
+    deferring = if (may_pause) g else null;
+    defer deferring = previous;
+    g.group.pumpOwned(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return endPump(g, status(err));
+    return goOn(g, out);
+}
+
+/// Ends talk_pump's work on an error.
+fn endPump(g: *Group, code: HostErrorCode) HostErrorCode {
+    g.pumping = null;
+    g.dropCrossing();
+    return code;
+}
+
+/// Goes on with the Pump in `g.pumping` until it ends, or pauses at a
+/// crossing for the Host.
+fn goOn(g: *Group, out: ?*PumpResult) HostErrorCode {
+    const p = &g.pumping.?;
+    while (true) {
+        while (g.group.pumpPaused()) {
+            if (g.crossing) |x| if (x.answer == null) {
+                if (out) |r| r.* = .{ .state = .crossing, .fuel_used = 0 };
+                return .ok;
+            };
+            // Otherwise the pause is `defer_crossings`' (a testing aid):
+            // take the Pump up again at once.
+            g.group.resumePump() catch |err| return endPump(g, status(err));
+            g.dropAnswered();
+        }
+        p.fuel += g.group.pump_fuel;
+        // An answer given during its Start waits for the next Pump, so run
+        // it now: a Host waiting on events would otherwise never take it
+        // (#1509).
+        if (pumpState(g) != .idle or !g.group.answered_starting.swap(false, .acq_rel)) break;
+        g.group.pumpOwned(p.clock, p.slice, p.cap) catch |err| return endPump(g, status(err));
     }
+    const fuel = p.fuel;
+    g.pumping = null;
     const reports = takeReports(g);
     const r = out orelse {
         talk_reports_release(reports);
@@ -1471,6 +1577,42 @@ fn pumpOwned(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions, out: 
         r.next_deadline_micros = deadline.micros;
     }
     return .ok;
+}
+
+/// The crossing a paused talk_pump waits at; false when there is none.
+export fn talk_group_crossing(g: *Group, out: *CrossingInfo) bool {
+    const x = g.crossing orelse return false;
+    if (x.answer != null) return false;
+    out.* = .{ .object = x.object, .prop = x.prop.ptr, .prop_len = x.prop.len, .op = x.op, .index = x.index, .name = x.name.ptr, .name_len = x.name.len, .value = x.value };
+    return true;
+}
+
+/// Answers the crossing a talk_pump paused at, as its callback would have
+/// returned, and goes on with that Pump, which may pause again. TALK_UNKNOWN_CALL
+/// when no crossing waits.
+export fn talk_crossing_answer(g: *Group, end: CallEnd, given: ?*Value, failure: ?*const ScriptError, out: ?*PumpResult) HostErrorCode {
+    const x = if (g.crossing) |*x| x else {
+        if (given) |v| v.release();
+        return .unknown_call;
+    };
+    if (x.answer != null or g.pumping == null) {
+        if (given) |v| v.release();
+        return .unknown_call;
+    }
+    const f = if (failure) |e| e.* else no_failure;
+    const gpa = g.group.gpa;
+    x.answer = switch (x.op) {
+        .get => getResult(gpa, end, given, f),
+        .set => setResult(gpa, end, given, f),
+        .count, .at, .find => elementResult(gpa, end, given, f),
+    };
+    const previous = deferring;
+    deferring = g;
+    defer deferring = previous;
+    defer g.flush();
+    g.group.resumePump() catch |err| return endPump(g, status(err));
+    g.dropAnswered();
+    return goOn(g, out);
 }
 
 const CombinedAdmission = union(enum) {
@@ -1499,7 +1641,7 @@ fn admissionPump(g: *Group, admission: CombinedAdmission, seconds: i64, micros: 
         .function => |x| talk_group_call(g, x.f, x.args, x.len, x.limits, id, out),
     };
     if (admitted != .ok) return admitted;
-    const code = pumpOwned(g, seconds, micros, o, result_);
+    const code = pumpOwned(g, seconds, micros, o, result_, false);
     notify = code != .ok;
     return code;
 }
@@ -2329,6 +2471,7 @@ test "the enums match talk.h's" {
     try expectHeaderEnum(HostErrorCode, "talk_host_error_code", "TALK_");
     try expectHeaderEnum(Kind, "talk_kind", "TALK_KIND_");
     try expectHeaderEnum(GroupState, "talk_group_state", "TALK_");
+    try expectHeaderEnum(CrossingOp, "talk_crossing_op", "TALK_CROSSING_");
     try expectHeaderEnum(Verdict, "talk_verdict", "TALK_");
     try expectHeaderEnum(Outcome, "talk_outcome", "TALK_");
     try expectHeaderEnum(EffectStatus, "talk_effect_status", "TALK_EFFECT_");
@@ -3592,27 +3735,60 @@ fn elementResult(gpa: std.mem.Allocator, end: CallEnd, value: ?*Value, failure: 
 
 const no_failure: ScriptError = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
 
+/// The answer talk_crossing_answer gave the crossing paused at `o`, now
+/// that the resumed Pump makes that crossing again.
+fn answered(o: *objects.Object, prop: []const u8, op: CrossingOp) ?objects.Result {
+    const g = deferring orelse return null;
+    const x = if (g.crossing) |*x| x else return null;
+    if (x.object != o or x.op != op or !std.mem.eql(u8, x.prop, prop)) return null;
+    const r = x.answer orelse return null;
+    x.answer = null;
+    g.dropCrossing();
+    return r;
+}
+
+/// A callback returned TALK_CALL_STARTED: inside talk_pump the Pump pauses
+/// at the crossing; anywhere else it is host error.
+fn pause(o: *objects.Object, prop: []const u8, op: CrossingOp, index: i64, name: []const u8, value: ?*const Value, given: ?*Value) objects.Result {
+    if (given) |v| v.release();
+    const g = deferring orelse return .broken;
+    g.dropAnswered();
+    if (g.crossing != null) return .broken;
+    const gpa = g.group.gpa;
+    var x: Crossing = .{ .object = o, .prop = prop, .op = op, .index = index };
+    if (name.len > 0) x.name = gpa.dupe(u8, name) catch return .broken;
+    if (value) |v| x.value = @constCast(v).retain();
+    g.crossing = x;
+    return .deferred;
+}
+
 fn elementCount(context: ?*anyopaque, gpa: std.mem.Allocator, o: *objects.Object) objects.Result {
+    if (answered(o, "elements", .count)) |r| return r;
     const b: *ElementsBridge = @ptrCast(@alignCast(context.?));
     var value: ?*Value = null;
     var failure = no_failure;
     const end = b.count(b.context, o, &value, &failure);
+    if (end == .started) return pause(o, "elements", .count, 0, "", null, value);
     return elementResult(gpa, end, value, failure);
 }
 
 fn elementAt(context: ?*anyopaque, gpa: std.mem.Allocator, o: *objects.Object, index: i64) objects.Result {
+    if (answered(o, "elements", .at)) |r| return r;
     const b: *ElementsBridge = @ptrCast(@alignCast(context.?));
     var value: ?*Value = null;
     var failure = no_failure;
     const end = b.at(b.context, o, index, &value, &failure);
+    if (end == .started) return pause(o, "elements", .at, index, "", null, value);
     return elementResult(gpa, end, value, failure);
 }
 
 fn elementFind(context: ?*anyopaque, gpa: std.mem.Allocator, o: *objects.Object, name: []const u8) objects.Result {
+    if (answered(o, "elements", .find)) |r| return r;
     const b: *ElementsBridge = @ptrCast(@alignCast(context.?));
     var value: ?*Value = null;
     var failure = no_failure;
     const end = b.find(b.context, o, name.ptr, name.len, &value, &failure);
+    if (end == .started) return pause(o, "elements", .find, 0, name, null, value);
     return elementResult(gpa, end, value, failure);
 }
 
@@ -3620,13 +3796,15 @@ fn validCost(cost: Cost) bool {
     return cost.fuel >= 0 and cost.alloc >= 0;
 }
 
-/// A C property's Get and Set and their context, behind the Core's.
-pub const PropBridge = struct { get: *const fn (?*anyopaque, *objects.Object, *?*Value, *ScriptError) callconv(.c) CallEnd, set: PropSetFn, context: ?*anyopaque };
+/// A C property's Get and Set and their context, behind the Core's, with
+/// its name, borrowed from its Kind, for a Crossing Pause.
+pub const PropBridge = struct { get: *const fn (?*anyopaque, *objects.Object, *?*Value, *ScriptError) callconv(.c) CallEnd, set: PropSetFn, context: ?*anyopaque, name: []const u8 = "" };
 
 fn propResult(gpa: std.mem.Allocator, end: CallEnd, value: ?*Value, failure: ScriptError) objects.Result {
     switch (end) {
         .answered => return if (value) |v| .{ .value = v } else .done,
         .failed => {
+            if (value) |v| v.release();
             const code = bytes(failure.code, failure.code_len) catch return .broken;
             const message = bytes(failure.message, failure.message_len) catch return .broken;
             const owned_code = gpa.dupe(u8, code) catch return .broken;
@@ -3643,26 +3821,40 @@ fn propResult(gpa: std.mem.Allocator, end: CallEnd, value: ?*Value, failure: Scr
     }
 }
 
-fn propGet(context: ?*anyopaque, gpa: std.mem.Allocator, o: *objects.Object) objects.Result {
-    const b: *PropBridge = @ptrCast(@alignCast(context.?));
-    var value: ?*Value = null;
-    var failure: ScriptError = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
-    const end = b.get(b.context, o, &value, &failure);
+/// A Get's answer: a value, Nothing included.
+fn getResult(gpa: std.mem.Allocator, end: CallEnd, value: ?*Value, failure: ScriptError) objects.Result {
     const r = propResult(gpa, end, value, failure);
     return if (r == .done) .broken else r;
 }
 
-fn propSet(context: ?*anyopaque, gpa: std.mem.Allocator, o: *objects.Object, v: *const Value) objects.Result {
-    const b: *PropBridge = @ptrCast(@alignCast(context.?));
-    var failure: ScriptError = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
-    const end = b.set.?(b.context, o, v, &failure);
-    return switch (propResult(gpa, end, null, failure)) {
+/// A Set's answer: done, any value it gave dropped.
+fn setResult(gpa: std.mem.Allocator, end: CallEnd, value: ?*Value, failure: ScriptError) objects.Result {
+    return switch (propResult(gpa, end, value, failure)) {
         .value => |x| blk: {
             x.release();
             break :blk .done;
         },
         else => |r| r,
     };
+}
+
+fn propGet(context: ?*anyopaque, gpa: std.mem.Allocator, o: *objects.Object) objects.Result {
+    const b: *PropBridge = @ptrCast(@alignCast(context.?));
+    if (answered(o, b.name, .get)) |r| return r;
+    var value: ?*Value = null;
+    var failure = no_failure;
+    const end = b.get(b.context, o, &value, &failure);
+    if (end == .started) return pause(o, b.name, .get, 0, "", null, value);
+    return getResult(gpa, end, value, failure);
+}
+
+fn propSet(context: ?*anyopaque, gpa: std.mem.Allocator, o: *objects.Object, v: *const Value) objects.Result {
+    const b: *PropBridge = @ptrCast(@alignCast(context.?));
+    if (answered(o, b.name, .set)) |r| return r;
+    var failure = no_failure;
+    const end = b.set.?(b.context, o, v, &failure);
+    if (end == .started) return pause(o, b.name, .set, 0, "", v, null);
+    return setResult(gpa, end, null, failure);
 }
 
 /// Defines an Object Kind, once per process: its properties, each with a
@@ -3714,8 +3906,9 @@ export fn talk_define_object_kind(c: *Core, def: *const ObjectKindDef, out: *?*o
         const b = gpa.create(PropBridge) catch return .out_of_memory;
         b.* = .{ .get = p.get.?, .set = p.set, .context = p.context };
         c.prop_bridges.append(gpa, b) catch return .out_of_memory;
+        b.name = gpa.dupe(u8, bytes(p.name, p.name_len) catch unreachable) catch return .out_of_memory;
         x.* = .{
-            .name = gpa.dupe(u8, bytes(p.name, p.name_len) catch unreachable) catch return .out_of_memory,
+            .name = b.name,
             .shape = retained(p.shape.?),
             .get = .{ .call = propGet, .context = b },
             .set = if (p.set != null) .{ .call = propSet, .context = b } else null,
