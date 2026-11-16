@@ -99,7 +99,11 @@ on start
 end start
 
 on httpRequest {segments: ["slow"], exchange: x}
-  wait 0.3 s
+  put 0 into tries
+  repeat until the closed of x or tries = 100
+    wait 0.05 s
+    add 1 to tries
+  end repeat
   put the closed of x after seen
   try
     ask http to respond x, {body: "late"}
@@ -109,11 +113,15 @@ on httpRequest {segments: ["slow"], exchange: x}
 end httpRequest
 
 on httpRequest {segments: ["result"], exchange: x}
+  put 0 into tries
+  repeat until the length of seen = 2 or tries = 100
+    wait 0.05 s
+    add 1 to tries
+  end repeat
   ask http to respond x, {json: seen}
 end httpRequest
 '''
 steps = [
   { abort = "GET /slow" },
-  { sleep = 600 },
   { request = "GET /result", status = 200, response = '[true,"exchange closed"]' },
 ]
