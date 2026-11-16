@@ -2158,19 +2158,138 @@ const dateField = (name: string, d: Value): Value => {
 };
 // `offset` in `toCivil` and `toInstant`: an exact duration of whole minutes,
 // less than 24 hr in magnitude, as microseconds.
-const offsetOf = (name: string, v: Value): bigint => {
+const fixedOffsetUs = (v: Value): bigint | undefined => {
   const q = v.asQuantityRef();
   const seconds = q && sameDimension(q.unit, SECONDS) ? inBase(q) : undefined;
   const whole = seconds && isInteger(seconds) ? integerOf(seconds) : undefined;
-  if (
-    whole === undefined ||
+  return whole === undefined ||
     whole % 60n !== 0n ||
     whole >= 86_400n ||
     whole <= -86_400n
-  ) {
+    ? undefined
+    : whole * US_PER_SECOND;
+};
+const offsetOf = (name: string, v: Value): bigint => {
+  const us = fixedOffsetUs(v);
+  if (us === undefined) {
     throw outOfDomain(name, v);
   }
-  return whole * US_PER_SECOND;
+  return us;
+};
+/** Zone Rules, checked whole: each change's start and offset, in
+ * microseconds, and the window's exclusive end (chapter 7, Zone Rules). */
+type ZoneRules = {
+  offsets: bigint[];
+  starts: bigint[];
+  until: bigint;
+  zone: string;
+};
+const exactKeys = (v: Value, keys: readonly string[]) =>
+  v.kind === 'map' && v.mapSize === keys.length && keys.every(k => v.hasKey(k));
+/** `scanned` is the number of changes, whenever `changes` is a list, so a
+ * malformed map is charged as a well-formed one of its length would be. */
+const zoneRulesOf = (
+  name: string,
+  v: Value,
+  measure: { scanned?: number },
+): ZoneRules => {
+  const bad = () => outOfDomain(name, v);
+  if (!exactKeys(v, ['zone', 'until', 'changes'])) {
+    throw bad();
+  }
+  const zone = v.get('zone').asText();
+  const until = v.get('until').asInstant();
+  const changes = v.get('changes');
+  if (changes.kind === 'list') {
+    measure.scanned = changes.length;
+  }
+  if (
+    zone === undefined ||
+    until === undefined ||
+    changes.kind !== 'list' ||
+    changes.length === 0
+  ) {
+    throw bad();
+  }
+  const starts: bigint[] = [];
+  const offsets: bigint[] = [];
+  for (let i = 1; i <= changes.length; i++) {
+    const change = changes.index(i);
+    if (!exactKeys(change, ['at', 'offset'])) {
+      throw bad();
+    }
+    const at = change.get('at').asInstant();
+    const offset = fixedOffsetUs(change.get('offset'));
+    if (
+      at === undefined ||
+      offset === undefined ||
+      (starts.length > 0 && at <= starts.at(-1)!)
+    ) {
+      throw bad();
+    }
+    starts.push(at);
+    offsets.push(offset);
+  }
+  if (starts.at(-1)! >= until) {
+    throw bad();
+  }
+  return { zone, starts, offsets, until };
+};
+const outsideWindow = (rules: ZoneRules, us: bigint) =>
+  us < rules.starts[0]! || us >= rules.until;
+/** The offset in effect at the Instant `us`, inside the window. */
+const zoneOffsetAt = (rules: ZoneRules, us: bigint): bigint => {
+  let k = 0;
+  while (k + 1 < rules.starts.length && rules.starts[k + 1]! <= us) {
+    k++;
+  }
+  return rules.offsets[k]!;
+};
+const DISAMBIGUATIONS = ['compatible', 'earlier', 'later', 'reject'];
+/** The Instant at which the zone's wall clock reads `local`, a Civil Date's
+ * microseconds read as if at UTC, resolving a gap or overlap. */
+const zoneInstant = (
+  rules: ZoneRules,
+  civil: Value,
+  local: bigint,
+  disambiguation: string,
+): bigint => {
+  for (const o of rules.offsets) {
+    if (outsideWindow(rules, local - o)) {
+      throw outOfRange('zone', civil);
+    }
+  }
+  const { starts, offsets, until } = rules;
+  const candidates: bigint[] = [];
+  for (let k = 0; k < starts.length; k++) {
+    const t = local - offsets[k]!;
+    if (starts[k]! <= t && t < (starts[k + 1] ?? until)) {
+      candidates.push(t);
+    }
+  }
+  if (candidates.length === 1) {
+    return candidates[0]!;
+  }
+  if (disambiguation === 'reject') {
+    throw new ScriptError('ambiguous time', [
+      ['civil', civil],
+      ['zone', text(rules.zone)],
+    ]);
+  }
+  if (candidates.length > 1) {
+    return disambiguation === 'later'
+      ? candidates.reduce((a, b) => (a > b ? a : b))
+      : candidates.reduce((a, b) => (a < b ? a : b));
+  }
+  // A gap: the change where the offset rises from o1 to o2 past `local`.
+  for (let j = 1; j < starts.length; j++) {
+    const o1 = offsets[j - 1]!;
+    const o2 = offsets[j]!;
+    if (local - o2 < starts[j]! && starts[j]! <= local - o1) {
+      return disambiguation === 'earlier' ? local - o2 : local - o1;
+    }
+  }
+  throw new Error('a Civil Date with no candidate lies in no gap');
 };
 
 // Chapter 7's correctly rounded number functions, on plain numbers, with
@@ -2529,9 +2648,20 @@ export const builtin = (
       if (x!.kind !== 'instant') {
         throw wrongKind('instant', x!);
       }
-      const offset = offsetOf(name, y!);
+      const i = x!.asInstant()!;
+      let offset: bigint;
+      if (y!.kind === 'map') {
+        const rules = zoneRulesOf(name, y!, measure);
+        if (outsideWindow(rules, i)) {
+          throw outOfRange('zone', x!);
+        }
+        offset = zoneOffsetAt(rules, i);
+      } else {
+        offset = offsetOf(name, y!);
+      }
       return {
-        result: inRangeDate(() => civilOf(civilOfUs(x!.asInstant()! + offset))),
+        result: inRangeDate(() => civilOf(civilOfUs(i + offset))),
+        scanned: measure.scanned,
       };
     }
     case 'toInstant': {
@@ -2542,9 +2672,29 @@ export const builtin = (
       if (c.us === null) {
         throw outOfDomain(name, x!);
       }
-      const offset = offsetOf(name, y!);
+      const how = z ?? nothing;
+      if (y!.kind !== 'map') {
+        const offset = offsetOf(name, y!);
+        if (how.kind !== 'nothing') {
+          throw outOfDomain(name, how);
+        }
+        return {
+          result: inRangeDate(() =>
+            instantOf(checkInstant(civilUs(c) - offset)),
+          ),
+        };
+      }
+      const rules = zoneRulesOf(name, y!, measure);
+      const word = how.kind === 'nothing' ? 'compatible' : how.asText();
+      if (word === undefined || !DISAMBIGUATIONS.includes(word)) {
+        throw outOfDomain(name, how);
+      }
+      const local = civilUs(c);
       return {
-        result: inRangeDate(() => instantOf(checkInstant(civilUs(c) - offset))),
+        result: inRangeDate(() =>
+          instantOf(checkInstant(zoneInstant(rules, x!, local, word))),
+        ),
+        scanned: measure.scanned,
       };
     }
     case 'abs':
@@ -2605,6 +2755,7 @@ export const builtin = (
 export const builtinDefaults: Record<string, Value[]> = {
   round: [num(0), text('half up')],
   bitShiftLeft: [nothing],
+  toInstant: [nothing],
   fromFloat64: [text('big')],
   fromFloat32: [text('big')],
   toFloat64: [text('big')],
