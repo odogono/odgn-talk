@@ -1033,7 +1033,8 @@ arithmetic, `^`, and the Built-ins. `floor`,
 `ceiling`, `truncate` and `round` round the coefficient exactly by the General
 Decimal Arithmetic's modes; `upper` and `lower` use the full case mappings, with
 Final_Sigma, then NFC; the date fields, ISO weeks, `toCivil` and `toInstant`
-work on proleptic Gregorian days; and the float Built-ins read and write IEEE
+work on proleptic Gregorian days, `toCivil` and `toInstant` also under Zone
+Rules ([ADR 0179](../../docs/adr/0179-zone-rules-are-plain-values-that-let-built-ins-convert-in-a-named-zone.md)); and the float Built-ins read and write IEEE
 754 bytes through the shortest round-trip decimal. `sqrt` and `power` are the
 decimal `power`, exact where the value is. `exp`, `ln`, `log10` and the
 trigonometric functions ([transcendental](src/decimal/transcendental.zig))

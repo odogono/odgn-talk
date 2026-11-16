@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { HostError } from '../src/errors';
-import type { Value } from '../src/values';
+import { builtin } from '../src/operations';
+import { instant, text, type Value } from '../src/values';
 import { zoneRules } from '../src/zone-rules';
 
 const changesOf = (rules: Value) => {
@@ -106,5 +107,30 @@ describe('zoneRules', () => {
         new Date('1841-01-01T00:00:00Z'),
       ),
     ).toThrow('not whole minutes');
+  });
+});
+
+describe('zoneRules through toCivil and toInstant', () => {
+  test('agree with Intl across the window', () => {
+    for (const zone of ['Europe/London', 'Australia/Lord_Howe']) {
+      const from = new Date('2025-01-01T00:00:00Z');
+      const until = new Date('2028-01-01T00:00:00Z');
+      const rules = zoneRules(zone, from, until);
+      for (
+        let ms = from.getTime() + 86_400_000;
+        ms < until.getTime() - 86_400_000;
+        ms += 3 * 86_400_000 + 3_601_000
+      ) {
+        const at = instant(BigInt(ms) * 1000n);
+        const civil = builtin('toCivil', [at, rules]).result;
+        const wall = new Date(ms + intlOffset(zone, ms) * 1000)
+          .toISOString()
+          .slice(0, 19);
+        expect(`${zone} ${civil}`).toBe(`${zone} ${wall}`);
+        // A wall clock outside a gap or overlap reads back as the Instant.
+        const back = builtin('toInstant', [civil, rules, text('reject')]);
+        expect(back.result.toString()).toBe(at.toString());
+      }
+    }
   });
 });

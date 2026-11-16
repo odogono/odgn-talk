@@ -1,0 +1,14 @@
+# zone-rules: `toCivil` and `toInstant` given Zone Rules for a zone with a
+# spring gap and an autumn overlap: each disambiguation, `"reject"`, both
+# window edges, malformed maps, a disambiguation with a fixed offset, use in a
+# Guard, and Fuel per change (spec chapter 7, Zone Rules; ADR 0179).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "zones"
+source = "zones.talk"
