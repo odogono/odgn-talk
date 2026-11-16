@@ -7,7 +7,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	cryptorand "crypto/rand"
@@ -18,7 +17,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -31,6 +29,7 @@ import (
 	"time"
 
 	talk "northtalk.org/go"
+	"northtalk.org/go/peer"
 )
 
 // maxFrame is the largest frame a Runner sends or reads.
@@ -160,25 +159,45 @@ func loadPeerKey(file string) (tls.Certificate, string, error) {
 	return cert, fingerprintOf(leaf), nil
 }
 
-// ---------------------------------------------------------------- frames
+// ---------------------------------------------------------------- links
 
-// link is one connection to another Runner, either way round.
+// link is one connection to another Runner, either way round: a peer.Link
+// that moves length-prefixed frames.
 type link struct {
+	r     *runnerPeers
 	conn  net.Conn
+	in    *bufio.Reader
 	plain bool
-	mu    sync.Mutex
 	// fingerprint is the other end's key: checked over TLS, as it claims
 	// over plain TCP.
 	fingerprint string
-	next        int
-	asked       map[int]chan talk.Value
+	mu          sync.Mutex
 	closed      bool
-	hello       chan struct{}
 }
 
-func (l *link) send(frame talk.Value) bool {
-	body, err := talk.EncodeValue(frame)
-	if err != nil || len(body) > maxFrame {
+func newLink(r *runnerPeers, conn net.Conn, key string, plain bool) *link {
+	return &link{r: r, conn: conn, in: bufio.NewReader(conn), plain: plain, fingerprint: key}
+}
+
+func (l *link) Key() string { return l.fingerprint }
+
+// Identity is the Caller Identity of what arrives on l: none over plain TCP,
+// which authenticates nobody, and otherwise the key, with the `--peer` name
+// pinned to it.
+func (l *link) Identity() talk.Value {
+	if l.plain {
+		return talk.Nothing
+	}
+	pairs := []talk.Pair{{Key: "key", Val: mustText(l.fingerprint)}}
+	if name, named := l.r.nameOf(l.fingerprint); named {
+		pairs = append(pairs, talk.Pair{Key: "name", Val: mustText(name)})
+	}
+	v, _ := talk.Map(pairs...)
+	return v
+}
+
+func (l *link) Send(body []byte) bool {
+	if len(body) > maxFrame {
 		return false
 	}
 	head := make([]byte, 4)
@@ -188,130 +207,89 @@ func (l *link) send(frame talk.Value) bool {
 	if l.closed {
 		return false
 	}
-	_, err = l.conn.Write(append(head, body...))
+	_, err := l.conn.Write(append(head, body...))
 	return err == nil
 }
 
-// begin sends a question; its answer comes on the channel, which closes
-// unanswered when the link does. Questions go out in the order begun.
-func (l *link) begin(kind string, rest ...talk.Pair) (<-chan talk.Value, bool) {
-	l.mu.Lock()
-	if l.closed {
-		l.mu.Unlock()
+// read is the next whole frame; false once the link fails or closes.
+func (l *link) read() ([]byte, bool) {
+	head := make([]byte, 4)
+	if _, err := io.ReadFull(l.in, head); err != nil {
 		return nil, false
 	}
-	l.next++
-	n := l.next
-	answer := make(chan talk.Value, 1)
-	l.asked[n] = answer
-	l.mu.Unlock()
-	frame, _ := talk.Map(append([]talk.Pair{{Key: kind, Val: talk.Int(int64(n))}}, rest...)...)
-	if !l.send(frame) {
+	n := binary.BigEndian.Uint32(head)
+	if n > maxFrame {
 		return nil, false
 	}
-	return answer, true
-}
-
-// ask sends a question and waits for its answer; false when the link
-// closes first.
-func (l *link) ask(kind string, rest ...talk.Pair) (talk.Value, bool) {
-	answer, ok := l.begin(kind, rest...)
-	if !ok {
-		return talk.Nothing, false
+	body := make([]byte, n)
+	if _, err := io.ReadFull(l.in, body); err != nil {
+		return nil, false
 	}
-	v, ok := <-answer
-	return v, ok
+	return body, true
 }
 
-func (l *link) answered(n int, frame talk.Value) {
-	l.mu.Lock()
-	answer := l.asked[n]
-	delete(l.asked, n)
-	l.mu.Unlock()
-	if answer != nil {
-		answer <- frame
-	}
-}
-
-func (l *link) isClosed() bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.closed
-}
-
-func (l *link) close() {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if l.closed {
-		return
-	}
-	l.closed = true
-	_ = l.conn.Close()
-	for n, answer := range l.asked {
-		close(answer)
-		delete(l.asked, n)
-	}
-}
-
-func has(frame talk.Value, key string) bool {
-	for _, p := range frame.Entries() {
-		if p.Key == key {
-			return true
+func (l *link) Run(arrive func([]byte)) {
+	defer l.Close()
+	for {
+		body, ok := l.read()
+		if !ok {
+			return
 		}
+		arrive(body)
 	}
-	return false
 }
 
-func textField(frame talk.Value, key string) string {
-	s, _ := frame.Get(key).AsText()
-	return s
-}
-
-func wholeField(frame talk.Value, key string) (int, bool) {
-	if !has(frame, key) || frame.Get(key).Kind() != talk.KindNumber {
-		return 0, false
+func (l *link) Close() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.closed {
+		l.closed = true
+		_ = l.conn.Close()
 	}
-	n, err := strconv.Atoi(frame.Get(key).String())
-	return n, err == nil
 }
 
-func failure(code string, pairs ...talk.Pair) *talk.ScriptError {
-	data, _ := talk.Map(pairs...)
-	return &talk.ScriptError{Code: code, Message: code, Data: data}
-}
-
-func sendFailed(reason string, err talk.Value) *talk.ScriptError {
-	pairs := []talk.Pair{{Key: "reason", Val: mustText(reason)}}
-	if err.Kind() != talk.KindNothing {
-		pairs = append(pairs, talk.Pair{Key: "error", Val: err})
+// greet opens a plain connection: each end first says which key it is, with
+// nothing to check it by. nil when the other end doesn't say in time.
+func (r *runnerPeers) greet(conn net.Conn) *link {
+	l := newLink(r, conn, "", true)
+	hello, _ := talk.Map(talk.Pair{Key: "hello", Val: mustText(r.fingerprint)})
+	body, _ := talk.EncodeValue(hello)
+	if !l.Send(body) {
+		l.Close()
+		return nil
 	}
-	return failure("send failed", pairs...)
+	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	frame, ok := l.read()
+	_ = conn.SetReadDeadline(time.Time{})
+	if !ok {
+		l.Close()
+		return nil
+	}
+	said, err := talk.DecodeValue(frame, nil)
+	key, _ := said.Get("hello").AsText()
+	if err != nil || len(key) != 64 || strings.Trim(key, "0123456789abcdef") != "" {
+		l.Close()
+		return nil
+	}
+	l.fingerprint = key
+	return l
 }
 
 // ---------------------------------------------------------------- the Host
 
-type exposure struct{ name, script string }
-
-// runnerPeers is the Runner's side of `peer`: its exposures, its links and
-// its key.
+// runnerPeers is the Runner's side of `peer`: its key, its listener and its
+// links, around the Peer Router that holds its exposures.
 type runnerPeers struct {
 	o           peerOptions
 	cert        tls.Certificate
 	fingerprint string
-	group       *talk.Group
-	kind        *talk.ObjectKind
-	listener    net.Listener
+	router      *peer.Router
 
-	mu        sync.Mutex
-	exposures map[string]exposure
-	names     map[string]string
-	peers     map[string]*talk.Object
-	links     map[string]*link
-	callers   map[string]talk.Value
-	byKey     map[string]string
-	// outboxes hold each destination's Remote Sends, in the order the
-	// Script made them, for one goroutine to dial and send.
-	outboxes map[string]chan func(*link)
+	mu       sync.Mutex
+	listener net.Listener
+	// byKey is the `--peer` name for each key: pinned ones, and what a plain
+	// one claimed when dialled.
+	byKey map[string]string
 }
 
 func newRunnerPeers(core *talk.Core, o peerOptions) (*runnerPeers, error) {
@@ -319,16 +297,40 @@ func newRunnerPeers(core *talk.Core, o peerOptions) (*runnerPeers, error) {
 	if err != nil {
 		return nil, err
 	}
-	r := &runnerPeers{o: o, cert: cert, fingerprint: fingerprint, kind: core.PeerKind(),
-		exposures: map[string]exposure{}, names: map[string]string{}, peers: map[string]*talk.Object{},
-		links: map[string]*link{}, callers: map[string]talk.Value{}, byKey: map[string]string{},
-		outboxes: map[string]chan func(*link){}}
+	r := &runnerPeers{o: o, cert: cert, fingerprint: fingerprint, byKey: map[string]string{}}
 	for name, remote := range o.remotes {
 		if remote.fingerprint != "" {
 			r.byKey[remote.fingerprint] = name
 		}
 	}
+	r.router = peer.New(core, peer.Options{
+		Key: fingerprint,
+		Dial: func(address string) peer.Link {
+			if l := r.dial(address); l != nil {
+				return l
+			}
+			return nil
+		},
+		AddressOf: r.nameOf,
+	})
 	return r, nil
+}
+
+func (r *runnerPeers) nameOf(key string) (string, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	name, named := r.byKey[key]
+	return name, named
+}
+
+// binding is the `peer` Grant's binding: a Script reaches only the Runners
+// a `--peer` names, and exposes any name.
+func (r *runnerPeers) binding() peer.Binding {
+	reach := []string{}
+	for name := range r.o.remotes {
+		reach = append(reach, name)
+	}
+	return peer.Binding{Reach: reach}
 }
 
 // listening is whether the Runner listens, which keeps it running.
@@ -339,7 +341,9 @@ func (r *runnerPeers) listening() bool {
 }
 
 func (r *runnerPeers) start(group *talk.Group) error {
-	r.group = group
+	// A Peer of the Runner's own exposure is vouched for as its own key.
+	self, _ := talk.Map(talk.Pair{Key: "key", Val: mustText(r.fingerprint)})
+	r.router.Attach(group, self)
 	if r.o.listen != nil || len(r.o.remotes) > 0 || r.o.keyFile != "" {
 		r.o.log("peer: key " + r.fingerprint)
 	}
@@ -389,7 +393,9 @@ func (r *runnerPeers) start(group *talk.Group) error {
 
 func (r *runnerPeers) accept(conn net.Conn, plain bool) {
 	if plain {
-		r.greet(conn)
+		if l := r.greet(conn); l != nil {
+			r.router.Connect(l)
+		}
 		return
 	}
 	t := conn.(*tls.Conn)
@@ -402,7 +408,7 @@ func (r *runnerPeers) accept(conn net.Conn, plain bool) {
 		_ = conn.Close()
 		return
 	}
-	r.adopt(conn, fingerprintOf(certs[0]), false)
+	r.router.Connect(newLink(r, conn, fingerprintOf(certs[0]), false))
 }
 
 func (r *runnerPeers) stopListening() {
@@ -416,285 +422,15 @@ func (r *runnerPeers) stopListening() {
 
 func (r *runnerPeers) close() {
 	r.stopListening()
-	r.mu.Lock()
-	links := make([]*link, 0, len(r.links))
-	for _, l := range r.links {
-		links = append(links, l)
-	}
-	r.mu.Unlock()
-	for _, l := range links {
-		l.close()
-	}
+	r.router.Close()
 }
 
-// adopt starts reading a connection whose other end is known, or, for a
-// plain one, will say who it is.
-func (r *runnerPeers) adopt(conn net.Conn, key string, plain bool) *link {
-	l := &link{conn: conn, plain: plain, fingerprint: key, asked: map[int]chan talk.Value{}, hello: make(chan struct{})}
-	if key != "" {
-		r.mu.Lock()
-		// The newest link to a key carries what this Runner sends there.
-		r.links[key] = l
-		r.mu.Unlock()
-	}
-	go r.read(l)
-	return l
-}
-
-// greet opens a plain connection: each end first says which key it is,
-// with nothing to check it by.
-func (r *runnerPeers) greet(conn net.Conn) *link {
-	l := r.adopt(conn, "", true)
-	hello, _ := talk.Map(talk.Pair{Key: "hello", Val: mustText(r.fingerprint)})
-	l.send(hello)
-	select {
-	case <-l.hello:
-		return l
-	case <-time.After(10 * time.Second):
-		l.close()
-		return nil
-	}
-}
-
-func (r *runnerPeers) read(l *link) {
-	defer func() {
-		l.close()
-		r.mu.Lock()
-		if r.links[l.fingerprint] == l {
-			delete(r.links, l.fingerprint)
-		}
-		r.mu.Unlock()
-	}()
-	in := bufio.NewReader(l.conn)
-	head := make([]byte, 4)
-	for {
-		if _, err := io.ReadFull(in, head); err != nil {
-			return
-		}
-		n := binary.BigEndian.Uint32(head)
-		if n > maxFrame {
-			return
-		}
-		body := make([]byte, n)
-		if _, err := io.ReadFull(in, body); err != nil {
-			return
-		}
-		frame, err := talk.DecodeValue(body, func(kind, id string) (*talk.Object, bool) {
-			if kind != peerKindName {
-				return nil, false
-			}
-			p, err := r.peerFor(id)
-			return p, err == nil
-		})
-		if err != nil || frame.Kind() != talk.KindMap {
-			return
-		}
-		r.arrive(l, frame)
-	}
-}
-
-const peerKindName = "peer"
-
-var peerID = regexp.MustCompile(`^([0-9a-f]{64})/([0-9a-f]{32})$`)
-
-func splitID(id string) (string, string, bool) {
-	m := peerID.FindStringSubmatch(id)
-	if m == nil {
-		return "", "", false
-	}
-	return m[1], m[2], true
-}
-
-// peerFor is this Group's one Peer for an exposure id.
-func (r *runnerPeers) peerFor(id string) (*talk.Object, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if p := r.peers[id]; p != nil {
-		return p, nil
-	}
-	if p, found := r.group.ObjectByID(peerKindName, id); found && p != nil {
-		r.peers[id] = p
-		return p, nil
-	}
-	p, err := r.group.Object(r.kind, id, nil)
-	if err != nil {
-		return nil, err
-	}
-	r.peers[id] = p
-	return p, nil
-}
-
-// identityOf is the Caller Identity of what arrives on l: none over plain
-// TCP, which authenticates nobody.
-func (r *runnerPeers) identityOf(l *link, key string) talk.Value {
-	if l != nil && l.plain {
-		return talk.Nothing
-	}
-	pairs := []talk.Pair{{Key: "key", Val: mustText(key)}}
-	r.mu.Lock()
-	name, named := r.byKey[key]
-	r.mu.Unlock()
-	if named {
-		pairs = append(pairs, talk.Pair{Key: "name", Val: mustText(name)})
-	}
-	v, _ := talk.Map(pairs...)
-	return v
-}
-
-// local gives a Remote Send to this Runner's exposure: a Delivery, or for a
-// call a Request whose Pending is returned. reason is set when it can't go.
-func (r *runnerPeers) local(l *link, key, secret, message string, args []talk.Value, waits bool) (*talk.Pending, string) {
-	r.mu.Lock()
-	e, held := r.exposures[secret]
-	r.mu.Unlock()
-	var s *talk.Script
-	if held {
-		s = r.group.Script(e.script)
-	}
-	if s == nil {
-		return nil, "not exposed"
-	}
-	m := talk.Message{Name: message, Args: args}
-	identity := r.identityOf(l, key)
-	if !waits {
-		if id, err := s.Deliver(m); err == nil {
-			r.vouch(id, identity)
-		}
-		return nil, ""
-	}
-	id, pending, err := s.Request(context.Background(), m)
-	if errors.Is(err, talk.ErrMailboxFull) {
-		return nil, "mailbox full"
-	}
-	if err != nil {
-		return nil, "unreachable"
-	}
-	r.vouch(id, identity)
-	return pending, ""
-}
-
-func (r *runnerPeers) vouch(id talk.DeliveryID, identity talk.Value) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.callers[string(id)] = identity
-}
-
-func (r *runnerPeers) arrive(l *link, frame talk.Value) {
-	if l.plain && l.fingerprint == "" {
-		// A plain link's first frame says which key the other end is.
-		hello := textField(frame, "hello")
-		if len(hello) != 64 || strings.Trim(hello, "0123456789abcdef") != "" {
-			l.close()
-			return
-		}
-		l.fingerprint = hello
-		r.mu.Lock()
-		r.links[hello] = l
-		r.mu.Unlock()
-		close(l.hello)
-		return
-	}
-	if n, ok := wholeField(frame, "reached"); ok {
-		l.answered(n, frame)
-		return
-	}
-	if n, ok := wholeField(frame, "replied"); ok {
-		l.answered(n, frame)
-		return
-	}
-	if n, ok := wholeField(frame, "reach"); ok {
-		r.mu.Lock()
-		key, named := r.names[textField(frame, "name")]
-		r.mu.Unlock()
-		answer := talk.Pair{Key: "error", Val: mustText("not exposed")}
-		if named {
-			answer = talk.Pair{Key: "peer", Val: mustText(r.fingerprint + "/" + key)}
-		}
-		reply, _ := talk.Map(talk.Pair{Key: "reached", Val: talk.Int(int64(n))}, answer)
-		l.send(reply)
-		return
-	}
-	message := textField(frame, "message")
-	var args []talk.Value
-	for i := 1; i <= frame.Get("args").Len(); i++ {
-		args = append(args, frame.Get("args").Index(i))
-	}
-	if has(frame, "post") {
-		if key, secret, ok := splitID(textField(frame, "post")); ok && key == r.fingerprint {
-			r.local(l, l.fingerprint, secret, message, args, false)
-		}
-		return
-	}
-	n, ok := wholeField(frame, "call")
-	if !ok {
-		return
-	}
-	reply := func(p talk.Pair) {
-		v, _ := talk.Map(talk.Pair{Key: "replied", Val: talk.Int(int64(n))}, p)
-		l.send(v)
-	}
-	failed := func(reason string, err talk.Value) {
-		pairs := []talk.Pair{{Key: "reason", Val: mustText(reason)}}
-		if err.Kind() != talk.KindNothing {
-			pairs = append(pairs, talk.Pair{Key: "error", Val: err})
-		}
-		f, _ := talk.Map(pairs...)
-		reply(talk.Pair{Key: "failed", Val: f})
-	}
-	key, secret, ok := splitID(textField(frame, "to"))
-	if !ok || key != r.fingerprint {
-		failed("not exposed", talk.Nothing)
-		return
-	}
-	pending, reason := r.local(l, l.fingerprint, secret, message, args, true)
-	if pending == nil {
-		failed(reason, talk.Nothing)
-		return
-	}
-	go func() {
-		<-pending.Done()
-		value, err := pending.Result()
-		if err != nil {
-			reason := "unreachable"
-			errValue := talk.Nothing
-			if err.Code == "send failed" {
-				if s, ok := err.Data.Get("reason").AsText(); ok {
-					reason = s
-				}
-				errValue = err.Data.Get("error")
-			}
-			failed(reason, errValue)
-			return
-		}
-		reply(talk.Pair{Key: "value", Val: value})
-	}()
-}
-
-// linkTo is a link to the Host with this key, dialled if a `--peer` gives it.
-func (r *runnerPeers) linkTo(key string) *link {
-	r.mu.Lock()
-	open := r.links[key]
-	name, named := r.byKey[key]
-	r.mu.Unlock()
-	if open != nil {
-		return open
-	}
+// dial is a new link to the Runner a `--peer` names; nil when it can't be
+// reached or doesn't have the pinned key.
+func (r *runnerPeers) dial(name string) *link {
+	remote, named := r.o.remotes[name]
 	if !named {
 		return nil
-	}
-	return r.dial(name)
-}
-
-// dial is a link to the Runner a `--peer` names, dialled if none is open.
-func (r *runnerPeers) dial(name string) *link {
-	remote := r.o.remotes[name]
-	if remote.fingerprint != "" {
-		r.mu.Lock()
-		open := r.links[remote.fingerprint]
-		r.mu.Unlock()
-		if open != nil {
-			return open
-		}
 	}
 	address := net.JoinHostPort(remote.host, strconv.Itoa(remote.port))
 	if remote.plain {
@@ -727,187 +463,5 @@ func (r *runnerPeers) dial(name string) *link {
 		_ = conn.Close()
 		return nil
 	}
-	return r.adopt(conn, remote.fingerprint, false)
-}
-
-// The talk.PeerImpl the Runner grants.
-
-func (r *runnerPeers) Expose(c *talk.Call, name string) error {
-	r.mu.Lock()
-	if key, named := r.names[name]; name != "" && named {
-		e := r.exposures[key]
-		r.mu.Unlock()
-		if e.script != c.ScriptName() {
-			c.Fail(failure("name in use"))
-			return nil
-		}
-		return r.answerPeer(c, r.fingerprint+"/"+key)
-	}
-	secret := make([]byte, 16)
-	_, _ = cryptorand.Read(secret)
-	key := hex.EncodeToString(secret)
-	r.exposures[key] = exposure{name: name, script: c.ScriptName()}
-	if name != "" {
-		r.names[name] = key
-	}
-	r.mu.Unlock()
-	return r.answerPeer(c, r.fingerprint+"/"+key)
-}
-
-func (r *runnerPeers) answerPeer(c *talk.Call, id string) error {
-	p, err := r.peerFor(id)
-	if err != nil {
-		return err
-	}
-	c.Answer(p.Value())
-	return nil
-}
-
-func (r *runnerPeers) Unexpose(c *talk.Call, name string, peer *talk.Object) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	key := r.names[name]
-	if peer != nil {
-		_, key, _ = splitID(peer.ID())
-	}
-	e, held := r.exposures[key]
-	if !held || e.script != c.ScriptName() {
-		return nil
-	}
-	delete(r.exposures, key)
-	if e.name != "" {
-		delete(r.names, e.name)
-	}
-	return nil
-}
-
-func (r *runnerPeers) Reach(c *talk.Call, address string) error {
-	if _, named := r.o.remotes[address]; !named {
-		c.Fail(failure("bad address"))
-		return nil
-	}
-	go func() {
-		l := r.dial(address)
-		if l == nil {
-			c.Fail(failure("bad address"))
-			return
-		}
-		frame, ok := l.ask("reach", talk.Pair{Key: "name", Val: mustText(address)})
-		if !ok {
-			c.Fail(failure("bad address"))
-			return
-		}
-		id := textField(frame, "peer")
-		if key, _, valid := splitID(id); !valid || key != l.fingerprint {
-			c.Fail(failure("not exposed"))
-			return
-		}
-		if err := r.answerPeer(c, id); err != nil {
-			c.Fail(failure("bad address"))
-		}
-	}()
-	return nil
-}
-
-func (r *runnerPeers) Post(c *talk.Call, peer *talk.Object, message string, args []talk.Value) error {
-	return r.remoteSend(c, peer, message, args, false)
-}
-
-func (r *runnerPeers) Call(c *talk.Call, peer *talk.Object, message string, args []talk.Value) error {
-	return r.remoteSend(c, peer, message, args, true)
-}
-
-func (r *runnerPeers) remoteSend(c *talk.Call, peer *talk.Object, message string, args []talk.Value, waits bool) error {
-	key, secret, ok := splitID(peer.ID())
-	if !ok {
-		if waits {
-			c.Fail(sendFailed("unreachable", talk.Nothing))
-		}
-		return nil
-	}
-	if key == r.fingerprint {
-		// A Peer of this Runner's own exposure: still a Remote Send.
-		pending, reason := r.local(nil, key, secret, message, args, waits)
-		if !waits {
-			return nil
-		}
-		if pending == nil {
-			c.Fail(sendFailed(reason, talk.Nothing))
-			return nil
-		}
-		go func() {
-			<-pending.Done()
-			value, err := pending.Result()
-			if err != nil {
-				c.Fail(failure(err.Code, err.Data.Entries()...))
-				return
-			}
-			c.Answer(value)
-		}()
-		return nil
-	}
-	rest := []talk.Pair{{Key: "message", Val: mustText(message)}, {Key: "args", Val: talk.List(args...)}}
-	r.enqueue(key, func(l *link) {
-		if !waits {
-			if l != nil {
-				frame, _ := talk.Map(append([]talk.Pair{{Key: "post", Val: mustText(peer.ID())}}, rest...)...)
-				l.send(frame)
-			}
-			return
-		}
-		var answer <-chan talk.Value
-		ok := l != nil
-		if ok {
-			answer, ok = l.begin("call", append([]talk.Pair{{Key: "to", Val: mustText(peer.ID())}}, rest...)...)
-		}
-		if !ok {
-			c.Fail(sendFailed("unreachable", talk.Nothing))
-			return
-		}
-		go func() {
-			frame, ok := <-answer
-			switch {
-			case ok && has(frame, "value"):
-				c.Answer(frame.Get("value"))
-			case ok && has(frame, "failed"):
-				failed := frame.Get("failed")
-				reason, _ := failed.Get("reason").AsText()
-				c.Fail(sendFailed(reason, failed.Get("error")))
-			default:
-				c.Fail(sendFailed("unreachable", talk.Nothing))
-			}
-		}()
-	})
-	return nil
-}
-
-// enqueue queues a Remote Send to the Host with this key, after every one
-// the Script made before it, as the TS Runner keeps them.
-func (r *runnerPeers) enqueue(key string, job func(*link)) {
-	r.mu.Lock()
-	box := r.outboxes[key]
-	if box == nil {
-		box = make(chan func(*link), 1024)
-		r.outboxes[key] = box
-		go func() {
-			var l *link
-			for job := range box {
-				if l == nil || l.isClosed() {
-					l = r.linkTo(key)
-				}
-				job(l)
-			}
-		}()
-	}
-	r.mu.Unlock()
-	box <- job
-}
-
-func (r *runnerPeers) Caller(c *talk.Call) (talk.Value, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if v, ok := r.callers[c.Delivery()]; ok && c.Delivery() != "" {
-		return v, nil
-	}
-	return talk.Nothing, nil
+	return newLink(r, conn, remote.fingerprint, false)
 }

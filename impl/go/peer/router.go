@@ -8,8 +8,7 @@
 //	def, _ := core.PeerCapability(router, costs)
 //	router.Attach(group, identity)
 //
-// Remote Sends to other Hosts are not carried yet: a Peer naming another
-// Host's key is `unreachable`.
+// Links carry Remote Sends to other Hosts: Connect one, or give Options.Dial.
 package peer
 
 import (
@@ -35,17 +34,29 @@ type Options struct {
 	// Key is this Host's key fingerprint, 64 lowercase hex digits, which
 	// every Peer id begins with. Empty makes a random one.
 	Key string
+	// Dial is a link to the Host an address names, or nil when there is
+	// none. A Router with Dial reaches every address through it, by asking
+	// that Host; one without reaches the names its own Groups expose. It may
+	// block, and is never called with the router's lock held.
+	Dial func(address string) Link
+	// AddressOf is the address Dial takes for the Host with a key, for a
+	// Peer naming a key with no open link.
+	AddressOf func(key string) (string, bool)
 }
 
 // Router holds a Host's Peer Exposures and carries Remote Sends between the
 // Groups attached to it. It is a talk.PeerImpl with a Release hook.
 type Router struct {
+	o         Options
 	key       string
 	kind      *talk.ObjectKind
 	mu        sync.Mutex
 	exposures map[string]exposure // by secret
 	names     map[string]string   // to a secret
 	members   map[target]*member
+	wires     map[string]*wire // by the other Host's key
+	addressed map[string]*wire // by the address dialled
+	outboxes  map[string]chan func(*wire)
 }
 
 var _ talk.PeerImpl = (*Router)(nil)
@@ -58,8 +69,15 @@ func New(core *talk.Core, o Options) *Router {
 		_, _ = rand.Read(b)
 		key = hex.EncodeToString(b)
 	}
-	return &Router{key: key, kind: core.PeerKind(), exposures: map[string]exposure{},
-		names: map[string]string{}, members: map[target]*member{}}
+	r := newRouter(key, core.PeerKind())
+	r.o = o
+	return r
+}
+
+func newRouter(key string, kind *talk.ObjectKind) *Router {
+	return &Router{key: key, kind: kind, exposures: map[string]exposure{},
+		names: map[string]string{}, members: map[target]*member{},
+		wires: map[string]*wire{}, addressed: map[string]*wire{}, outboxes: map[string]chan func(*wire){}}
 }
 
 // Key is this Host's key fingerprint, as every Peer id names it.
@@ -274,10 +292,15 @@ func (r *Router) withdrawWhere(match func(owner) bool) {
 	}
 }
 
-// peerIn is the Group's one Peer for an exposure, made the first time. The
-// caller holds mu.
+// peerIn is the Group's one Peer for this Host's exposure. The caller
+// holds mu.
 func (r *Router) peerIn(t target, secret string) (talk.Value, error) {
-	id := r.key + "/" + secret
+	return r.peerOf(t, r.key+"/"+secret)
+}
+
+// peerOf is the Group's one Peer for an exposure id, on this Host or
+// another, made the first time. The caller holds mu.
+func (r *Router) peerOf(t target, id string) (talk.Value, error) {
 	m := r.members[t]
 	if m == nil {
 		return talk.Nothing, errors.New("peer: the Group isn't attached")
@@ -347,12 +370,16 @@ func (r *Router) unexpose(c call, name, id string) {
 }
 
 func (r *Router) reach(c call, address string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	if !allows(c, func(b Binding) []string { return b.Reach }, address) {
 		c.fail(failure("bad address"))
 		return nil
 	}
+	if r.o.Dial != nil {
+		r.reachAway(c, address)
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	key, held := r.names[address]
 	if !held {
 		c.fail(failure("not exposed"))
@@ -390,11 +417,10 @@ func (r *Router) cross(v talk.Value, to target) (talk.Value, bool) {
 		return m, err == nil
 	case talk.KindObject:
 		o, _ := v.AsObject()
-		key, mine := r.mine(o.ID())
-		if !mine || o.Kind() != r.kind {
+		if !peerID.MatchString(o.ID()) || o.Kind() != r.kind {
 			return talk.Nothing, false
 		}
-		p, err := r.peerIn(to, key)
+		p, err := r.peerOf(to, o.ID())
 		return p, err == nil
 	case talk.KindFunction:
 		return talk.Nothing, false
@@ -429,8 +455,6 @@ func (r *Router) vouch(from, to target, id talk.DeliveryID) {
 // send carries a Remote Send to the exposure a Peer id names. A `post` never
 // fails in the Script: one that can't go is dropped.
 func (r *Router) send(c call, id, message string, args []talk.Value, waits bool) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	fail := func(reason string) {
 		if waits {
 			c.fail(sendFailed(reason))
@@ -438,10 +462,15 @@ func (r *Router) send(c call, id, message string, args []talk.Value, waits bool)
 	}
 	key, mine := r.mine(id)
 	if !mine {
-		// Another Host's Peer: no link carries it yet.
-		fail("unreachable")
+		if m := peerID.FindStringSubmatch(id); m != nil {
+			r.sendAway(c, m[1], id, message, args, waits)
+		} else {
+			fail("unreachable")
+		}
 		return nil
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	e, held := r.exposures[key]
 	if !held || r.members[e.owner.group] == nil {
 		fail("not exposed")

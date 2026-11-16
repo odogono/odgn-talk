@@ -734,7 +734,8 @@ TS Runner resolves through Intl, such as `de-CH`, may resolve to `de` here.
 lets `reach NAME` find a listener whose key has that fingerprint, and
 `-peer-key` reads a PEM ECDSA P-256 key and certificate so the key survives a
 restart. `tcp://` addresses use plain TCP instead, on loopback only, where
-`caller` gives Nothing. The implementation is
+`caller` gives Nothing. The Runner's exposures and frames are the
+[Peer Router](peer/)'s, and its keys, listener and links are in
 [`peers.go`](internal/cmd/northtalk/peers.go).
 The main module requires `sqlite/`; it stays cgo-free. It exits 0 when no
 Run, queued message, timer, Serve Registration or open Exchange is left, 1
@@ -1059,8 +1060,10 @@ A `*peer.Router` is the `talk.PeerImpl` that `Core.PeerCapability` takes, and it
 lets a Group's Scripts expose and send, vouched for as `identity`, and
 `Detach` withdraws a discarded Group's Peer Exposures. `Binding{Expose, Reach}`
 limits the names a Grant may use. Remote Sends go between attached Groups, at
-most once. A Peer naming another Host's key is `unreachable` until links
-arrive (#2268). `peer/kit_test.go` runs the [peer kit](../../corpus/peer-kit/)
+most once. A `peer.Link` carries them to another Host as chapter 12's frames:
+`Connect` one, or give `Options.Dial` and `Options.AddressOf` to dial by
+address and by key. A Router with `Dial` reaches every address through it.
+The Runner's mutual TLS and loopback TCP are such links. `peer/kit_test.go` runs the [peer kit](../../corpus/peer-kit/)
 on stand-in Groups, and `peer/router_test.go` drives real Groups.
 
 ### The notification router

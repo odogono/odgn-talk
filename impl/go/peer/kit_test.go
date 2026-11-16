@@ -173,8 +173,7 @@ func expected(step toml.Table) outcome {
 // differs, if any.
 func runSequence(s kitSequence) (int, outcome, outcome, bool) {
 	var log []string
-	r := &Router{key: strings.Repeat("ab", 32), exposures: map[string]exposure{},
-		names: map[string]string{}, members: map[target]*member{}}
+	r := newRouter(strings.Repeat("ab", 32), nil)
 	groups := map[string]*standIn{}
 	names := make([]string, 0, len(s.groups))
 	for name := range s.groups {

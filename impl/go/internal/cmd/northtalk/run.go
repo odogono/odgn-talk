@@ -171,8 +171,8 @@ func runScript(o runOptions, rio runIO) int {
 	}
 	def, err = core.HTTPCapabilityWith(h, fetcher, talk.Costs{"serve": {}, "unserve": {}, "respond": {}, "fetch": {}})
 	grant("http", def, err, nil)
-	def, err = core.PeerCapability(peers, talk.Costs{"expose": {}, "unexpose": {}, "reach": {}, "post": {}, "call": {}, "caller": {}})
-	grant("peer", def, err, nil)
+	def, err = core.PeerCapability(peers.router, talk.Costs{"expose": {}, "unexpose": {}, "reach": {}, "post": {}, "call": {}, "caller": {}})
+	grant("peer", def, err, peers.binding())
 	databases := newLazySqlite()
 	def, err = core.SqliteCapability(databases, talk.Costs{"query": {}, "change": {}, "begin": {}, "commit": {}, "rollback": {}}, 0)
 	grant("sqlite", def, err, talk.SqliteBinding{Database: "main", MaxRows: maxRows})

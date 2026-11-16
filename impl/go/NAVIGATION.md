@@ -142,7 +142,7 @@ The Go module runs the embedded Zig Core, with no Go parser, checker, compiler o
 
 ## Peer Router
 
-- Implementation: [router](peer/router.go), the [`peer` Capability](peer_capability.go)
+- Implementation: [router](peer/router.go) and [its links](peer/links.go), the [`peer` Capability](peer_capability.go), the Runner's TLS and TCP links in [peers.go](internal/cmd/northtalk/peers.go)
 - Rules: [The peer router](../../spec/09-embedding.md#the-peer-router), [ADR 0181](../../docs/adr/0181-the-peer-router-owns-peer-exposure-lifetime-guarded-by-peer-kit.md)
 - Tests and cases: [peer kit](../../corpus/peer-kit/) and [its runner](peer/kit_test.go), [real-Group tests](peer/router_test.go)
 - First check: `go -C impl/go test -race ./peer`
