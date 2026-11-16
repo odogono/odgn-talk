@@ -8,3 +8,7 @@ fuzz-findings/
 
 # Python bytecode from the Benchmark Suite's Python runner
 __pycache__/
+
+# Go build output: the Runner built in impl/go, and `go test -c` binaries
+/impl/go/northtalk
+*.test
