@@ -785,6 +785,19 @@ Quantity comparison retains sequentially rounded Base Unit magnitudes beyond
 the number limit. Some huge Unit exponents remain impractical when interval
 bounds and stable-coefficient shortcuts cannot decide the comparison.
 
+`ZoneRules(zone, from, until)` builds [Zone Rules](../../docs/adr/0179-zone-rules-are-plain-values-that-let-built-ins-convert-in-a-named-zone.md)
+from Go's time zone database, walking the zone with `Time.ZoneBounds` and
+keeping the boundaries where the offset changes. A Script then converts local
+time with `toCivil` and `toInstant`, even in a Guard, without a `calendar`
+Grant. Keep the window to a few years either side of now and rebuild it, say
+once per Run: every call checks the whole map, at 10 Fuel plus 2 per change,
+so a ±10-year window in a zone with summer time costs about 90 Fuel a call.
+Unlike Java's `ZoneRules`, the map holds only its window, and a time outside
+it raises `out of range`; it is also a copy of the database when built. An
+unknown zone, an empty window, or an offset that isn't whole minutes, as in
+local mean time, is refused with `InvalidValue`. Embed `time/tzdata` when the
+Host's platform may lack a zone database.
+
 ## Save, restore and code updates
 
 `Group.Save` returns the Zig Core's save bytes for a Quiescent Group, in the
