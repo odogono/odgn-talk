@@ -74,3 +74,4 @@ A Civil Date is one value kind whose time of day is optional, and dates run from
 
 - Narrowed by ADR 0053: backticks interpolate expressions and raw fences hold multiline text. Reusable text/date templates now use `${…}` and `$$`, replacing the earlier bare-brace syntax. Ordinary quoted text is unchanged.
 - Narrowed by [ADR 0091](0091-time-has-microsecond-resolution.md): times are whole microseconds, so the `nanosecond` field becomes `microsecond` and date text takes a fraction of one to six digits.
+- Narrowed by [ADR 0179](0179-zone-rules-are-plain-values-that-let-built-ins-convert-in-a-named-zone.md): `toCivil` and `toInstant` also accept Zone Rules, a plain map of a named zone's offsets that the Host builds, so named-zone conversion works without a Grant and in Guards.
