@@ -9,6 +9,13 @@ Spec's Data Files.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-16
+
+### Added
+
+- **go:** `ZoneRules(zone, from, until)` builds Zone Rules from Go's time zone database, for `toCivil` and `toInstant` to convert in a named zone without a Grant.
+- **spec:** `toCivil` and `toInstant` convert in a named time zone without a Grant, given Zone Rules that the Host builds from its zone data.
+
 ## [0.2.0] - 2026-11-13
 
 ### Breaking
