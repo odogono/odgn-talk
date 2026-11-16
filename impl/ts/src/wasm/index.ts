@@ -28,6 +28,7 @@ export {
   type InlineFunction,
   type InlineOperation,
 } from '../inline-grants';
+export { zoneRules } from '../zone-rules';
 
 export {
   HostError,

@@ -131,6 +131,12 @@ describe('the embedding interface matches spec/embedding/talk.ts', () => {
       parametersOf(spec, 'inlineGrants'),
     );
   });
+
+  test('zoneRules builder', () => {
+    expect(parametersOf(parse('src/zone-rules.ts'), 'zoneRules')).toEqual(
+      parametersOf(spec, 'zoneRules'),
+    );
+  });
 });
 
 // Exports of @northtalk/ts that @northtalk/ts/wasm leaves out on purpose: the

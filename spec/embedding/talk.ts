@@ -152,6 +152,14 @@ export declare function map(m: Map<string, Value> | Iterable<[string, Value]>): 
 export declare function record(o: Record<string, Value>): Value;
 
 /**
+ * Zone Rules for the IANA zone `zone` from `from` up to `until`, exclusive,
+ * as an ordinary map Value (chapter 7, Zone Rules; ADR 0179): the offset in
+ * effect at `from`, then each Instant in the window where it changes, from
+ * the runtime's own zone data. Uncharged, outside any Run. An unknown zone,
+ * an empty window, or an offset that isn't whole minutes throws invalid value.
+ */
+export declare function zoneRules(zone: string, from: Date, until: Date): Value;
+/**
  * Plain JS data to a Value by the named constructors (ADR 0119). A Value
  * passes through; null and undefined are nothing; arrays are lists, holes
  * nothing; plain objects follow record(); a Map follows map(). A JS number

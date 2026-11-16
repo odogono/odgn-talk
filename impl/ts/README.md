@@ -801,6 +801,25 @@ Each outer key defines a Capability and grants all its Operations. Spread the re
 
 A plain function, or `{ fn, arity }`, is immediate. `{ async: fn, arity?, maxPendingMs? }` suspends and receives the call's `AbortSignal` after the Script arguments; abandonment aborts it. Its pending limit defaults to the Group's `maxWaitMs`. Arity is always `fn.length` unless overridden, so supply `arity` when the signal parameter, default parameters or rest parameters change that count. Operations cost zero Fuel beyond call instructions, have no Argument Labels and are Host Commands: `ask math to sum 10, 10` and `sum 10, 10` both answer in `it`; write `fetch id and wait` for a suspending one. Existing argument-count, Reserved Word and ambiguous-command checks apply. Both TS entry points export this Helper, which works over the TS Core and Zig Host Adapter.
 
+`zoneRules(zone, from, until)` builds [Zone Rules](../../docs/adr/0179-zone-rules-are-plain-values-that-let-built-ins-convert-in-a-named-zone.md) from the runtime's `Intl` zone data, so a Script can convert local time with `toCivil` and `toInstant`, even in a Guard, without a `calendar` Grant:
+
+```ts
+import { createGroup, zoneRules } from '@northtalk/ts';
+
+const now = Date.now();
+const year = 365 * 86_400_000;
+const site = zoneRules('Europe/London', new Date(now - 2 * year), new Date(now + 2 * year));
+// Pass `site` to the Script as an ordinary map, e.g. as a Handler argument:
+// on raised at, site where hour(toCivil(at, site)) >= 22
+```
+
+- **A modest window:** a few years either side of now. Every `toCivil` or `toInstant` call checks the whole map, at 10 Fuel plus 2 per change, so a ±10-year window in a zone with summer time costs about 90 Fuel a call. Build Zone Rules again, say once per Run, rather than reaching decades ahead.
+- **No extrapolation:** unlike Java's `ZoneRules`, these hold only their window. A time outside it raises `out of range`.
+- **A copy:** the map holds the offsets `Intl` gave when it was built. Rebuild it to pick up new zone data.
+- **Failures:** an unknown zone, an empty window, or an offset that isn't whole minutes, as in local mean time before a zone adopted standard time, throws `invalid value`.
+
+Both TS entry points export it, and it works over the TS Core and the Zig Host Adapter.
+
 For a Host that owns the Clock and Pump loop, use `newGroup` directly:
 
 ```ts
