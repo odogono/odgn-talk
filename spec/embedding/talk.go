@@ -149,7 +149,7 @@ type Pair struct {
 
 func KV(k string, v Value) Pair
 
-// ZoneRules builds Zone Rules for the IANA zone from `from` up to `until`,
+// Go only: ZoneRules builds Zone Rules for the IANA zone from `from` up to `until`,
 // exclusive, as an ordinary map Value (chapter 7, Zone Rules; ADR 0179): the
 // offset in effect at `from`, then each Instant in the window where it
 // changes, from the Host's time zone database. Uncharged, outside any Run. An
