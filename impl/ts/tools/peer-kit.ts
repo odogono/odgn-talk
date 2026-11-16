@@ -15,6 +15,7 @@ import { list, map, text, type Value } from '../src/values';
 
 type Delivery = {
   args: string;
+  group?: string;
   kind: 'deliver' | 'request';
   message: string;
   script?: string;
@@ -26,6 +27,7 @@ type Step = {
   do: string;
   error?: string;
   grant?: string;
+  group?: string;
   message?: string;
   name?: string;
   peer?: string;
@@ -33,13 +35,14 @@ type Step = {
   same?: string;
   script?: string;
 };
-type Sequence = { name: string; scripts?: string[]; steps: Step[] };
-type KitFile = { scripts: string[]; sequence: Sequence[] };
+type Groups = Record<string, string[]>;
+type Sequence = { groups?: Groups; name: string; steps: Step[] };
+type KitFile = { groups: Groups; sequence: Sequence[] };
 
 export type PeerKitSequence = {
   file: string;
+  groups: Groups;
   name: string;
-  scripts: string[];
   steps: Step[];
 };
 
@@ -59,12 +62,19 @@ export const peerKitSequences = async (
       ) as KitFile;
       return kit.sequence.map(s => ({
         file,
+        groups: s.groups ?? kit.groups,
         name: s.name,
-        scripts: s.scripts ?? kit.scripts,
         steps: s.steps,
       }));
     });
 };
+
+/**
+ * Whether the TS router can run the sequence: it serves one Group, so it
+ * skips the sequences with several.
+ */
+export const peerKitRuns = (sequence: PeerKitSequence): boolean =>
+  Object.keys(sequence.groups).length === 1;
 
 // A fixed key, so Peer ids are this Host's: 64 hex digits.
 const KEY = 'ab'.repeat(32);
@@ -77,6 +87,7 @@ const KEY = 'ab'.repeat(32);
 class StandIn {
   readonly objects = new Map<Value, HostObject>();
   constructor(
+    readonly name: string,
     readonly scripts: readonly string[],
     private readonly log: string[],
   ) {}
@@ -92,7 +103,7 @@ class StandIn {
     }
     const line = (kind: string, m: { args?: Value[]; name: string }) => {
       this.log.push(
-        `${name} ${kind} ${m.name} ${list(...(m.args ?? [])).toString()}`,
+        `${this.name} ${name} ${kind} ${m.name} ${list(...(m.args ?? [])).toString()}`,
       );
       return `d${this.log.length}`;
     };
@@ -118,7 +129,8 @@ const listOf = (source: string): Value[] => {
 
 const expected = (step: Step): Outcome => ({
   deliveries: (step.deliveries ?? []).map(
-    d => `${d.script ?? 'a'} ${d.kind} ${d.message} ${display(d.args)}`,
+    d =>
+      `${d.group ?? 'g'} ${d.script ?? 'a'} ${d.kind} ${d.message} ${display(d.args)}`,
   ),
   ...(step.error !== undefined ? { error: display(step.error) } : {}),
   ...(step.do === 'expose' && step.error === undefined
@@ -150,7 +162,10 @@ export const runPeerKitSequence = (
   sequence: PeerKitSequence,
 ): PeerKitFailure | undefined => {
   const log: string[] = [];
-  const group = new StandIn(sequence.scripts, log);
+  const [[groupName, scripts]] = Object.entries(sequence.groups) as [
+    [string, string[]],
+  ];
+  const group = new StandIn(groupName, scripts, log);
   const router = new PeerRouter({ key: KEY });
   router.bind(group as unknown as TsGroup);
   const peers = new Map<string, HostObject>();

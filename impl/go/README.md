@@ -78,14 +78,15 @@ also grant a Capability whose Operation is a Go function.
 
 ## Supported packages and platforms
 
-| Package | Purpose |
-| --- | --- |
-| `northtalk.org/go` | The Core, Groups, Scripts, Values, Capabilities and Grants, save and restore |
-| `northtalk.org/go/driver` | `Pool`, which pumps Groups on workers with a Clock and deadline timers, and Transcript replay |
-| `northtalk.org/go/session` | The Session Host: Entries, Session Commands and the REPL |
-| `northtalk.org/go/store` | An in-memory `StoreImpl` for the Store Capability |
-| `northtalk.org/go/notify` | The Store notification router |
-| `northtalk.org/go/sqlite` | The SQLite Capability, a separate module |
+| Package                    | Purpose                                                                                       |
+| -------------------------- | --------------------------------------------------------------------------------------------- |
+| `northtalk.org/go`         | The Core, Groups, Scripts, Values, Capabilities and Grants, save and restore                  |
+| `northtalk.org/go/driver`  | `Pool`, which pumps Groups on workers with a Clock and deadline timers, and Transcript replay |
+| `northtalk.org/go/session` | The Session Host: Entries, Session Commands and the REPL                                      |
+| `northtalk.org/go/store`   | An in-memory `StoreImpl` for the Store Capability                                             |
+| `northtalk.org/go/notify`  | The Store notification router                                                                 |
+| `northtalk.org/go/peer`    | The Peer Router for `peer`'s Remote Sends between Groups                                      |
+| `northtalk.org/go/sqlite`  | The SQLite Capability, a separate module                                                      |
 
 Everything under `internal/`, including the `northtalk` REPL command, is
 unsupported; the published command is [`@northtalk/cli`](../../tooling/cli/).
@@ -649,8 +650,6 @@ summarising the Zig changes Go Hosts receive.
 
 **Implemented commands:** [Session observation](../../spec/session-observation.md) adds `:describe`, `:inspect`, `:apropos`, `:trace`/`:untrace`, `:fuel`, marked declaration docs and object-crossing Transcript envelopes. This Core implements the public Run accounting reports, `RestoreResult.reports`, Declaration Documentation ([#436](https://github.com/odogono/odgn-talk/issues/436)), `:describe` and `:apropos` ([#437](https://github.com/odogono/odgn-talk/issues/437)), and `:trace`, `:untrace` and `:fuel` ([#438](https://github.com/odogono/odgn-talk/issues/438)). It also implements `:inspect` and object-crossing envelopes ([#439](https://github.com/odogono/odgn-talk/issues/439)); coordinated release review remains in #370.
 
-
-
 - **Value inspection and object Transcripts:** `:inspect` accepts one expression, including a multiline expression, and evaluates it once. Syntax and checking diagnostics use the expression’s own source positions; statements, declarations and trailing input give `! bad arguments`. Passive rows show the held value, sizes, sorted map fields, Function metadata/docs or the actual Object Kind's properties. An object then runs the generated normative reader as a separate ordinary request with the current limits; getters run once in code-point order and print one-level results or parity-safe errors. Generated readers stay out of Session Source/export. New recordings include initial `% setup` and portable Function exposures; recordings without `%` still replay with their original empty-object setup.
 - **Object adapters:** supply `Objects(context)` in `session.Environment`; use `Objects.DefineKind` and `.Object` for initial and dynamically returned identities. `.Request(map[string]any)` builds and executes a normalized external worker request, recursively encoding held Values; `.Action(Envelope)` accepts raw Value Encoding, with `.Encode` for Function references. The adapter records actual callback boundaries, ordered actions, errors and synchronous refusals. Supply `ResolveObject` for live Restore. Standalone replay creates dummy native identities and consumes these records through normal Core Shape checks and costs; it does not invoke the original getter or external I/O. Function references preserve actual exposed Values and nested map insertion order, and become invalid after successful Restore. Corpus replay uses the same envelopes in both Trace modes. [The proposed first expectations](../../docs/reviews/object-inspection/README.md) still await human first-blessing review.
 
@@ -659,7 +658,6 @@ Independent Go Trace replay preserves the exact source scalars in `reload`, `ext
 - **Declaration Documentation:** `--|` blocks attach to the next top-level declaration as the specification says. A leading block keeps an Entry `NeedsMore`, and the Host refuses a block that documents nothing with `! bad arguments`. The source a declaration was entered with keeps its block, through redefinition, export and reload. `Documentation(name)`, `LibraryDocumentation(library, name)` and `FunctionDocumentation(value)` return the documentation. Each Handler Clause has its own entry. An Import resolves to the declaration that defines it, and a Built-in uses its `stdlib.toml` description. A Function Value's documentation comes from the code that defined it, so a stale one keeps its documentation, including across save and restore.
 - **Tracing and Fuel:** the Session Host reads only the public Run accounting reports for these commands. `:trace` filters latch a dispatched Run by its message Selector when it starts; a Command Call shares its caller's Run and is not traced separately, and a Function Value's Run has no Selector to match. `trace start` and `trace end` rows follow a Host call's ordinary output, and Fuel rows follow them. `:fuel <entry>` measures the Entry's root Delivery and every Run and message spawned from it, summing each member Run's latest cumulative Fuel. It stays pending until the root's causal work reports no live Runs and no queued messages. `NeedsMore` waits for a multiline `:fuel` Entry. `:save` keeps filters, latched Runs and measurements; `:restore` prints `fuel abandoned` for each measurement still pending, then continues from the saved ones. The `sessions/observation` case pins the output on both Cores.
 - **`:describe` and `:apropos`:** both read declaration source and the Built-in catalogue, so they execute nothing. Describing a current Script Variable takes one explicit `vars` snapshot for its value rows; no other lookup reads the Group. A signature ends at the declaration's grammar head: a function's or Handler's head line, or a Constant's or Script Variable's name. A stale Function Value keeps its original name, arity and documentation through save and restore, even after its executable code is discarded. Describing an Object variable renders its actual Kind metadata without calling getters.
-
 
 From `impl/go/`, run the Go REPL or record/replay a Transcript:
 
@@ -1050,6 +1048,20 @@ They may queue Host Inputs; worker calls are `reentrant call`, and panics cannot
 refuse release. `grant_release_test.go` verifies lifecycle ordering and identity.
 The TS Core supports the same embedding hook; it has no Message Layer adapter,
 so its transport tests are deferred. The `store` factory forwards its implementation's release hook; see the router below.
+
+### The Peer Router
+
+Package [`peer`](peer/) supplies `peer.New(core, Options{Key})`, the
+[Peer Router](../../spec/09-embedding.md#the-peer-router) for the optional
+`peer` Capability ([ADR 0181](../../docs/adr/0181-the-peer-router-owns-peer-exposure-lifetime-guarded-by-peer-kit.md)).
+A `*peer.Router` is the `talk.PeerImpl` that `Core.PeerCapability` takes, and its
+`Release` method is the `peer` Grant release hook. `Attach(group, identity)`
+lets a Group's Scripts expose and send, vouched for as `identity`, and
+`Detach` withdraws a discarded Group's Peer Exposures. `Binding{Expose, Reach}`
+limits the names a Grant may use. Remote Sends go between attached Groups, at
+most once. A Peer naming another Host's key is `unreachable` until links
+arrive (#2268). `peer/kit_test.go` runs the [peer kit](../../corpus/peer-kit/)
+on stand-in Groups, and `peer/router_test.go` drives real Groups.
 
 ### The notification router
 
@@ -1724,16 +1736,16 @@ limits, and exhausting it can terminate the process or WASI instance.
 Measured on 2026-10-10 with Go 1.27.2, macOS arm64 and Wasmtime 49.0.0,
 using a fresh process/instance per case, default Go GC settings and no Trace:
 
-| Growth workload | Limits | Sidecar peak RSS | `wasip1` peak linear memory |
-| --- | --- | --- | --- |
-| Run-local List, repeated 64-byte text | default | 39.09 MiB | 90.00 MiB |
-| Run-local List, `nothing` | default | 100.95 MiB | 133.50 MiB |
-| Script Variable List, repeated 64-byte text | default | 29.61 MiB | 28.50 MiB |
-| Script Variable List, `nothing` | default | 37.77 MiB | 37.50 MiB |
-| Run-local List, repeated 64-byte text | conformance minimums | 238.50 MiB | 333.00 MiB |
-| Run-local List, `nothing` | conformance minimums | 1241.67 MiB | 1563.00 MiB |
-| Script Variable List, repeated 64-byte text | conformance minimums | 397.47 MiB | 464.50 MiB |
-| Script Variable List, `nothing` | conformance minimums | 751.50 MiB | 835.00 MiB |
+| Growth workload                             | Limits               | Sidecar peak RSS | `wasip1` peak linear memory |
+| ------------------------------------------- | -------------------- | ---------------- | --------------------------- |
+| Run-local List, repeated 64-byte text       | default              | 39.09 MiB        | 90.00 MiB                   |
+| Run-local List, `nothing`                   | default              | 100.95 MiB       | 133.50 MiB                  |
+| Script Variable List, repeated 64-byte text | default              | 29.61 MiB        | 28.50 MiB                   |
+| Script Variable List, `nothing`             | default              | 37.77 MiB        | 37.50 MiB                   |
+| Run-local List, repeated 64-byte text       | conformance minimums | 238.50 MiB       | 333.00 MiB                  |
+| Run-local List, `nothing`                   | conformance minimums | 1241.67 MiB      | 1563.00 MiB                 |
+| Script Variable List, repeated 64-byte text | conformance minimums | 397.47 MiB       | 464.50 MiB                  |
+| Script Variable List, `nothing`             | conformance minimums | 751.50 MiB       | 835.00 MiB                  |
 
 The Run-local workloads fault on allocation; Script Variable workloads
 commit every 1,000 additions and fault on Persistent State (64 MiB at the
@@ -1748,7 +1760,6 @@ The [earlier buffer-growth measurements](../../tools/wasi/results/2026-10-10-lis
 remain the evidence for [#584](https://github.com/odogono/odgn-talk/issues/584).
 
 These figures describe the historical Go artifacts. Current sidecar build and memory-check commands are in the [Zig guide](../zig/README.md#native-message-layer-sidecar). The shared memory check enforces the stated backstop; the sidecar check asserts the child's OS-reported peak RSS. CI runs conformance-minimum WASI and native sidecar cases against Zig, including rollback and post-fault reuse. Native Go regression tests still check slot size, sampled heap growth, aliases and concurrent List branches.
-
 
 ## Corpus runner
 

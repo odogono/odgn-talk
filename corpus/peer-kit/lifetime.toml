@@ -1,5 +1,5 @@
 # Release withdraws a Grant's Peer Exposures, except on Reload (chapter 9, The peer router: Lifetime).
-scripts = ["a", "b", "c", "d", "e"]
+groups = { g = ["a", "b", "c", "d", "e"] }
 
 [[sequence]]
 name = "stop, revoke and disable withdraw the owner's named and unnamed exposures; reload keeps them"

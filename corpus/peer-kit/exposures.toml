@@ -1,5 +1,5 @@
 # expose and unexpose, and what a Remote Send finds afterwards.
-scripts = ["a", "b", "c"]
+groups = { g = ["a", "b", "c"] }
 
 [[sequence]]
 name = "exposing a name gives a Peer, and exposing it again gives the same one"
