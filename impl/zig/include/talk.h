@@ -817,8 +817,10 @@ typedef struct talk_memory {
 /* Host Objects (ADRs 0012, 0016). A property's Get and Set run inside the
  * Run, like an immediate Operation, and are charged the same way. Get
  * answers with TALK_CALL_ANSWERED and *result, an owned reference; Set with
- * TALK_CALL_ANSWERED. TALK_CALL_FAILED or TALK_CALL_BROKEN is host error.
- * A NULL set makes the property read-only. */
+ * TALK_CALL_ANSWERED. TALK_CALL_FAILED is a Script error, and
+ * TALK_CALL_BROKEN host error. Inside talk_pump, TALK_CALL_STARTED pauses
+ * the Pump at the crossing until talk_crossing_answer; anywhere else it is
+ * host error. A NULL set makes the property read-only. */
 typedef struct talk_object talk_object;
 typedef struct talk_object_kind talk_object_kind;
 /* C only: Prop.Get. */
@@ -838,7 +840,8 @@ typedef struct talk_prop {
 /* An Object Kind's ordered, named collection of Host Objects (#1143). Each
  * callback answers with TALK_CALL_ANSWERED and *result, an owned reference,
  * Nothing included; a Script error with TALK_CALL_FAILED and *error.
- * TALK_CALL_STARTED, TALK_CALL_LIMITED and TALK_CALL_BROKEN are host error.
+ * TALK_CALL_STARTED pauses the Pump as a property's Get does; it,
+ * TALK_CALL_LIMITED and TALK_CALL_BROKEN are otherwise host error.
  * at's index is nonzero: positive from the front, negative from the end.
  * find's name is borrowed UTF-8 for the callback, with its byte length. */
 /* C only: ObjectElements.Count. */
@@ -1017,7 +1020,10 @@ typedef enum talk_group_state {
     TALK_IDLE,
     TALK_SLICED,
     TALK_STOPPED,
-    TALK_REWOUND
+    TALK_REWOUND,
+    /* C only: paused at a deferred property or collection callback; see
+     * talk_group_crossing. */
+    TALK_CROSSING
 } talk_group_state;
 
 typedef struct talk_pump_options {
@@ -1478,6 +1484,42 @@ const talk_decided *talk_deciding_decided(talk_deciding *d);
  * answered during its Start is settled by a further Pump at the same
  * reading before this returns; out sums their fuel and reports. */
 talk_host_error_code talk_pump(talk_group *g, int64_t seconds, int32_t micros, const talk_pump_options *o, talk_pump_result *out);
+/* C only: which callback a Crossing Pause stopped at. */
+typedef enum talk_crossing_op {
+    /* C only: a property's Get. */
+    TALK_CROSSING_GET,
+    /* C only: a property's Set. */
+    TALK_CROSSING_SET,
+    /* C only: a collection's count. */
+    TALK_CROSSING_COUNT,
+    /* C only: a collection's at. */
+    TALK_CROSSING_AT,
+    /* C only: a collection's find. */
+    TALK_CROSSING_FIND
+} talk_crossing_op;
+/* C only: a Crossing Pause, borrowing from the Group until it is answered.
+ * prop is the property's name, or "elements" for a collection; index is
+ * at's, name find's, and value a Set's. */
+typedef struct talk_crossing {
+    talk_object *object;
+    const char *prop;
+    size_t prop_len;
+    talk_crossing_op op;
+    int64_t index;
+    const char *name;
+    size_t name_len;
+    const talk_value *value;
+} talk_crossing;
+/* C only: the crossing a talk_pump that gave TALK_CROSSING waits at; false
+ * when none waits. Until it is answered, the Group refuses other worker
+ * calls with TALK_REENTRANT_CALL. */
+bool talk_group_crossing(talk_group *g, talk_crossing *out);
+/* C only: answers that crossing as its callback would have returned, end
+ * with result or error, and goes on with the Pump, which may pause again;
+ * out is as talk_pump's. The reports and fuel are the whole Pump's, given
+ * when it ends. TALK_UNKNOWN_CALL when no crossing waits. result is owned
+ * by the Core from this call; error is borrowed but its data is taken. */
+talk_host_error_code talk_crossing_answer(talk_group *g, talk_call_end end, talk_value *result, const talk_script_error *error, talk_pump_result *out);
 /* Makes the Group's handle for a Host-owned thing, the first time it
  * crosses into the Group. A reused id within the kind is
  * TALK_DUPLICATE_OBJECT_ID. The handle lives as long as the Group. */
