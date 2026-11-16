@@ -606,6 +606,28 @@ pub const Group = struct {
     crossing: ?Crossing = null,
     /// The talk_pump in progress, paused or not.
     pumping: ?Pumping = null,
+    /// While a crossing waits: the Trace its Host inputs' records wait
+    /// behind, as a native callback's do (paused-crossing-inputs.md).
+    paused_trace: ?*std.Io.Writer = null,
+    paused: bool = false,
+
+    /// Pauses at the crossing: until it is answered, the Host's inputs are
+    /// the callback's, so Stop lands there and their records follow the
+    /// crossing's.
+    fn enterPause(g: *Group) void {
+        g.paused = true;
+        g.paused_trace = g.group.trace;
+        g.group.pumping = true;
+        g.group.holdCallbackTrace(g.paused_trace, true);
+    }
+
+    fn leavePause(g: *Group) void {
+        if (!g.paused) return;
+        g.paused = false;
+        g.group.trace = g.paused_trace;
+        g.group.pumping = false;
+        g.paused_trace = null;
+    }
 
     /// Forgets the crossing, answered or not.
     fn dropCrossing(g: *Group) void {
@@ -616,7 +638,10 @@ pub const Group = struct {
     /// Forgets an answer the resumed Pump didn't take, as when a Stop
     /// landed at the pause and the crossing was never made again.
     fn dropAnswered(g: *Group) void {
-        if (g.crossing) |x| if (x.answer != null) g.dropCrossing();
+        if (g.crossing) |x| if (x.answer != null) {
+            g.dropCrossing();
+            g.group.answerTaken();
+        };
     }
 
     fn owns(g: *Group, o: *const objects.Object) bool {
@@ -1536,6 +1561,7 @@ fn pumpOwned(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions, out: 
 
 /// Ends talk_pump's work on an error.
 fn endPump(g: *Group, code: HostErrorCode) HostErrorCode {
+    g.leavePause();
     g.pumping = null;
     g.dropCrossing();
     return code;
@@ -1548,6 +1574,7 @@ fn goOn(g: *Group, out: ?*PumpResult) HostErrorCode {
     while (true) {
         while (g.group.pumpPaused()) {
             if (g.crossing) |x| if (x.answer == null) {
+                g.enterPause();
                 if (out) |r| r.* = .{ .state = .crossing, .fuel_used = 0 };
                 return .ok;
             };
@@ -1610,6 +1637,10 @@ export fn talk_crossing_answer(g: *Group, end: CallEnd, given: ?*Value, failure:
     deferring = g;
     defer deferring = previous;
     defer g.flush();
+    g.leavePause();
+    // The re-made callback takes the answer; controls queued meanwhile
+    // land after its record.
+    g.group.beginAnswer();
     g.group.resumePump() catch |err| return endPump(g, status(err));
     g.dropAnswered();
     return goOn(g, out);
@@ -3744,6 +3775,7 @@ fn answered(o: *objects.Object, prop: []const u8, op: CrossingOp) ?objects.Resul
     const r = x.answer orelse return null;
     x.answer = null;
     g.dropCrossing();
+    g.group.answerTaken();
     return r;
 }
 

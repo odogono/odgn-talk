@@ -1872,9 +1872,17 @@ static int object_elements_test(void) {
  * with it. The Trace is the one immediate answers give. */
 static bool crossing_defers = false;
 static int64_t crossing_level = 0;
+static talk_group *crossing_group = NULL;
+static int crossing_gets = 0;
+/* The first Get makes a refused Host input inside its callback: its record
+ * follows the callback's, deferred or not. */
+static void crossing_input(talk_object *o) {
+    if (crossing_gets++ == 0) (void)talk_set_parent(crossing_group, o, o);
+}
 static talk_call_end crossing_get(void *context, talk_object *o, talk_value **result, talk_script_error *error) {
-    (void)context; (void)o; (void)error;
+    (void)context; (void)error;
     if (crossing_defers) return TALK_CALL_STARTED;
+    crossing_input(o);
     return talk_int(crossing_level, result) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_BROKEN;
 }
 static talk_call_end crossing_set(void *context, talk_object *o, const talk_value *v, talk_script_error *error) {
@@ -1906,6 +1914,7 @@ static const char *crossing_source = "on go\n  put the level of g into a\n  set 
 static int crossing_run(bool defers, int *pauses, char *pumped_trace) {
     crossing_defers = defers;
     crossing_level = 4;
+    crossing_gets = 0;
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_core *core = talk_new();
@@ -1913,6 +1922,7 @@ static int crossing_run(bool defers, int *pauses, char *pumped_trace) {
     talk_group *group = NULL;
     talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    crossing_group = group;
     talk_object_kind_def tile_def = {"tile", 4, NULL, 0, NULL, NULL, 0, NULL};
     talk_object_kind *tile = NULL;
     int bad = talk_define_object_kind(core, &tile_def, &tile) != TALK_OK;
@@ -1946,6 +1956,7 @@ static int crossing_run(bool defers, int *pauses, char *pumped_trace) {
         talk_call_end end = TALK_CALL_ANSWERED;
         if (x.op == TALK_CROSSING_GET) {
             bad |= x.prop_len != 5 || memcmp(x.prop, "level", 5) != 0 || x.value != NULL;
+            crossing_input(x.object);
             bad |= talk_int(crossing_level, &v) != TALK_OK;
         } else if (x.op == TALK_CROSSING_SET) {
             const talk_decimal *d = NULL;
@@ -2006,6 +2017,7 @@ static int crossing_pause_test(void) {
     drop_refused_pumps(deferred);
     bad |= strcmp(immediate, deferred) != 0;
     bad |= strstr(trace, "raise s/r2 code=\"host error\"") == NULL;
+    bad |= strstr(immediate, "name=level op=get value=4\n> set-parent") == NULL;
     if (bad) fprintf(stderr, "pauses %d\nimmediate:\n%s\ndeferred:\n%s\nafter:\n%s", pauses, immediate, deferred, trace);
     return bad;
 }
