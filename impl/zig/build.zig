@@ -181,7 +181,10 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(session_tests).step);
     if (target.result.os.tag != .wasi) {
         const runner_tests = b.addTest(.{ .root_module = runner_module });
-        test_step.dependOn(&b.addRunArtifact(runner_tests).step);
+        const run_runner_tests = b.addRunArtifact(runner_tests);
+        // peer_kit.zig reads corpus/peer-kit/ from impl/zig.
+        run_runner_tests.setCwd(b.path("."));
+        test_step.dependOn(&run_runner_tests.step);
         test_step.dependOn(&run_smoke.step);
         test_step.dependOn(&run_kit.step);
     }

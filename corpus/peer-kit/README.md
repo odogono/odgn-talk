@@ -47,3 +47,4 @@ The kit doesn't cover Restore yet ([#2281](https://github.com/odogono/odgn-talk/
 
 - **TS:** [`impl/ts/tools/peer-kit.ts`](../../impl/ts/tools/peer-kit.ts) drives `@northtalk/ts/peer` through the kit, and [`impl/ts/tests/peer-kit.test.ts`](../../impl/ts/tests/peer-kit.test.ts) runs it under Bun.
 - **Go:** [`impl/go/peer/kit_test.go`](../../impl/go/peer/kit_test.go) drives `northtalk.org/go/peer` through the kit. `go -C impl/go test ./peer` runs it.
+- **Zig:** [`impl/zig/src/runner/peer_kit.zig`](../../impl/zig/src/runner/peer_kit.zig) holds the native Runner's [exposure table](../../impl/zig/src/runner/exposures.zig) to the kit. The Runner serves one Group, so it skips the sequences with several. `zig build test` in `impl/zig` runs it.

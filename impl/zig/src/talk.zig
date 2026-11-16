@@ -3370,7 +3370,17 @@ pub const TimerImpl = extern struct { context: ?*anyopaque, schedule: OperationF
 pub const ConsoleImpl = extern struct { context: ?*anyopaque, write: OperationFn, read: OperationFn };
 pub const UserImpl = extern struct { context: ?*anyopaque, confirm: OperationFn, choose: OperationFn, enter: OperationFn, notify: OperationFn };
 pub const HttpImpl = extern struct { context: ?*anyopaque, serve: OperationFn, unserve: OperationFn, respond: OperationFn, fetch: OperationFn };
-pub const PeerImpl = extern struct { context: ?*anyopaque, expose: OperationFn, unexpose: OperationFn, reach: OperationFn, post: OperationFn, call: OperationFn, caller: OperationFn };
+pub const PeerImpl = extern struct {
+    context: ?*anyopaque,
+    expose: OperationFn,
+    unexpose: OperationFn,
+    reach: OperationFn,
+    post: OperationFn,
+    call: OperationFn,
+    caller: OperationFn,
+    /// Optional.
+    release: ?ReleaseHook = null,
+};
 
 /// The largest cost component: 2^53 - 1.
 const max_cost = 9_007_199_254_740_991;
@@ -3481,7 +3491,12 @@ export fn talk_http_capability(c: *Core, impl: *const HttpImpl, costs: ?*const C
 
 export fn talk_peer_capability(c: *Core, impl: *const PeerImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
     // In name order: call, caller, expose, post, reach, unexpose.
-    return defineStandard(c, .peer, &.{ impl.call, impl.caller, impl.expose, impl.post, impl.reach, impl.unexpose }, impl.context, costs, out);
+    const code = defineStandard(c, .peer, &.{ impl.call, impl.caller, impl.expose, impl.post, impl.reach, impl.unexpose }, impl.context, costs, out);
+    if (code != .ok) return code;
+    const hook = impl.release orelse return .ok;
+    const released = setRelease(c, out.*.?, hook, impl.context);
+    if (released != .ok) out.* = null;
+    return released;
 }
 
 /// The Core-fixed kind `peer`, defined the first time it is asked for, so

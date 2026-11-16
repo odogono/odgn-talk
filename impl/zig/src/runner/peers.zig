@@ -84,7 +84,7 @@ const Link = struct {
     remote: ?[]const u8 = null,
 };
 
-const Exposure = struct { name: ?[]const u8, script: []const u8 };
+const exposures = @import("exposures.zig");
 
 /// A `call` waiting for its Request's Run to end: one that arrived on a
 /// link, or this Runner's own to its own exposure.
@@ -104,8 +104,8 @@ pub const Peers = struct {
     listen_at: ?Address,
     remotes: []const Remote,
     links: std.ArrayList(*Link) = .empty,
-    exposures: std.StringHashMapUnmanaged(Exposure) = .empty,
-    names: std.StringHashMapUnmanaged([]const u8) = .empty,
+    /// Its exposures, and their Lifetime.
+    exposed: exposures.Exposures,
     /// This Group's one Peer for each exposure id, an owned value.
     peers: std.StringHashMapUnmanaged(*c.talk_value) = .empty,
     /// Each Remote Send's Caller Identity, by delivery id: the sending
@@ -125,7 +125,7 @@ pub const Peers = struct {
             io.random(&raw);
             fingerprint = std.fmt.bytesToHex(raw, .lower);
         }
-        return .{ .gpa = gpa, .io = io, .core = core, .log = log, .identity = identity, .fingerprint = fingerprint, .listen_at = listen_at, .remotes = remotes };
+        return .{ .gpa = gpa, .io = io, .core = core, .log = log, .identity = identity, .fingerprint = fingerprint, .listen_at = listen_at, .remotes = remotes, .exposed = .init(gpa) };
     }
 
     pub fn deinit(p: *Peers) void {
@@ -138,15 +138,7 @@ pub const Peers = struct {
             c.talk_value_release(entry.value_ptr.*);
         }
         p.peers.deinit(p.gpa);
-        var exposed = p.exposures.iterator();
-        while (exposed.next()) |entry| {
-            p.gpa.free(entry.key_ptr.*);
-            if (entry.value_ptr.name) |n| p.gpa.free(n);
-            p.gpa.free(entry.value_ptr.script);
-        }
-        p.exposures.deinit(p.gpa);
-        // Its keys are the exposures' names, freed above.
-        p.names.deinit(p.gpa);
+        p.exposed.deinit();
         var delivered = p.remote_deliveries.keyIterator();
         while (delivered.next()) |k| p.gpa.free(k.*);
         p.remote_deliveries.deinit(p.gpa);
@@ -604,7 +596,7 @@ pub const Peers = struct {
             const name = if (name_value) |v| textOf(v) orelse "" else "";
             const nv = number(n);
             defer c.talk_value_release(nv);
-            if (p.names.get(name)) |secret| {
+            if (p.exposed.named(name)) |secret| {
                 var buf: [97]u8 = undefined;
                 const id = std.fmt.bufPrint(&buf, "{s}/{s}", .{ &p.fingerprint, secret }) catch return;
                 const idv = text(id);
@@ -667,7 +659,7 @@ pub const Peers = struct {
         // Over TLS the sending key is known; over plain TCP, or from this
         // Runner itself, nobody is vouched for.
         const sender: ?[64]u8 = if (from) |l| if (l.tls != null) l.key else null else null;
-        const held = p.exposures.get(secret) orelse return if (waits != null) "not exposed" else null;
+        const held = p.exposed.get(secret) orelse return if (waits != null) "not exposed" else null;
         const script = c.talk_group_script(p.group, held.script.ptr, held.script.len) orelse return if (waits != null) "not exposed" else null;
         var values: std.ArrayList(?*c.talk_value) = .empty;
         defer {
@@ -835,21 +827,15 @@ pub const Peers = struct {
         const p = self(context);
         const caller_script = callText(c.talk_call_script_name, call);
         const name: ?[]const u8 = if (len > 0) textOf(args[0]) else null;
-        if (name) |n| if (p.names.get(n)) |secret| {
-            if (!std.mem.eql(u8, p.exposures.get(secret).?.script, caller_script)) {
-                p.later.append(p.gpa, .{ .call = call, .value = null, .fail = "name in use" }) catch return c.TALK_CALL_BROKEN;
-                return c.TALK_CALL_STARTED;
-            }
-            return p.answerPeer(call, secret);
-        };
-        const script = p.gpa.dupe(u8, caller_script) catch return c.TALK_CALL_BROKEN;
         var raw: [16]u8 = undefined;
         p.io.random(&raw);
-        const secret = p.gpa.dupe(u8, &std.fmt.bytesToHex(raw, .lower)) catch return c.TALK_CALL_BROKEN;
-        const owned_name: ?[]const u8 = if (name) |n| p.gpa.dupe(u8, n) catch return c.TALK_CALL_BROKEN else null;
-        p.exposures.put(p.gpa, secret, .{ .name = owned_name, .script = script }) catch return c.TALK_CALL_BROKEN;
-        if (owned_name) |n| p.names.put(p.gpa, n, secret) catch return c.TALK_CALL_BROKEN;
-        return p.answerPeer(call, secret);
+        switch (p.exposed.expose(caller_script, name, raw) catch return c.TALK_CALL_BROKEN) {
+            .name_in_use => {
+                p.later.append(p.gpa, .{ .call = call, .value = null, .fail = "name in use" }) catch return c.TALK_CALL_BROKEN;
+                return c.TALK_CALL_STARTED;
+            },
+            .secret => |secret| return p.answerPeer(call, secret),
+        }
     }
 
     fn answerPeer(p: *Peers, call: ?*c.talk_call, secret: []const u8) c.talk_call_end {
@@ -867,7 +853,7 @@ pub const Peers = struct {
         if (len == 0) return c.TALK_CALL_ANSWERED;
         const script = callText(c.talk_call_script_name, call);
         var secret: ?[]const u8 = null;
-        if (textOf(args[0])) |name| secret = p.names.get(name) else {
+        if (textOf(args[0])) |name| secret = p.exposed.named(name) else {
             var o: ?*c.talk_object = null;
             if (c.talk_value_as_object(p.group, args[0], &o)) {
                 var s: [*c]const u8 = null;
@@ -876,14 +862,7 @@ pub const Peers = struct {
                 if (splitId(s[0..n])) |parts| secret = parts.secret;
             }
         }
-        const key = secret orelse return c.TALK_CALL_ANSWERED;
-        const held = p.exposures.get(key) orelse return c.TALK_CALL_ANSWERED;
-        if (!std.mem.eql(u8, held.script, script)) return c.TALK_CALL_ANSWERED;
-        if (held.name) |n| _ = p.names.remove(n);
-        const removed = p.exposures.fetchRemove(key).?;
-        p.gpa.free(removed.key);
-        if (removed.value.name) |n| p.gpa.free(n);
-        p.gpa.free(removed.value.script);
+        if (secret) |key| p.exposed.unexpose(script, key);
         return c.TALK_CALL_ANSWERED;
     }
 
@@ -990,12 +969,25 @@ pub const Peers = struct {
         return c.TALK_CALL_ANSWERED;
     }
 
+    /// The `peer` release hook: a stop, a revocation or a disabling of a
+    /// Script's `peer` Grant withdraws its exposures; a Reload keeps them.
+    fn release(context: ?*anyopaque, g: [*c]const c.talk_grant_context) callconv(.c) void {
+        const p = self(context);
+        const script = if (g.*.script_name_len == 0) "" else g.*.script_name[0..g.*.script_name_len];
+        p.exposed.release(script, switch (g.*.reason) {
+            c.TALK_RELEASE_STOP => .stop,
+            c.TALK_RELEASE_RELOAD => .reload,
+            c.TALK_RELEASE_REVOKE => .revoke,
+            else => .disable,
+        });
+    }
+
     /// The `peer` Capability, with this Runner's Host functions.
     pub fn capability(p: *Peers) !?*c.talk_capability_def {
         const names = [_][]const u8{ "expose", "unexpose", "reach", "post", "call", "caller" };
         var costs: [names.len]c.talk_named_cost = undefined;
         for (names, &costs) |n, *x| x.* = .{ .name = n.ptr, .name_len = n.len, .cost = .{ .fuel = 0, .alloc = 0 } };
-        const impl: c.talk_peer_impl = .{ .context = p, .expose = expose, .unexpose = unexpose, .reach = reach, .post = post, .call = callOp, .caller = caller };
+        const impl: c.talk_peer_impl = .{ .context = p, .expose = expose, .unexpose = unexpose, .reach = reach, .post = post, .call = callOp, .caller = caller, .release = release };
         var def: ?*c.talk_capability_def = null;
         if (c.talk_peer_capability(p.core, &impl, &.{ .entries = &costs, .len = costs.len }, &def) != c.TALK_OK) return error.HostError;
         _ = c.talk_peer_kind(p.core);

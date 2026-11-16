@@ -5,6 +5,8 @@ pub const runner = @import("runner.zig");
 pub const router = @import("router.zig");
 pub const request = @import("request.zig");
 pub const peers = @import("peers.zig");
+pub const exposures = @import("exposures.zig");
+pub const kit_toml = @import("kit_toml.zig");
 
 pub const Options = runner.Options;
 pub const run = runner.run;
@@ -31,6 +33,8 @@ test {
     _ = request;
     _ = peers;
     _ = peers.tls;
+    _ = exposures;
+    _ = @import("peer_kit.zig");
 }
 
 test "a port is digits from 0 to 65535" {

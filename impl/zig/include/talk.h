@@ -660,10 +660,14 @@ typedef struct talk_http_impl {
  * the Selector as text and the arguments as a list, which may hold Peers;
  * answer call with the receiver's reply, or fail it with send failed
  * {reason, error}. caller gives the Caller Identity recorded for the call's
- * delivery, or Nothing. */
+ * delivery, or Nothing. release is an optional release hook, called with
+ * context: on TALK_RELEASE_STOP, TALK_RELEASE_REVOKE or
+ * TALK_RELEASE_DISABLE the Host withdraws the exposures that Grant made,
+ * and on TALK_RELEASE_RELOAD keeps them (chapter 9, The peer router). */
 typedef struct talk_peer_impl {
     void *context;
     talk_operation_fn expose, unexpose, reach, post, call, caller;
+    talk_release_hook release;
 } talk_peer_impl;
 
 /* console: write receives the value to show. read is suspending, and
