@@ -2554,7 +2554,8 @@ export const costModel = {
     {
       "key": "builtin.toCivil",
       "fuel": [
-        [0, 0, 10, 1]
+        [0, 0, 10, 1],
+        [10, 0, 2, 1]
       ],
       "alloc": [
         [1, 2, 1, 1]
@@ -2563,7 +2564,8 @@ export const costModel = {
     {
       "key": "builtin.toInstant",
       "fuel": [
-        [0, 0, 10, 1]
+        [0, 0, 10, 1],
+        [10, 0, 2, 1]
       ],
       "alloc": [
         [1, 2, 1, 1]

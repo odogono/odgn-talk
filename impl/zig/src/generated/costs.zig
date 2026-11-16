@@ -119,6 +119,10 @@ pub const costs: CostsTable = .{
             .issue = "#1754",
             .change = "A fired `wait for` writes its bound values into their slots when it fires, and while its Run is ready its event retains only its message, so Persistent State counts each bound value once, in place of what its slot held, with no extra slot per bind; Cost Model 0 remains provisional",
         },
+        .{
+            .issue = "#2252",
+            .change = "`toCivil` and `toInstant` charge 2 Fuel per change in Zone Rules given as their offset, on top of their base; a fixed offset costs as before; Cost Model 0 remains provisional",
+        },
     },
     .measure = .{
         .size = "the logical size of the value, as the [[size]] table gives it",
@@ -773,13 +777,15 @@ pub const costs: CostsTable = .{
         },
         .{
             .key = "builtin.toCivil",
-            .fuel = "10",
+            .fuel = "10 + 2 * scanned",
             .alloc = "size(result)",
+            .input = "`scanned` is the number of changes in Zone Rules given as `offset`, each checked and compared, and 0 for a fixed offset",
         },
         .{
             .key = "builtin.toInstant",
-            .fuel = "10",
+            .fuel = "10 + 2 * scanned",
             .alloc = "size(result)",
+            .input = "`scanned` is the number of changes in Zone Rules given as `offset`, each checked and compared, and 0 for a fixed offset",
         },
         .{
             .key = "catch-accept",

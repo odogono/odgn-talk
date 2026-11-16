@@ -1381,7 +1381,7 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2,
+      "total": 3,
       "variadic": false
     }
   },

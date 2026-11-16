@@ -486,17 +486,17 @@ Whether the Civil Date `d` has a time of day.
 
 `toCivil(i, offset)`
 
-The date-time on the wall clock at `offset` from UTC at the Instant `i`.
+The date-time on the wall clock at the Instant `i`, at `offset` from UTC or under the Zone Rules `offset`.
 
 Also raises: [`out of domain`](../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`out of range`](../../spec/06-errors-and-limits.md#the-error-code-catalogue).
 
 ### toInstant
 
-`toInstant(c, offset)`
+`toInstant(c, offset, disambiguation = nothing)`
 
-The Instant at which the wall clock at `offset` from UTC reads the date-time `c`.
+The Instant at which the wall clock, at `offset` from UTC or under the Zone Rules `offset`, reads the date-time `c`.
 
-Also raises: [`out of domain`](../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`out of range`](../../spec/06-errors-and-limits.md#the-error-code-catalogue).
+Also raises: [`out of domain`](../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`out of range`](../../spec/06-errors-and-limits.md#the-error-code-catalogue), [`ambiguous time`](../../spec/06-errors-and-limits.md#the-error-code-catalogue).
 
 ## Constants
 
