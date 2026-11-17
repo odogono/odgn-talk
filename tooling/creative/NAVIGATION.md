@@ -230,7 +230,7 @@ landed, and the Issue graph job ticks it as they close.
   `addToChord` and `remove`, pure, on the step tree); rests are placed by parsing the text with each rest as a word
   (`restsAsWords`, through the host's `parse`); `select`/`caret` link the
   window's selection with the Code Browser's. `host.audition` (#2190) plays a step through
-  [pattern-audition.ts](src/pattern-audition.ts) and Edit's preview audio. Bump `PIANO_ROLL_VERSION` with
+  `auditionStep` in [edit-preview.ts](src/edit-preview.ts). Bump `PIANO_ROLL_VERSION` with
   any change, since the service worker caches the chunk by version; a bump that
   changes the Music base also follows the Music base step under Project model.
   Tests: [piano-roll.test.ts](tests/piano-roll.test.ts), [piano-roll-edits.test.ts](tests/piano-roll-edits.test.ts) and the `piano-roll`
@@ -439,9 +439,10 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
   `instruments` browser suite.
 - Auditioning (#2080): [instruments/audition.ts](src/instruments/audition.ts)
   builds the messages ▶ and the computer keyboard send, and picks a
-  sampler's sound; [instruments/preview.ts](src/instruments/preview.ts)
-  plays them in Edit, `previewInstruments` once and `holdInstruments` while
-  keys are held. Tests: [audition.test.ts](tests/instruments/audition.test.ts).
+  sampler's sound; ▶ plays them through `playPreview` in
+  [edit-preview.ts](src/edit-preview.ts), and the computer keyboard through
+  `holdInstruments` in [instruments/preview.ts](src/instruments/preview.ts)
+  while keys are held. Tests: [audition.test.ts](tests/instruments/audition.test.ts).
 - [instruments/kind.ts](src/instruments/kind.ts): a parameter's `group`
   names its collapsible section in the Instruments window, and a number
   parameter's `scale: 'log'` makes its slider logarithmic (#2078). Add-on
@@ -533,9 +534,12 @@ Folio's own Mini-Notation parser and its checks (ADR 0159, #1893).
   Project sound, and stops an owner's patterns with its sounds.
 - [sound-migration.ts](src/sound-migration.ts): format 7's rewrite of
   `tell sound to loop` to `play … with {repeat: true}`.
-- [message.ts](src/message.ts) and
-  [instruments/preview.ts](src/instruments/preview.ts): Edit's preview of
-  `play`. [pattern-checks.ts](src/pattern-checks.ts)'s
+- [edit-preview.ts](src/edit-preview.ts) (#2269): every Edit preview of
+  `play` (Message Box, Literal Editor audition, Instruments ▶). `editPreview`
+  is the scratch session whose `finish` keeps what played before its stops;
+  `assetSoundBytes` is the one sound-bytes adapter; `playPreview` sounds it
+  through [instruments/preview.ts](src/instruments/preview.ts). Tests:
+  [edit-preview.test.ts](tests/edit-preview.test.ts). [pattern-checks.ts](src/pattern-checks.ts)'s
   `needsInstrumentAudio` decides whether Browse starts the audio.
 - Recipes: **Loop a pattern** (`loopPattern` in [recipes.ts](src/recipes.ts));
   [examples/first-sounds.ts](src/examples/first-sounds.ts) teaches patterns.

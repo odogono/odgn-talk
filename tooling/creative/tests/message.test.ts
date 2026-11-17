@@ -14,6 +14,8 @@ import {
   ELEMENT_KINDS,
 } from '../src/model';
 import { PlaySession } from '../src/play';
+import { synthInstrument } from '../src/add-ons/instruments/ids';
+import './helpers/instruments';
 
 const fixture = () => {
   const project = withMusicSounds(createProject('Story'));
@@ -522,6 +524,17 @@ test('in Edit, `play` is only a preview and a loop waits for Browse', async () =
   expect(await runInEdit(editor, 'loop "bd hh"')).toEqual({
     text: 'A loop starts when you Browse.',
   });
+});
+
+test('in Edit, `play` on a named Instrument previews its note, not its stop', async () => {
+  const project = fixture();
+  project.instruments.push(synthInstrument('bass') as never);
+  const played = await runInEdit(new StackEditor(project), 'play "c3" on bass');
+  const commands = played.preview?.flatMap(m =>
+    m.commands.map(c => `${m.instrument}:${c.kind}`),
+  );
+  expect(commands).toContain('bass:note');
+  expect(commands?.some(c => c.endsWith(':stop'))).toBe(false);
 });
 
 test('during Play a Message Box pattern belongs to the targeted Script', async () => {
