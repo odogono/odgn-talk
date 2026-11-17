@@ -168,7 +168,7 @@ After a Zig change, see [what consumes the Core](#after-changing-the-zig-core).
 
 ## Inspect
 
-- Implementation: [exports](src/talk.zig), [`talk.h`](include/talk.h)
+- Implementation: [exports](src/talk.zig), [`talk.h`](include/talk.h), the Message Layer reply (`writeInspection` in [message.zig](src/message.zig), which walks the catalogue's `views`)
 - Rules: [Inspect](../../spec/09-embedding.md#the-pump-and-the-group-fingerprint), [`:runs`, `:mailbox` and `:vars`](../../spec/12-sessions-and-tooling.md#session-commands)
 - Tests and cases: tests in the module, [C Host tests](tests/talk_h_test.c)
 - First check: `cd impl/zig && zig build test`
@@ -253,7 +253,7 @@ After a Zig change, see [what consumes the Core](#after-changing-the-zig-core).
 
 ## Binary Request/Pump and combined calls
 
-- Implementation: [envelope](src/request_pump.zig), [binary Values](src/binary_value.zig), [binary frames](src/message.zig) (`fn handleBinary`), [exports](src/talk.zig)
+- Implementation: [envelope](src/request_pump.zig), [binary Values](src/binary_value.zig), [binary frames](src/message.zig) (`fn handleBinary`; a Load of either layout goes through `fn handleLoad`), [typed records from either layout](src/envelope_codec.zig) ([ADR 0183](../../docs/adr/0183-every-hosts-message-layer-codecs-are-generated-from-one-catalogue.md)), [exports](src/talk.zig)
 - Rules: [the binary exchange](../../spec/embedding/request-pump-binary.md), [ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md), [measurements](../../docs/research/request-pump-binary.md)
 - Tests and cases: tests in the modules; the Go adapter's [combined tests](../go/zig_combined_test.go) run the binary exchange with `TALK_ZIG_REQUEST_PUMP=fields`, as the [Go workflow](../../.github/workflows/go.yml) does
 - First check: `cd impl/zig && zig build test`; envelope gates: `impl/go/request-pump-bench.sh`

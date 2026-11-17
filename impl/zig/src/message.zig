@@ -28,6 +28,8 @@ const binary_value = @import("binary_value.zig");
 const rp = @import("request_pump.zig");
 const exchange = @import("exchange.zig");
 const need_codec = @import("need.zig");
+const envelope = @import("generated/envelope.zig");
+const envelope_codec = @import("envelope_codec.zig");
 
 const Allocator = std.mem.Allocator;
 const Value = model.Value;
@@ -60,14 +62,7 @@ fn asBool(j: ?Json) ?bool {
 /// An integer a frame spells, from its number text: a JSON integer, or a
 /// string holding one (chapter 9's integer encoding).
 fn asInt(j: ?Json) ?i64 {
-    const v = j orelse return null;
-    const text = switch (v) {
-        .number_string => |s| s,
-        .string => |s| s,
-        .integer => |n| return n,
-        else => return null,
-    };
-    return std.fmt.parseInt(i64, text, 10) catch null;
+    return envelope_codec.jsonInt(j orelse return null);
 }
 
 fn asU64(j: ?Json) ?u64 {
@@ -2819,19 +2814,22 @@ fn createGroup(s: *Session, msg: Json) talk.HostErrorCode {
     return .ok;
 }
 
-fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
-    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
-    const name = asText(field(msg, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
-    const source = asText(field(msg, "source")) orelse return hostError(s.gpa, ref, .invalid_value);
+/// Loads a typed Load of either layout; the C options map its fields one
+/// line each.
+fn loadReply(s: *Session, ref: i64, load: ?envelope.Load) []u8 {
+    const ld = load orelse return hostError(s.gpa, ref, .invalid_value);
+    const entry = s.groupNamed(ld.group) orelse return hostError(s.gpa, ref, .invalid_value);
+    const name = ld.name;
+    const source = ld.source;
     // An Object this Group never made is another Group's handle, which a
     // binding can name only by a placeholder: it is refused as wrong group.
     var foreign = false;
-    const owner = if (field(msg, "owner")) |j| objectOf(entry, j) else null;
-    const foreign_owner = field(msg, "owner") != null and owner == null;
+    const owner = if (ld.owner) |j| objectOf(entry, j) else null;
+    const foreign_owner = ld.owner != null and owner == null;
     var load_objects: []talk.LoadObject = &.{};
     defer s.gpa.free(load_objects);
     var bound: usize = 0;
-    if (field(msg, "objects")) |given| {
+    if (ld.objects) |given| {
         if (given != .object) return hostError(s.gpa, ref, .invalid_value);
         load_objects = s.gpa.alloc(talk.LoadObject, given.object.count()) catch return hostError(s.gpa, ref, .out_of_memory);
         for (given.object.keys(), given.object.values()) |k, v| {
@@ -2845,7 +2843,7 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
     }
     var load_grants: []talk.LoadGrant = &.{};
     defer s.gpa.free(load_grants);
-    if (field(msg, "grants")) |g| {
+    if (ld.grants) |g| {
         if (g != .object) return hostError(s.gpa, ref, .invalid_value);
         load_grants = s.gpa.alloc(talk.LoadGrant, g.object.count()) catch return hostError(s.gpa, ref, .out_of_memory);
         for (g.object.keys(), g.object.values(), load_grants) |k, v, *slot| {
@@ -2855,7 +2853,7 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
         }
     }
     var limits_slot: talk.Limits = undefined;
-    const limits = limitsOf(field(msg, "limits"), &limits_slot) catch {
+    const limits = limitsOf(ld.limits, &limits_slot) catch {
         entry.group.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "invalid value");
         return hostError(s.gpa, ref, .invalid_value);
     };
@@ -2876,8 +2874,8 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
         .source_len = source.len,
         .grants = if (load_grants.len == 0) null else load_grants.ptr,
         .grants_len = load_grants.len,
-        .grants_as_used = asBool(field(msg, "grantsAsUsed")) orelse false,
-        .forbid_suspension = asBool(field(msg, "forbidSuspension")) orelse false,
+        .grants_as_used = ld.grantsAsUsed orelse false,
+        .forbid_suspension = ld.forbidSuspension orelse false,
         .owner = owner,
         .objects = if (bound == 0) null else load_objects.ptr,
         .objects_len = bound,
@@ -3612,81 +3610,160 @@ fn inspectReply(s: *Session, msg: Json, ref: i64) []u8 {
 }
 
 fn writeInspection(o: *Out, gpa: Allocator, i: *const talk.Inspection) (Allocator.Error || error{NotEncodable})!void {
-    try o.raw("\"scripts\":[");
-    for (i.scripts[0..i.scripts_len], 0..) |sv, n| {
-        if (n > 0) try o.raw(",");
-        try o.raw("{\"name\":");
-        try o.text(sv.name[0..sv.name_len]);
-        if (sv.disabled_grants_len > 0) {
-            try o.raw(",\"disabledGrants\":[");
-            for (sv.disabled_grants[0..sv.disabled_grants_len], 0..) |g, k| {
+    try writeViewFields(o, gpa, "inspection", Inspected.Getters("inspection"){ .of = i });
+}
+
+/// The talk.zig Inspection, read as the catalogue's views (ADR 0183): one
+/// getter per view field, named as the field, each a one-line mapping from
+/// the C view `of`. A getter returns an optional for an optional field,
+/// null when the reply omits it.
+const Inspected = struct {
+    const Inspection = struct {
+        of: *const talk.Inspection,
+        fn scripts(v: @This()) []const talk.ScriptView {
+            return v.of.scripts[0..v.of.scripts_len];
+        }
+    };
+    const Script = struct {
+        of: *const talk.ScriptView,
+        fn name(v: @This()) []const u8 {
+            return v.of.name[0..v.of.name_len];
+        }
+        fn disabledGrants(v: @This()) ?[]const talk.Id {
+            return if (v.of.disabled_grants_len == 0) null else v.of.disabled_grants[0..v.of.disabled_grants_len];
+        }
+        fn forbidSuspension(v: @This()) ?bool {
+            return if (v.of.forbid_suspension) true else null;
+        }
+        fn vars(v: @This()) []const talk.Pair {
+            return v.of.vars[0..v.of.vars_len];
+        }
+        fn runs(v: @This()) []const talk.RunView {
+            return v.of.runs[0..v.of.runs_len];
+        }
+        fn mailbox(v: @This()) []const talk.MessageView {
+            return v.of.mailbox[0..v.of.mailbox_len];
+        }
+    };
+    const Run = struct {
+        of: *const talk.RunView,
+        fn suspended(v: @This()) bool {
+            return v.of.status == .suspended;
+        }
+        fn id(v: @This()) []const u8 {
+            return v.of.id[0..v.of.id_len];
+        }
+        fn status(v: @This()) []const u8 {
+            return @tagName(v.of.status);
+        }
+        fn handler(v: @This()) []const u8 {
+            return v.of.handler[0..v.of.handler_len];
+        }
+        fn wait(v: @This()) ?[]const u8 {
+            return if (v.suspended()) v.of.wait[0..v.of.wait_len] else null;
+        }
+        fn until(v: @This()) ?model.dates.Instant {
+            return if (v.suspended() and v.of.has_until) .{ .seconds = v.of.until_seconds, .micros = v.of.until_micros } else null;
+        }
+        fn calls(v: @This()) ?[]const talk.Id {
+            return if (v.suspended()) v.of.calls[0..v.of.calls_len] else null;
+        }
+    };
+    // `talk.Message.limits` is not in the view: a mailbox entry shows its
+    // name and arguments only.
+    const Message = struct {
+        of: *const talk.MessageView,
+        fn delivery(v: @This()) ?[]const u8 {
+            return if (v.of.delivery_len == 0) null else v.of.delivery[0..v.of.delivery_len];
+        }
+        fn from(v: @This()) ?[]const u8 {
+            return if (v.of.from_len == 0) null else v.of.from[0..v.of.from_len];
+        }
+        fn message(v: @This()) *const talk.Message {
+            return &v.of.message;
+        }
+    };
+
+    /// The getters of the view `name`, over one of its C items.
+    fn Getters(comptime name: []const u8) type {
+        const by_view = .{ .{ "inspection", Inspection }, .{ "inspected-script", Script }, .{ "inspected-run", Run }, .{ "inspected-message", Message } };
+        inline for (by_view) |pair| if (comptime std.mem.eql(u8, pair[0], name)) return pair[1];
+        @compileError("no getters for the view " ++ name);
+    }
+};
+
+fn viewNamed(comptime name: []const u8) envelope.View {
+    for (envelope.views) |v| if (std.mem.eql(u8, v.name, name)) return v;
+    @compileError("no view " ++ name ++ " in the catalogue");
+}
+
+/// Writes each field of the catalogue's view `name` that `src` gives, in
+/// catalogue order, comma-led after the first: required ones always, an
+/// optional one when its getter gives a value.
+fn writeViewFields(o: *Out, gpa: Allocator, comptime name: []const u8, src: anytype) (Allocator.Error || error{NotEncodable})!void {
+    const Src = @TypeOf(src);
+    var first = true;
+    inline for (comptime viewNamed(name).fields) |f| {
+        const got = @field(Src, f.name)(src);
+        const optional = @typeInfo(@TypeOf(got)) == .optional;
+        if (optional == f.required) @compileError("the getter of " ++ name ++ "." ++ f.name ++ " must return an optional exactly when the field is");
+        if (if (optional) got else @as(?@TypeOf(got), got)) |value| {
+            if (!first) try o.raw(",");
+            first = false;
+            try o.key(f.name);
+            try writeViewItem(o, gpa, f, value);
+        }
+    }
+}
+
+fn writeViewItem(o: *Out, gpa: Allocator, comptime f: envelope.Field, value: anytype) (Allocator.Error || error{NotEncodable})!void {
+    switch (f.kind) {
+        .text => try o.text(value),
+        .bool => try o.raw(if (value) "true" else "false"),
+        .instant => try o.instant(gpa, value),
+        .texts => {
+            try o.raw("[");
+            for (value, 0..) |t, k| {
                 if (k > 0) try o.raw(",");
-                try o.text(g.data[0..g.len]);
+                try o.text(t.data[0..t.len]);
             }
             try o.raw("]");
-        }
-        if (sv.forbid_suspension) try o.raw(",\"forbidSuspension\":true");
-        try o.raw(",\"vars\":[");
-        for (sv.vars[0..sv.vars_len], 0..) |pair, k| {
-            if (k > 0) try o.raw(",");
+        },
+        .pairs => {
             try o.raw("[");
-            try o.text(pair.key.?[0..pair.key_len]);
-            try o.raw(",");
-            try o.value(pair.value);
-            try o.raw("]");
-        }
-        try o.raw("],\"runs\":[");
-        for (sv.runs[0..sv.runs_len], 0..) |r, k| {
-            if (k > 0) try o.raw(",");
-            try o.raw("{\"id\":");
-            try o.text(r.id[0..r.id_len]);
-            try o.raw(",\"status\":");
-            try o.text(@tagName(r.status));
-            try o.raw(",\"handler\":");
-            try o.text(r.handler[0..r.handler_len]);
-            if (r.status == .suspended) {
-                try o.raw(",\"wait\":");
-                try o.text(r.wait[0..r.wait_len]);
-                if (r.has_until) {
-                    try o.raw(",\"until\":");
-                    try o.instant(gpa, .{ .seconds = r.until_seconds, .micros = r.until_micros });
-                }
-                try o.raw(",\"calls\":[");
-                for (r.calls[0..r.calls_len], 0..) |c, m| {
-                    if (m > 0) try o.raw(",");
-                    try o.text(c.data[0..c.len]);
-                }
+            for (value, 0..) |pair, k| {
+                if (k > 0) try o.raw(",[") else try o.raw("[");
+                try o.text(pair.key.?[0..pair.key_len]);
+                try o.raw(",");
+                try o.value(pair.value);
                 try o.raw("]");
             }
-            try o.raw("}");
-        }
-        try o.raw("],\"mailbox\":[");
-        for (sv.mailbox[0..sv.mailbox_len], 0..) |mv, k| {
-            if (k > 0) try o.raw(",");
-            try o.raw("{");
-            if (mv.delivery_len > 0) {
-                try o.raw("\"delivery\":");
-                try o.text(mv.delivery[0..mv.delivery_len]);
-                try o.raw(",");
-            }
-            if (mv.from_len > 0) {
-                try o.raw("\"from\":");
-                try o.text(mv.from[0..mv.from_len]);
-                try o.raw(",");
-            }
-            try o.raw("\"message\":{\"name\":");
-            try o.text(mv.message.name.?[0..mv.message.name_len]);
+            try o.raw("]");
+        },
+        .message => {
+            try o.raw("{\"name\":");
+            try o.text(value.name.?[0..value.name_len]);
             try o.raw(",\"args\":[");
-            const args: []const *Value = if (mv.message.args_len == 0) &.{} else mv.message.args.?[0..mv.message.args_len];
-            for (args, 0..) |v, m| {
-                if (m > 0) try o.raw(",");
+            const args: []const *Value = if (value.args_len == 0) &.{} else value.args.?[0..value.args_len];
+            for (args, 0..) |v, k| {
+                if (k > 0) try o.raw(",");
                 try o.value(v);
             }
-            try o.raw("]}}");
-        }
-        try o.raw("]}");
+            try o.raw("]}");
+        },
+        .views => {
+            const G = Inspected.Getters(f.view.?);
+            try o.raw("[");
+            for (value, 0..) |*item, k| {
+                if (k > 0) try o.raw(",");
+                try o.raw("{");
+                try writeViewFields(o, gpa, f.view.?, G{ .of = item });
+                try o.raw("}");
+            }
+            try o.raw("]");
+        },
+        else => @compileError("no Inspect writer for the kind " ++ @tagName(f.kind)),
     }
-    try o.raw("]");
 }
 
 /// `grants`: each name the Script keeps, with its kept Operations, as the
@@ -4474,6 +4551,11 @@ fn handleFrame(s: *Session, frame: []const u8) []u8 {
     if (msg != .object) return protocolError(s.gpa, 0, "the frame is not an object");
     const ref = asInt(field(msg, "ref")) orelse return protocolError(s.gpa, 0, "no ref");
     const m = asText(field(msg, "m")) orelse return protocolError(s.gpa, ref, "no message name");
+    if (std.mem.eql(u8, m, "load")) return handleLoad(s, ref, .{
+        .group = asText(field(msg, "group")),
+        .refuse_worker = asBool(field(msg, "refuseWorker")) orelse false,
+        .load = envelope_codec.fromJson(envelope.Load, msg),
+    });
     return handleMessage(s, msg, ref, m, frame);
 }
 
@@ -4514,7 +4596,7 @@ fn handleMessage(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const
     // running, then reached this boundary before servicing its queued frame.
     if (s.inline_inputs and (asBool(field(msg, "refuseWorker")) orelse false)) {
         const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
-        if (!messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "state-fingerprint", "inspect", "grants", "counters" })) return protocolError(s.gpa, ref, "refuseWorker requires a worker message");
+        if (!messageIn(m, &.{ "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "state-fingerprint", "inspect", "grants", "counters" })) return protocolError(s.gpa, ref, "refuseWorker requires a worker message");
         recordWorkerRefusal(s, entry, msg, m);
         return hostError(s.gpa, ref, .reentrant_call);
     }
@@ -4625,8 +4707,6 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
         return newGroupReply(s, msg, ref);
     } else if (s.group_exchanges and std.mem.eql(u8, m, "drop-group")) {
         return dropGroupReply(s, msg, ref);
-    } else if (std.mem.eql(u8, m, "load")) {
-        return loadReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "deliver")) {
         return queuedReply(s, msg, ref, .deliver);
     } else if (std.mem.eql(u8, m, "request")) {
@@ -4759,6 +4839,8 @@ fn dropGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
 const PausedWorker = exchange.Paused(*GroupEntry);
 
 fn pausedAdmission(s: *Session, msg: Json, ref: i64, m: []const u8, paused: PausedWorker) []u8 {
+    // An inline round's Load reaches here as JSON; a worker, it is never
+    // admitted.
     const input: exchange.Input = if (messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "state-fingerprint", "inspect", "grants", "counters" }))
         .worker
     else if (messageIn(m, &.{ "deliver", "request", "broadcast", "decide", "call", "set-parent", "dispose", "stop", "cancel-run", "rewind-run", "revoke", "answer", "fail", "cancel-delivery", "cancel-correlated", "queued-inputs", "request-charge", "settle", "object" }))
@@ -4810,7 +4892,7 @@ fn recordWorkerRefusal(s: *Session, entry: *GroupEntry, msg: Json, m: []const u8
         const now = model.dates.parseInstant(asText(field(msg, "now")) orelse return) catch return;
         g.refuseWorker(.{ .pump = .{ .now = now, .slice = asInt(field(msg, "fuelSlice")) orelse 0, .cap = asInt(field(msg, "fuelCap")) orelse 0 } });
     } else if (std.mem.eql(u8, m, "load")) {
-        g.refuseWorker(.{ .load = .{ .name = asText(field(msg, "name")) orelse return, .source = asText(field(msg, "source")) orelse return } });
+        refuseLoad(entry, envelope_codec.fromJson(envelope.Load, msg));
     } else if (std.mem.eql(u8, m, "inspect")) {
         g.refuseWorker(.inspect);
     } else if (std.mem.eql(u8, m, "counters")) {
@@ -5254,96 +5336,84 @@ fn handleBinary(s: *Session, frame: []const u8) []u8 {
     };
 }
 
-/// Load metadata uses protocol items only. Build the existing validation
-/// tree without JSON scanning or escaping. The work list also handles hostile
-/// nesting without using the WASI stack.
-fn loadProtocol(a: Allocator, span: []const u8) rp.Error!Json {
-    const ProtocolWork = struct { span: []const u8, out: *Json };
-    var result: Json = .null;
-    var work: std.ArrayList(ProtocolWork) = .empty;
-    defer work.deinit(a);
-    try work.append(a, .{ .span = span, .out = &result });
-    while (work.pop()) |item| {
-        var r: rp.Reader = .{ .data = item.span };
-        switch (try r.byte()) {
-            0 => item.out.* = .null,
-            1 => item.out.* = .{ .bool = false },
-            2 => item.out.* = .{ .bool = true },
-            3 => {
-                const n = try r.uint();
-                item.out.* = if (n <= std.math.maxInt(i64)) .{ .integer = @intCast(n) } else .{ .number_string = try std.fmt.allocPrint(a, "{d}", .{n}) };
-            },
-            0x10 => {
-                const n = (try rp.intOf(item.span)) orelse return error.Malformed;
-                item.out.* = .{ .integer = n };
-                r.at = r.data.len;
-            },
-            0x12 => {
-                item.out.* = .{ .string = try rp.ptextOf(item.span) };
-                r.at = r.data.len;
-            },
-            6 => {
-                const n = try r.uint();
-                if (n > r.data.len - r.at) return error.Malformed;
-                var list = std.array_list.Managed(Json).init(a);
-                try list.resize(@intCast(n));
-                item.out.* = .{ .array = list };
-                for (list.items) |*slot| try work.append(a, .{ .span = try r.skip(), .out = slot });
-            },
-            7 => {
-                const n = try r.uint();
-                if (n > (r.data.len - r.at) / 2) return error.Malformed;
-                var map: std.json.ObjectMap = .empty;
-                try map.ensureTotalCapacity(a, @intCast(n));
-                for (0..@intCast(n)) |_| {
-                    if (try r.byte() != rp.tag.text) return error.Malformed;
-                    const key = try r.bytes();
-                    if (!std.unicode.utf8ValidateSlice(key)) return error.Malformed;
-                    const kv = try map.getOrPut(a, key);
-                    if (kv.found_existing) return error.Malformed;
-                    try work.append(a, .{ .span = try r.skip(), .out = kv.value_ptr });
-                }
-                item.out.* = .{ .object = map };
-            },
-            else => return error.Malformed,
-        }
-        if (!r.done()) return error.Malformed;
-    }
-    return result;
-}
-
 fn handleBinaryLoad(s: *Session, payload: []const u8) []u8 {
     var arena = std.heap.ArenaAllocator.init(s.gpa);
     defer arena.deinit();
     const a = arena.allocator();
-    const names = rp.fields(rp.Message.load);
-    var spans: [12]?[]const u8 = undefined;
-    var r: rp.Reader = .{ .data = payload };
-    r.record(names, true, &spans) catch return protocolError(s.gpa, 0, "malformed Load frame");
-    if (!r.done()) return protocolError(s.gpa, 0, "bytes after the Load frame");
-    const ref = (rp.intOf(spans[0] orelse return protocolError(s.gpa, 0, "no ref")) catch null) orelse return protocolError(s.gpa, 0, "no ref");
+    var ref: i64 = 0;
+    const ld = envelope_codec.fromFields(envelope.Load, .load, a, payload, &ref) catch |err| return switch (err) {
+        error.OutOfMemory => oomReply(),
+        error.Malformed => protocolError(s.gpa, ref, "malformed Load frame"),
+        error.Trailing => protocolError(s.gpa, ref, "bytes after the Load frame"),
+        error.NoInt => protocolError(s.gpa, ref, "no ref"),
+        error.MissingText => protocolError(s.gpa, ref, "missing Load text"),
+        error.NotProtocolText => protocolError(s.gpa, ref, "Load text requires protocol text"),
+        error.BadItem => protocolError(s.gpa, ref, "malformed Load metadata"),
+    };
     s.active_ref = ref;
-    for (spans[1..4]) |span| {
-        const bytes = span orelse return protocolError(s.gpa, ref, "missing Load text");
-        if (bytes[0] != rp.tag.protocol_text) return protocolError(s.gpa, ref, "Load text requires protocol text");
-    }
-    var map: std.json.ObjectMap = .empty;
-    for (names, spans) |name, span| {
-        if (span) |bytes| map.put(a, name, loadProtocol(a, bytes) catch |err| return if (err == error.OutOfMemory) oomReply() else protocolError(s.gpa, ref, "malformed Load metadata")) catch return oomReply();
-    }
-    const msg: Json = .{ .object = map };
-    if (field(msg, "newGroup")) |init| {
+    if (ld.newGroup) |init| {
         if (s.restoring != null) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
         if (!s.group_exchanges and anyExchangeOpen(s)) return protocolError(s.gpa, ref, "a Group's exchange is open");
         if (init != .object) return hostError(s.gpa, ref, .invalid_value);
         var options = init;
-        options.object.put(a, "group", field(msg, "group") orelse return hostError(s.gpa, ref, .invalid_value)) catch return oomReply();
+        options.object.put(a, "group", .{ .string = ld.group }) catch return oomReply();
         const code = createGroup(s, options);
         if (code != .ok) return hostError(s.gpa, ref, code);
     }
-    const reply = handleMessage(s, msg, ref, "load", &.{});
+    const reply = handleLoad(s, ref, .{ .group = ld.group, .refuse_worker = ld.refuseWorker orelse false, .load = ld });
     if (!s.crossing_trace or !s.reply_error) return reply;
-    return withTrace(s, groupOf(s, msg) orelse return reply, reply);
+    return withTrace(s, s.groupNamed(ld.group) orelse return reply, reply);
+}
+
+/// A Load as its gate sees it, from either layout: the Group it names, the
+/// binding's worker refusal, and its typed record, which a JSON frame
+/// lacking a required field has not, so it is refused as `invalid value`
+/// once the gate admits it.
+const LoadFrame = struct { group: ?[]const u8, refuse_worker: bool, load: ?envelope.Load };
+
+/// As handleMessage, for a worker Load of either layout.
+fn handleLoad(s: *Session, ref: i64, f: LoadFrame) []u8 {
+    s.active_ref = ref;
+    const entry = if (f.group) |name| s.groupNamed(name) else null;
+    if (s.group_exchanges and s.restoring == null) {
+        // A Load naming no Group, or one not made yet, waits on no exchange.
+        if (entry) |e| s.x.load(e) else return loadReply(s, ref, f.load);
+    }
+    if (s.restoring != null) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
+    switch (s.x.gate(ref, .input, entry)) {
+        .dispatch => {},
+        .admit => |worker_ref| {
+            const paused = s.x.paused(worker_ref);
+            return switch (paused.admission(ref, entry, .worker)) {
+                .refuse => |why| protocolError(s.gpa, ref, refusalDetail(why)),
+                .refuse_worker => |e| refused: {
+                    const held = enterPaused(s, e, paused.worker);
+                    defer leavePaused(s, held);
+                    refuseLoad(e, f.load);
+                    break :refused hostError(s.gpa, ref, .reentrant_call);
+                },
+                .admit => |e| admitted: {
+                    const held = enterPaused(s, e, paused.worker);
+                    defer leavePaused(s, held);
+                    break :admitted loadReply(s, ref, f.load);
+                },
+            };
+        },
+        .refuse => |why| return protocolError(s.gpa, ref, refusalDetail(why)),
+        .result, .trace_result, .release_result => unreachable,
+    }
+    // The binding may have refused a worker while this export was still
+    // running, then reached this boundary before servicing its queued frame.
+    if (s.inline_inputs and f.refuse_worker) {
+        refuseLoad(entry orelse return hostError(s.gpa, ref, .invalid_value), f.load);
+        return hostError(s.gpa, ref, .reentrant_call);
+    }
+    return loadReply(s, ref, f.load);
+}
+
+fn refuseLoad(entry: *GroupEntry, load: ?envelope.Load) void {
+    const ld = load orelse return;
+    entry.group.group.refuseWorker(.{ .load = .{ .name = ld.name, .source = ld.source } });
 }
 
 /// As pausedAdmission: inputs join the paused worker's queue; another
@@ -9466,4 +9536,59 @@ test "every Report decodes to the same fields in the JSON and fields layouts" {
         try binReport(&w, s, report, true);
         try @import("envelope_vectors_test.zig").checkReport(a, w.out.items, tree);
     }
+}
+
+test "the Inspect reply walks the catalogue's views and writes the shared inspection vector" {
+    const gpa = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(gpa);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const Vector = struct { name: []const u8, view: ?[]const u8 = null, tree: []const u8 };
+    const vectors = try std.json.parseFromSliceLeaky([]Vector, a, @embedFile("envelope-frames"), .{ .ignore_unknown_fields = true });
+    const want = for (vectors) |v| {
+        if (std.mem.eql(u8, v.name, "inspection")) break v.tree;
+    } else return error.NoInspectionVector;
+    const parsed = try std.json.parseFromSliceLeaky(Json, a, want, .{ .parse_numbers = false });
+    var held_values: std.ArrayList(*Value) = .empty;
+    defer {
+        for (held_values.items) |v| v.release();
+        held_values.deinit(a);
+    }
+    const Decode = struct {
+        fn of(al: Allocator, held: *std.ArrayList(*Value), j: Json) !*Value {
+            const v = try encoding.decodeParsed(gpa, j, .{});
+            try held.append(al, v);
+            return v;
+        }
+    };
+    const s0 = parsed.object.get("scripts").?.array.items[0];
+    const vars = s0.object.get("vars").?.array.items;
+    const pairs = [_]talk.Pair{
+        .{ .key = "count", .key_len = 5, .value = try Decode.of(a, &held_values, vars[0].array.items[1]) },
+        .{ .key = "label", .key_len = 5, .value = try Decode.of(a, &held_values, vars[1].array.items[1]) },
+    };
+    const calls = [_]talk.Id{.{ .data = "c1", .len = 2 }};
+    const until = try model.dates.parseInstant("2026-10-19T12:00:00.25Z");
+    const runs = [_]talk.RunView{
+        .{ .id = "r1", .id_len = 2, .status = .suspended, .handler = "ping", .handler_len = 4, .wait = "call", .wait_len = 4, .has_until = true, .until_seconds = until.seconds, .until_micros = until.micros, .calls = &calls, .calls_len = 1 },
+        .{ .id = "r2", .id_len = 2, .status = .ready, .handler = "tick", .handler_len = 4 },
+    };
+    const args = s0.object.get("mailbox").?.array.items[0].object.get("message").?.object.get("args").?.array.items;
+    const ping_args = [_]*Value{ try Decode.of(a, &held_values, args[0]), try Decode.of(a, &held_values, args[1]) };
+    const mailbox = [_]talk.MessageView{
+        .{ .delivery = "d1", .delivery_len = 2, .from = "t", .from_len = 1, .message = .{ .name = "ping", .name_len = 4, .args = &ping_args, .args_len = 2 } },
+        .{ .delivery = "", .delivery_len = 0, .from = "", .from_len = 0, .message = .{ .name = "tick", .name_len = 4, .args = null, .args_len = 0 } },
+    };
+    const disabled = [_]talk.Id{.{ .data = "api", .len = 3 }};
+    const scripts = [_]talk.ScriptView{
+        .{ .disabled_grants = &disabled, .disabled_grants_len = 1, .name = "s", .name_len = 1, .vars = &pairs, .vars_len = 2, .runs = &runs, .runs_len = 2, .mailbox = &mailbox, .mailbox_len = 2, .forbid_suspension = true },
+        .{ .disabled_grants = &.{}, .disabled_grants_len = 0, .name = "t", .name_len = 1, .vars = &.{}, .vars_len = 0, .runs = &.{}, .runs_len = 0, .mailbox = &.{}, .mailbox_len = 0 },
+    };
+    const inspection: talk.Inspection = .{ .scripts = &scripts, .scripts_len = 2 };
+    var o = Out.init(gpa);
+    defer o.deinit();
+    try o.raw("{");
+    try writeInspection(&o, gpa, &inspection);
+    try o.raw("}");
+    try std.testing.expectEqualStrings(want, o.buf.written());
 }

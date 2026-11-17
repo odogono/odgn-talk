@@ -59,6 +59,7 @@ test {
     _ = request_pump;
     _ = @import("exchange.zig");
     _ = @import("need.zig");
+    _ = @import("envelope_codec.zig");
     _ = syntax;
     _ = check;
     _ = analysis;
