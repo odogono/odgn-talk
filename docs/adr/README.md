@@ -173,3 +173,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0180: Go sessions run the Zig Session Host through the reactor](0180-go-sessions-run-the-zig-session-host-through-the-reactor.md)
 - [0181: The Peer Router owns Peer Exposure Lifetime, guarded by peer-kit](0181-the-peer-router-owns-peer-exposure-lifetime-guarded-by-peer-kit.md)
 - [0182: @northtalk/editor publishes framework-free CodeMirror extensions](0182-northtalk-editor-publishes-framework-free-codemirror-extensions.md)
+- [0183: Every Host's Message Layer codecs are generated from one catalogue](0183-every-hosts-message-layer-codecs-are-generated-from-one-catalogue.md)
