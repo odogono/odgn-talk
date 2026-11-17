@@ -34,5 +34,5 @@ jobs:
         working-directory: impl/elixir
       - run: mix compile --warnings-as-errors
         working-directory: impl/elixir
-      - run: mix test test/binary_test.exs
+      - run: mix test test/binary_test.exs test/envelope_records_test.exs
         working-directory: impl/elixir

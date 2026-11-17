@@ -223,3 +223,55 @@ fn item(a: Allocator, values: *Values, w: *rp.Writer, span: []const u8, expected
         else => return error.UnexpectedJson,
     }
 }
+
+/// Every JSON-layout vector parses strictly into its generated record and
+/// writes back the same tree (ADR 0183).
+pub fn checkRecords() !void {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const Vector = struct { name: []const u8, tag: ?u8 = null, direction: ?[]const u8 = null, hex: ?[]const u8 = null, tree: []const u8, message: ?[]const u8 = null, view: ?[]const u8 = null };
+    const vectors = try std.json.parseFromSlice([]Vector, a, @embedFile("envelope-frames"), .{});
+    var checked: usize = 0;
+    for (vectors.value) |vector| {
+        const family: []const u8, const name: []const u8 = if (vector.view) |v| .{ "view", v } else if (vector.message) |m| .{ "json message", m } else blk: {
+            const entry = try entryFor(env.messages, vector.tag.?);
+            if (entry.layouts.len != 2) continue;
+            break :blk .{ "message", entry.name };
+        };
+        errdefer std.debug.print("record vector: {s}\n", .{vector.name});
+        var tree = try std.json.parseFromSliceLeaky(Json, a, vector.tree, .{ .parse_numbers = false });
+        _ = tree.object.orderedRemove("m"); // the dispatch tag, not a field
+        var found = false;
+        inline for (env.records) |r| {
+            if (std.mem.eql(u8, r[0], family) and std.mem.eql(u8, r[1], name)) {
+                found = true;
+                const filled = try std.json.parseFromValueLeaky(r[2], a, tree, .{});
+                const text = try std.json.Stringify.valueAlloc(a, filled, .{ .emit_null_optional_fields = false });
+                const again = try std.json.parseFromSliceLeaky(Json, a, text, .{ .parse_numbers = false });
+                try std.testing.expect(sameJson(tree, again));
+            }
+        }
+        try std.testing.expect(found);
+        checked += 1;
+    }
+    try std.testing.expect(checked > 0);
+}
+
+fn sameJson(x: Json, y: Json) bool {
+    return switch (x) {
+        .object => |o| y == .object and o.count() == y.object.count() and for (o.keys(), o.values()) |k, v| {
+            const w = y.object.get(k) orelse break false;
+            if (!sameJson(v, w)) break false;
+        } else true,
+        .array => |l| y == .array and l.items.len == y.array.items.len and for (l.items, y.array.items) |v, w| {
+            if (!sameJson(v, w)) break false;
+        } else true,
+        // Both sides parse with `parse_numbers = false`, so numbers keep their text.
+        .number_string => |n| y == .number_string and std.mem.eql(u8, n, y.number_string),
+        .string => |s| y == .string and std.mem.eql(u8, s, y.string),
+        .bool => |b| y == .bool and b == y.bool,
+        .null => y == .null,
+        else => false,
+    };
+}
