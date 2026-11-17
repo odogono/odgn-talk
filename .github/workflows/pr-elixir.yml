@@ -1,0 +1,36 @@
+name: PR Elixir envelope
+
+# The shared frame vectors on every PR that can move them (ADR 0183). The
+# full mix suite builds the reactor and stays in the weekly zig.yml.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'impl/elixir/**'
+      - 'impl/testdata/**'
+      - 'spec/data/envelope.toml'
+      - 'tools/envelope/**'
+      - '.github/workflows/pr-elixir.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-elixir-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  envelope-vectors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '28'
+          elixir-version: '1.19'
+      - run: mix deps.get
+        working-directory: impl/elixir
+      - run: mix compile --warnings-as-errors
+        working-directory: impl/elixir
+      - run: mix test test/binary_test.exs
+        working-directory: impl/elixir

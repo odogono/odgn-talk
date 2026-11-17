@@ -79,6 +79,18 @@ export const checkVectors = (data: Catalogue, vectors: Vector[]) => {
   const covered = new Set<number>();
   const reports = new Set<number>();
   const names = new Set<string>();
+  const present = new Set<string>();
+  const note = (
+    family: string,
+    tag: number,
+    field: Field,
+    item: BinaryItem,
+  ) => {
+    if (item.tag !== 0) {
+      present.add(`${family} ${hexTag(tag)} ${field.name}`);
+    }
+    checkItem(item, field);
+  };
   for (const vector of vectors) {
     if (!vector.name || names.has(vector.name)) {
       throw new Error(`Missing or duplicate vector name: ${vector.name}`);
@@ -108,9 +120,10 @@ export const checkVectors = (data: Catalogue, vectors: Vector[]) => {
     covered.add(tag);
     for (const field of entry.fields) {
       if (field.kind !== 'reports' || r.data[r.at] === 0) {
-        checkItem(r.item(), field);
+        note('message', tag, field, r.item());
         continue;
       }
+      present.add(`message ${hexTag(tag)} ${field.name}`);
       if (r.byte() !== 6) {
         throw new Error(`Wrong reports item in ${vector.name}`);
       }
@@ -127,7 +140,7 @@ export const checkVectors = (data: Catalogue, vectors: Vector[]) => {
         }
         reports.add(reportTag);
         for (const field of report.fields) {
-          checkItem(r.item(), field);
+          note('Report', reportTag, field, r.item());
         }
       }
     }
@@ -154,5 +167,21 @@ export const checkVectors = (data: Catalogue, vectors: Vector[]) => {
         );
       }
     }
+  }
+  // Every field must appear in some vector, or a Host can drop it unnoticed.
+  const missing = [
+    ...data.messages.flatMap(e =>
+      e.fields.map(f => ['message', e, f] as const),
+    ),
+    ...data.reports.flatMap(e => e.fields.map(f => ['Report', e, f] as const)),
+  ]
+    .filter(
+      ([family, e, f]) => !present.has(`${family} ${hexTag(e.tag)} ${f.name}`),
+    )
+    .map(
+      ([family, e, f]) => `${family} ${hexTag(e.tag)} (${e.name}) ${f.name}`,
+    );
+  if (missing.length > 0) {
+    throw new Error(`No vector carries these fields:\n${missing.join('\n')}`);
   }
 };

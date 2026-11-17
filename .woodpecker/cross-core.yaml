@@ -6,6 +6,8 @@ when:
       include:
         - 'impl/ts/**'
         - 'impl/zig/**'
+        - 'impl/testdata/**'
+        - 'tools/envelope/**'
         - 'corpus/**'
         - 'spec/**'
         - 'package.json'
