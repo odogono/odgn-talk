@@ -23,3 +23,5 @@ Add-ons ([#1899](https://github.com/odogono/odgn-talk/issues/1899)) remain code 
 ## Consequences
 
 The build no longer writes `kits/`, and `kitPrecacheFiles` and `KIT_BUDGET_BYTES` are removed. Each Base Project and Example Project has its own size budget. Music and First Sounds both hold copies of the same sound bytes.
+
+- Amended by [#2273](https://github.com/odogono/odgn-talk/issues/2273): a Base Project's version moves only when its own content changes, not when a built-in Add-on it lists is bumped. Folio loads the shipped version of a built-in Add-on for any Project that lists the same or an older one, and saves the Project at that version ([ADR 0162](0162-folio-add-ons-provide-element-and-instrument-kinds-palettes-and-controls.md)), so offering to update for an Add-on bump would change nothing. The build still writes the shipped versions into Music's Add-on list.

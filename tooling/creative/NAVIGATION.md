@@ -125,7 +125,9 @@ landed, and the Issue graph job ticks it as they close.
   and why. A new kind is a new file registered in both.
 - Changing the Music base: bump `MUSIC_BASE_VERSION` in
   [base-projects.ts](src/base-projects.ts), then add that version's hash to
-  [build.test.ts](tests/build.test.ts) (its failure prints the new one).
+  [build.test.ts](tests/build.test.ts) (its failure prints the new one). A
+  built-in Add-on release is not a change to Music: the build writes the
+  shipped version, and the hash leaves Add-on versions out (#2273).
 - Add-ons (ADR 0162, #1901): `Project.addOns` lists them by URL, and
   [add-on.ts](src/elements/add-on.ts) reads kinds named `<url>#<name>`. Until
   a loader registers one, `kindOf` gives the placeholder definition, which
@@ -231,8 +233,8 @@ landed, and the Issue graph job ticks it as they close.
   (`restsAsWords`, through the host's `parse`); `select`/`caret` link the
   window's selection with the Code Browser's. `host.audition` (#2190) plays a step through
   `auditionStep` in [edit-preview.ts](src/edit-preview.ts). Bump `PIANO_ROLL_VERSION` with
-  any change, since the service worker caches the chunk by version; a bump that
-  changes the Music base also follows the Music base step under Project model.
+  any change, since the service worker caches the chunk by version; Music picks
+  up the new version without a Music base bump (#2273).
   Tests: [piano-roll.test.ts](tests/piano-roll.test.ts), [piano-roll-edits.test.ts](tests/piano-roll-edits.test.ts) and the `piano-roll`
   browser suite.
 
