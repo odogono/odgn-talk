@@ -15,7 +15,7 @@ import {
   type Project,
 } from '../src/model';
 import { firstView, PlayHost } from '../src/play-host';
-import { scriptOwners } from '../src/script-manifest';
+import { giveIds } from './helpers/ids';
 import { PlayMirror } from '../src/play-mirror';
 import {
   type PlayRequest,
@@ -96,7 +96,7 @@ const hosted = (project: Project, clock?: () => number) => {
   request({
     kind: 'open',
     session: 1,
-    project: structuredClone(project),
+    project: structuredClone(giveIds(project)),
     pageIndex: 0,
     seed: 0n,
   });
@@ -619,6 +619,7 @@ test('clone telemetry keeps instance identity and links to the authored source',
   project.pages[0]!.elements.push(button);
   project.pages[0]!.script =
     'on openPage\n ask elements to clone original\n send click to it\nend openPage';
+  giveIds(project);
   const snapshots: Extract<PlayResponse, { kind: 'performance' }>[] = [];
   const host = new PlayHost(({ response }) => {
     if (response.kind === 'performance') {
@@ -645,7 +646,7 @@ test('clone telemetry keeps instance identity and links to the authored source',
     const clone = snapshots
       .at(-1)!
       .snapshot.scripts.find(row => row.script.includes('dynamic:'))!;
-    expect(clone.owner).toBe(2);
+    expect(clone.owner).toBe(button.id!);
     expect(clone.origins.map(row => row.origin)).toEqual(['click']);
   } finally {
     host.receive({ id: 2, request: { kind: 'stop', session: 1 } });
@@ -669,15 +670,18 @@ test('Library diagnostics retain source targets through the worker protocol', as
       .flatMap(view => view.problems)
       .some(
         problem =>
-          problem.target?.kind === 'library' && problem.target.index === 1,
+          problem.target?.kind === 'library' &&
+          problem.target.id === project.libraries[1]!.id,
       ),
   );
   expect(views.flatMap(view => view.problems)).toEqual(
     expect.arrayContaining([
-      expect.objectContaining({ target: { kind: 'library', index: 0 } }),
+      expect.objectContaining({
+        target: { kind: 'library', id: project.libraries[0]!.id! },
+      }),
       expect.objectContaining({
         line: 2,
-        target: { kind: 'library', index: 1 },
+        target: { kind: 'library', id: project.libraries[1]!.id! },
       }),
     ]),
   );
@@ -756,7 +760,7 @@ test('the Variables window reads the showing Page’s Scripts once per Pump', as
     kind: 'object',
     name: 'go',
     live: true,
-    owner: 2,
+    owner: project.pages[0]!.elements[0]!.id,
   });
   expect(page.get('step')).toEqual({ kind: 'function' });
   expect(sourceOf(page.get('board')!)).toBe('[[1, 2], [3]]');
@@ -974,8 +978,8 @@ test('a Breakpoint stops a Run partway as a Pause, and Resume finishes it', asyn
   const project = fixture();
   project.pages[0]!.elements[0]!.script =
     'on click\n put 1 into n\n set the label of me to "half"\n set the label of me to "done " & n\nend click';
-  const go = scriptOwners(project).indexOf(project.pages[0]!.elements[0]!);
   const { mirror, request, element } = hosted(project);
+  const go = project.pages[0]!.elements[0]!.id!;
   const label = () => {
     const e = element('go');
     return e.kind === 'button' ? e.label : undefined;
@@ -983,7 +987,7 @@ test('a Breakpoint stops a Run partway as a Pause, and Resume finishes it', asyn
   request({
     kind: 'breakpoints',
     session: 1,
-    breakpoints: [{ place: { kind: 'script', owner: go }, line: 4 }],
+    breakpoints: [{ place: { kind: 'script', id: go }, line: 4 }],
   });
   request({
     kind: 'send',
@@ -999,7 +1003,7 @@ test('a Breakpoint stops a Run partway as a Pause, and Resume finishes it', asyn
   expect(frame).toMatchObject({
     label: 'click in go',
     line: 4,
-    place: { kind: 'script', owner: go },
+    place: { kind: 'script', id: go },
   });
   expect(frame!.locals).toContainEqual(['n', { kind: 'plain', text: '1' }]);
   // Frame Steps and Message Box lines wait for the stopped Run.
@@ -1016,8 +1020,8 @@ test('Pause on errors stops a Run before an uncaught error unwinds', async () =>
   const project = fixture();
   project.pages[0]!.elements[0]!.script =
     'on click\n try\n  throw "caught"\n catch e\n end try\n set the label of me to "half"\n throw "boom"\nend click';
-  const go = scriptOwners(project).indexOf(project.pages[0]!.elements[0]!);
   const { mirror, request, element, views } = hosted(project);
+  const go = project.pages[0]!.elements[0]!.id!;
   const problems = () => views.flatMap(view => view.problems);
   const label = () => {
     const e = element('go');
@@ -1036,7 +1040,7 @@ test('Pause on errors stops a Run before an uncaught error unwinds', async () =>
   expect(label()).toBe('half');
   expect(mirror.stoppedRun).toMatchObject({
     error: 'boom',
-    frames: [{ line: 7, place: { kind: 'script', owner: go } }],
+    frames: [{ line: 7, place: { kind: 'script', id: go } }],
   });
   expect(problems()).toEqual([]);
   // Resuming lets the error end the Run as it would have.
@@ -1046,14 +1050,53 @@ test('Pause on errors stops a Run before an uncaught error unwinds', async () =>
   expect(problems()[0]).toMatchObject({ line: 7 });
 });
 
-test('Stop abandons a Run stopped at a Breakpoint', async () => {
-  const project = fixture();
-  const go = scriptOwners(project).indexOf(project.pages[0]!.elements[0]!);
+test('places name Scripts and Libraries by id, whatever their order (#2270)', async () => {
+  const project = giveIds(fixture());
+  project.libraries.push({
+    id: 50,
+    name: 'labels',
+    source: 'on relabel target\n set the label of target to "old"\nend relabel',
+  });
+  const go = project.pages[0]!.elements[0]!;
+  go.script = 'use relabel from labels\non click\n relabel me\nend click';
+  // Inserted later, so listed first with later ids than what follows them.
+  const fresh = createElement('button', 'fresh');
+  fresh.id = 100;
+  fresh.script = 'on click\n set the label of me to "fresh"\nend click';
+  project.pages[0]!.elements.unshift(fresh);
+  project.libraries.unshift({
+    id: 101,
+    name: 'unused',
+    source: 'on nothing\nend nothing',
+  });
   const { mirror, request } = hosted(project);
   request({
     kind: 'breakpoints',
     session: 1,
-    breakpoints: [{ place: { kind: 'script', owner: go }, line: 2 }],
+    breakpoints: [{ place: { kind: 'library', id: 50 }, line: 2 }],
+  });
+  request({
+    kind: 'send',
+    session: 1,
+    pageIndex: 0,
+    target: 'go',
+    message: 'click',
+  });
+  await until(() => mirror.stoppedRun !== undefined);
+  expect(mirror.stoppedRun!.frames).toMatchObject([
+    { label: 'relabel in Library labels', place: { kind: 'library', id: 50 } },
+    { label: 'click in go', line: 3, place: { kind: 'script', id: go.id } },
+  ]);
+});
+
+test('Stop abandons a Run stopped at a Breakpoint', async () => {
+  const project = fixture();
+  const { mirror, request } = hosted(project);
+  const go = project.pages[0]!.elements[0]!.id!;
+  request({
+    kind: 'breakpoints',
+    session: 1,
+    breakpoints: [{ place: { kind: 'script', id: go }, line: 2 }],
   });
   request({
     kind: 'send',
@@ -1080,7 +1123,9 @@ test('a Breakpoint in a Library stops the Run that calls it', async () => {
   request({
     kind: 'breakpoints',
     session: 1,
-    breakpoints: [{ place: { kind: 'library', index: 0 }, line: 2 }],
+    breakpoints: [
+      { place: { kind: 'library', id: project.libraries[0]!.id! }, line: 2 },
+    ],
   });
   request({
     kind: 'send',
@@ -1105,14 +1150,14 @@ test('Statement Steps move a stopped Run, and the session stays paused after it 
   });
   project.pages[0]!.elements[0]!.script =
     'use relabel from labels\non click\n relabel me\n put 2 into n\nend click';
-  const go = scriptOwners(project).indexOf(project.pages[0]!.elements[0]!);
   const { mirror, request } = hosted(project);
+  const go = project.pages[0]!.elements[0]!.id!;
   const at = () =>
     mirror.stoppedRun?.frames.map(f => `${f.label}:${f.line}`).join(' < ');
   request({
     kind: 'breakpoints',
     session: 1,
-    breakpoints: [{ place: { kind: 'script', owner: go }, line: 3 }],
+    breakpoints: [{ place: { kind: 'script', id: go }, line: 3 }],
   });
   request({
     kind: 'send',
@@ -1164,7 +1209,9 @@ test('while a Run is stopped, the Message Box and Watches run in the selected fr
   request({
     kind: 'breakpoints',
     session: 1,
-    breakpoints: [{ place: { kind: 'library', index: 0 }, line: 2 }],
+    breakpoints: [
+      { place: { kind: 'library', id: project.libraries[0]!.id! }, line: 2 },
+    ],
   });
   request({
     kind: 'watches',

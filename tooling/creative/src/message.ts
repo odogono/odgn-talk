@@ -9,7 +9,6 @@ import { runLine } from './message-line';
 import type { InstrumentMessage } from './instruments/session';
 import type { PlaySession } from './play';
 import { editPreview } from './edit-preview';
-import { scriptOwners } from './script-manifest';
 import { valueEncoder, type VariableValue } from './variables';
 
 /**
@@ -151,12 +150,7 @@ const editRun = async (
     return { error: started.error };
   }
   // Elements are placed in the authored Project, which `authored` maps to.
-  const encode = expression
-    ? valueEncoder(
-        play,
-        new Map(scriptOwners(editor.project).map((owner, i) => [owner, i])),
-      )
-    : undefined;
+  const encode = expression ? valueEncoder(play) : undefined;
   const reply = await settle(play, started.result, () => play.pump(0n), encode);
   // In Edit, `play` is only a preview and a loop waits for Browse.
   const looped = play.patterns.looping;

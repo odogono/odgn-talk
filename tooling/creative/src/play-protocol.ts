@@ -156,11 +156,11 @@ export type PlayRequest =
 export type PromptView = UserPrompt & { id: number };
 
 /**
- * A Script, by its owner's place in `scriptOwners(project)`, or a Library,
- * by its place in the Project's Libraries.
+ * A Script, by its owner's editor id (`ownerId`; the Project is 0), or a
+ * Library, by its id. Ids come from one editor counter, so they never clash
+ * across kinds, and survive the Project's copy to the worker.
  */
-export type SourcePlace =
-  { index: number; kind: 'library' } | { kind: 'script'; owner: number };
+export type SourcePlace = { id: number; kind: 'library' | 'script' };
 
 /** Step In, Step Over or Step Out. */
 export type StatementStep = 'in' | 'over' | 'out';
@@ -184,19 +184,18 @@ export type FrameView = {
  */
 export type StoppedRun = { error?: string; frames: FrameView[]; run: string };
 
-/** A Script problem, its owner given by place in `scriptOwners(project)`. */
+/** A Script problem, its owner given by `ownerId`; a Library's by its id. */
 export type ProblemView = {
   line: number;
   message: string;
   owner: number;
-  target?:
-    { index: number; kind: 'library' } | { kind: 'script'; owner: number };
+  target?: { id: number; kind: 'library' };
 };
 
 /**
  * A Drawing's change: its whole list after a reset, else the commands added
- * since the last one sent. `owner` places an authored Canvas in
- * `scriptOwners(project)`, so the page can commit it on return to Edit.
+ * since the last one sent. `owner` is an authored Canvas's `ownerId`, so the
+ * page can commit it on return to Edit.
  */
 export type DrawingView = {
   commands: CanvasCommand[];
@@ -289,8 +288,8 @@ export type PlayView = {
 };
 
 /**
- * A Pattern Event for the Playing Highlight (#2176): the Script that owns
- * it, by its place in `scriptOwners`, its pattern text, the event's
+ * A Pattern Event for the Playing Highlight (#2176): the `ownerId` of the
+ * Script that owns it, its pattern text, the event's
  * characters in that text, and when it sounds and ends in audio time.
  */
 export type PatternEventView = {

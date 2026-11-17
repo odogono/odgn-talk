@@ -11,7 +11,7 @@ import type { DeepReadonly } from './readonly';
 import { ReceivedDrawing } from './drawing';
 import { type StackEditor } from './editing';
 import { type Element, type RichText, type TextElement } from './model';
-import { ownerById, ownerId, type ScriptOwner } from './script-manifest';
+import { ownerById } from './script-manifest';
 import {
   type PaletteView,
   type PlayView,
@@ -67,7 +67,7 @@ export class PlayMirror implements ReaderTextPlay {
   #edits = new WeakMap<Element, number>();
   #edit = 0;
   // Every Drawing the worker has sent, by Page and name, and each authored
-  // Canvas's by its place in `scriptOwners(project)`.
+  // Canvas's by its `ownerId`.
   #drawings = new Map<string, ReceivedDrawing>();
   #authoredDrawings = new Map<number, CanvasCommand[]>();
   get authoredDrawings(): ReadonlyMap<number, readonly CanvasCommand[]> {
@@ -221,21 +221,19 @@ export class PlayMirror implements ReaderTextPlay {
 
 /**
  * On return to Edit, writes each authored Canvas's Drawing as the page last
- * showed it into the Project, as one undoable edit (ADR 0116). `owners` is
- * `scriptOwners` of the Project Play started from.
+ * showed it into the Project, as one undoable edit (ADR 0116), finding
+ * each by its `ownerId`.
  */
 export const commitDrawings = (
   editor: StackEditor,
-  owners: readonly ScriptOwner[],
   mirror: PlayMirror,
 ): void => {
   if (!mirror.authoredDrawings.size || editor.readOnly) {
     return;
   }
   editor.edit(({ tree }) => {
-    for (const [index, commands] of mirror.authoredDrawings) {
-      const authored = owners[index];
-      const owner = authored && ownerById(editor.project, ownerId(authored));
+    for (const [id, commands] of mirror.authoredDrawings) {
+      const owner = ownerById(editor.project, id);
       if (owner && 'kind' in owner && owner.kind === 'canvas') {
         tree.setDrawing(owner, commands);
       }
