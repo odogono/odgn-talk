@@ -44,6 +44,7 @@ import type {
   PumpedRequest,
   RestoreOptions,
   RestoreResult,
+  RunView,
   Settlement,
 } from '../group';
 import type { Library } from '../library';
@@ -56,6 +57,11 @@ import {
 } from '../objects';
 import { map, nothing, requireArgs, Value } from '../values';
 import { binaryValues, decode, encode, encodeAll, type Codec } from './codec';
+import {
+  decodeJsonView,
+  encodeJsonMessage,
+  type JsonMessage,
+} from './envelope-json';
 import { InstanceLostError } from './reactor';
 import { Session } from './session';
 import {
@@ -1121,12 +1127,12 @@ export class WasmGroup implements Group {
     const grants = this.#musicalClock
       ? { ...given, [MUSICAL_CLOCK]: this.#musicalClock }
       : given;
-    const ok = this.worker('load', {
+    // Each public option, one line to its catalogued field.
+    const load: JsonMessage<'load'> = {
       name: o.name,
       source: o.source,
       grants: this.#grantHandles(grants),
       grantsAsUsed: o.grantsAsUsed,
-      forbidSuspension: o.forbidSuspension || undefined,
       owner: o.owner ? this.#objectRef(o.owner) : undefined,
       objects: o.objects
         ? Object.fromEntries(
@@ -1134,7 +1140,9 @@ export class WasmGroup implements Group {
           )
         : undefined,
       limits: { ...limitDefaults, ...o.limits },
-    });
+      forbidSuspension: o.forbidSuspension || undefined,
+    };
+    const ok = this.worker('load', encodeJsonMessage('load', load));
     const name = textOf(field(ok, 'script')) ?? o.name;
     this.#bindings.set(name, new Map(Object.entries(grants)));
     const script = new WasmScript(this, name);
@@ -1450,52 +1458,42 @@ export class WasmGroup implements Group {
   }
 
   inspect(): Inspection {
-    const ok = this.worker('inspect');
+    const ok = this.worker('inspect', encodeJsonMessage('inspect', {}));
+    const view = decodeJsonView('inspection', ok);
     return {
-      scripts: listOf(field(ok, 'scripts')).map(s => {
-        const disabled = textsOf(field(s, 'disabledGrants'));
-        return {
-          name: textOf(field(s, 'name'))!,
-          ...(disabled.length ? { disabledGrants: disabled } : {}),
-          ...(field(s, 'forbidSuspension') === true
-            ? { forbidSuspension: true as const }
-            : {}),
-          vars: listOf(field(s, 'vars')).map(pair => {
-            const [name, v] = listOf(pair);
-            return [textOf(name)!, decode(this.#codec, v)] as [string, Value];
-          }),
-          runs: listOf(field(s, 'runs')).map(r => {
-            const run = plain(
-              r,
-            ) as Inspection['scripts'][number]['runs'][number] & {
-              until?: unknown;
-            };
-            if (typeof run.until === 'string') {
-              run.until = parseInstant(run.until);
-            }
-            return run;
-          }),
-          mailbox: listOf(field(s, 'mailbox')).map(item => {
-            const message = field(item, 'message');
-            const limits = plain(field(message, 'limits'));
-            return {
-              ...(has(item, 'delivery')
-                ? { delivery: textOf(field(item, 'delivery')) }
-                : {}),
-              ...(has(item, 'from')
-                ? { from: textOf(field(item, 'from')) }
-                : {}),
-              message: {
-                name: textOf(field(message, 'name'))!,
-                args: listOf(field(message, 'args')).map(a =>
-                  decode(this.#codec, a),
-                ),
-                ...(limits ? { limits } : {}),
-              },
-            };
-          }),
-        };
-      }),
+      scripts: view.scripts.map(s => ({
+        name: s.name,
+        ...(s.disabledGrants?.length
+          ? { disabledGrants: [...s.disabledGrants] }
+          : {}),
+        ...(s.forbidSuspension ? { forbidSuspension: true as const } : {}),
+        vars: s.vars.map(
+          ([name, v]) => [name, decode(this.#codec, v)] as [string, Value],
+        ),
+        runs: s.runs.map(r => ({
+          id: r.id,
+          status: r.status as RunView['status'],
+          handler: r.handler,
+          ...(r.wait !== undefined ? { wait: r.wait } : {}),
+          ...(r.until !== undefined ? { until: parseInstant(r.until) } : {}),
+          ...(r.calls ? { calls: [...r.calls] } : {}),
+        })),
+        mailbox: s.mailbox.map(item => {
+          // The Zig worker writes no `limits` here yet; read it if present.
+          const limits = plain(field(item.message, 'limits'));
+          return {
+            ...(item.delivery !== undefined ? { delivery: item.delivery } : {}),
+            ...(item.from !== undefined ? { from: item.from } : {}),
+            message: {
+              name: textOf(field(item.message, 'name'))!,
+              args: listOf(field(item.message, 'args')).map(a =>
+                decode(this.#codec, a),
+              ),
+              ...(limits ? { limits: limits as Message['limits'] } : {}),
+            },
+          };
+        }),
+      })),
     };
   }
 

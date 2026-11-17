@@ -665,6 +665,48 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
     return copy.inspect().scripts[0]!.vars.map(v => [v[0], v[1].toString()]);
   });
 
+  both('Inspect reads every field of its reply view', (core, nt) => {
+    const api = core.defineCapability('api', {
+      price: {
+        mode: 'immediate',
+        command: true,
+        cost: { fuel: 0 },
+        result: nt.shape.number,
+        do: () => nt.num(7),
+      },
+    });
+    const g = core.newGroup({ name: 'g' });
+    const waiting = g.load({
+      name: 'w',
+      source:
+        'script variable seen = 1\non go\n  wait 5 ms\n  return seen\nend go',
+    });
+    const queued = g.load({
+      name: 'q',
+      source: 'on go n\n  return n\nend go',
+      grants: { api: api.grant('all', undefined) },
+      grantsAsUsed: true,
+      forbidSuspension: true,
+    });
+    waiting.deliver({ name: 'go' });
+    g.pump(0n);
+    queued.deliver({ name: 'go', args: [nt.num(2)] });
+    return g.inspect().scripts.map(s => ({
+      ...s,
+      vars: s.vars.map(([n, v]) => `${n}=${v}`),
+      // The Zig Core lists no calls as `[]`; the TS Core leaves them out.
+      runs: s.runs.map(({ calls, ...r }) => ({
+        ...r,
+        ...(calls?.length ? { calls } : {}),
+      })),
+      mailbox: s.mailbox.map(m => ({
+        ...m,
+        delivery: typeof m.delivery,
+        message: { ...m.message, args: m.message.args?.map(String) },
+      })),
+    }));
+  });
+
   both('Inspect, counters, grants and Reload', (core, nt) => {
     const cap = core.clockCapability({ now: { fuel: 1 } });
     const g = core.newGroup({ name: 'g' });

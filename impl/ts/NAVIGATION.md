@@ -111,7 +111,7 @@ A declaration word such as `constant` or `shape` touches every stage; `rg -n -w 
 
 ## The Zig reactor behind the embedding API
 
-- Implementation: [`@northtalk/ts/wasm`](src/wasm/index.ts): the [Group](src/wasm/group.ts) and its needs, the [guest conversation](src/wasm/session.ts), [Values crossing](src/wasm/codec.ts), [frames](src/wasm/wire.ts) and the [WASI imports](src/wasm/reactor.ts)
+- Implementation: [`@northtalk/ts/wasm`](src/wasm/index.ts): the [Group](src/wasm/group.ts) and its needs, the [guest conversation](src/wasm/session.ts), [Values crossing](src/wasm/codec.ts), [frames](src/wasm/wire.ts), the [JSON layout](src/wasm/envelope-json.ts) that writes Load and reads Inspect from the [generated catalogue](src/generated/envelope.ts) ([ADR 0183](../../docs/adr/0183-every-hosts-message-layer-codecs-are-generated-from-one-catalogue.md)), and the [WASI imports](src/wasm/reactor.ts)
 - Rules: [the message layer](../../spec/09-embedding.md#the-message-layer), [paused inputs](../../spec/embedding/paused-crossing-inputs.md), [ADR 0097](../../docs/adr/0097-browser-hosts-may-run-the-zig-reactor-through-the-ts-embedding-api.md), [the guide's differences](README.md#the-zig-reactor-in-a-browser)
 - Tests and cases: [parity tests](tests/wasm.test.ts), [core-switch example](examples/core-switch/), [Corpus replay](tools/wasm-corpus.ts), [browser figures](tools/wasm-browser.ts)
 - First check: `bun run wasm:build && bun test impl/ts/tests/wasm.test.ts && bun impl/ts/tools/wasm-corpus.ts --quiet`
