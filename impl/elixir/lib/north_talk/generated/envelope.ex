@@ -13,6 +13,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 1,
       name: "request",
       direction: :host_to_guest,
+      layouts: [:fields, :json],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "group", kind: :text, required: true},
@@ -24,6 +25,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 2,
       name: "call",
       direction: :host_to_guest,
+      layouts: [:fields, :json],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "group", kind: :text, required: true},
@@ -36,6 +38,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 3,
       name: "pump",
       direction: :host_to_guest,
+      layouts: [:fields, :json],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "group", kind: :text, required: true},
@@ -48,6 +51,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 4,
       name: "request-pump",
       direction: :host_to_guest,
+      layouts: [:fields],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "group", kind: :text, required: true},
@@ -63,6 +67,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 5,
       name: "call-pump",
       direction: :host_to_guest,
+      layouts: [:fields],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "group", kind: :text, required: true},
@@ -79,6 +84,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 6,
       name: "op-result",
       direction: :host_to_guest,
+      layouts: [:fields],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "group", kind: :text, required: true},
@@ -93,6 +99,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 7,
       name: "prop-result",
       direction: :host_to_guest,
+      layouts: [:fields],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "group", kind: :text, required: true},
@@ -107,6 +114,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 8,
       name: "effect-result",
       direction: :host_to_guest,
+      layouts: [:fields],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "group", kind: :text, required: true},
@@ -117,12 +125,14 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 9,
       name: "release-result",
       direction: :host_to_guest,
+      layouts: [:fields],
       fields: [%{name: "ref", kind: :int, required: true}, %{name: "group", kind: :text, required: true}]
     },
     %{
       tag: 10,
       name: "settle-pump",
       direction: :host_to_guest,
+      layouts: [:fields],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "group", kind: :text, required: true},
@@ -136,6 +146,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 11,
       name: "load",
       direction: :host_to_guest,
+      layouts: [:fields, :json],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "group", kind: :text, required: true},
@@ -155,6 +166,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 12,
       name: "deliver",
       direction: :host_to_guest,
+      layouts: [:fields, :json],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "group", kind: :text, required: true},
@@ -166,6 +178,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 13,
       name: "broadcast",
       direction: :host_to_guest,
+      layouts: [:fields, :json],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "group", kind: :text, required: true},
@@ -176,6 +189,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 14,
       name: "decide",
       direction: :host_to_guest,
+      layouts: [:fields, :json],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "group", kind: :text, required: true},
@@ -188,6 +202,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 129,
       name: "admission",
       direction: :guest_to_host,
+      layouts: [:fields],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "delivery", kind: :text, required: false},
@@ -201,6 +216,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 130,
       name: "completion",
       direction: :guest_to_host,
+      layouts: [:fields],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "delivery", kind: :text, required: false},
@@ -220,6 +236,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 131,
       name: "op",
       direction: :guest_to_host,
+      layouts: [:fields],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "call", kind: :text, required: true},
@@ -245,6 +262,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 132,
       name: "prop",
       direction: :guest_to_host,
+      layouts: [:fields],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "object", kind: :texts, required: true},
@@ -262,6 +280,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 133,
       name: "effect",
       direction: :guest_to_host,
+      layouts: [:fields],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "script", kind: :text, required: true},
@@ -281,6 +300,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 134,
       name: "release",
       direction: :guest_to_host,
+      layouts: [:fields],
       fields: [
         %{name: "ref", kind: :int, required: true},
         %{name: "script", kind: :text, required: true},
@@ -298,6 +318,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 1,
       name: "run end",
       direction: :guest_to_host,
+      layouts: [],
       fields: [
         %{name: "script", kind: :text, required: false},
         %{name: "run", kind: :text, required: false},
@@ -321,6 +342,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 2,
       name: "run started",
       direction: :guest_to_host,
+      layouts: [],
       fields: [
         %{name: "script", kind: :text, required: false},
         %{name: "run", kind: :text, required: false},
@@ -337,6 +359,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 3,
       name: "run discarded",
       direction: :guest_to_host,
+      layouts: [],
       fields: [
         %{name: "script", kind: :text, required: false},
         %{name: "run", kind: :text, required: false},
@@ -350,6 +373,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 4,
       name: "run accounting",
       direction: :guest_to_host,
+      layouts: [],
       fields: [
         %{name: "script", kind: :text, required: false},
         %{name: "run", kind: :text, required: false},
@@ -364,6 +388,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 5,
       name: "causal work",
       direction: :guest_to_host,
+      layouts: [],
       fields: [
         %{name: "rootDelivery", kind: :text, required: false},
         %{name: "liveRuns", kind: :uint, required: false},
@@ -375,6 +400,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 6,
       name: "stop",
       direction: :guest_to_host,
+      layouts: [],
       fields: [
         %{name: "script", kind: :text, required: false},
         %{name: "reason", kind: :text, required: false},
@@ -387,6 +413,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 7,
       name: "unhandled",
       direction: :guest_to_host,
+      layouts: [],
       fields: [
         %{name: "delivery", kind: :text, required: false},
         %{name: "message", kind: :message, required: false},
@@ -397,6 +424,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 8,
       name: "call failed",
       direction: :guest_to_host,
+      layouts: [],
       fields: [
         %{name: "script", kind: :text, required: false},
         %{name: "call", kind: :text, required: false},
@@ -408,6 +436,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 9,
       name: "effect failure",
       direction: :guest_to_host,
+      layouts: [],
       fields: [
         %{name: "script", kind: :text, required: false},
         %{name: "run", kind: :text, required: false},
@@ -422,6 +451,7 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 10,
       name: "decided",
       direction: :guest_to_host,
+      layouts: [],
       fields: [
         %{name: "delivery", kind: :text, required: false},
         %{name: "broadcast", kind: :text, required: false},
@@ -434,12 +464,14 @@ defmodule NorthTalk.Generated.Envelope do
       tag: 11,
       name: "host error",
       direction: :guest_to_host,
+      layouts: [],
       fields: [%{name: "code", kind: :text, required: false}, %{name: "detail", kind: :text, required: false}]
     },
     %{
       tag: 12,
       name: "charge result",
       direction: :guest_to_host,
+      layouts: [],
       fields: [
         %{name: "request", kind: :text, required: false},
         %{name: "call", kind: :text, required: false},
@@ -465,4 +497,1307 @@ defmodule NorthTalk.Generated.Envelope do
   def messages, do: @messages
   def reports, do: @reports
   def settlement, do: @settlement
+end
+
+defmodule NorthTalk.Generated.Envelope.Request do
+  @moduledoc false
+  # The message "request".
+  defstruct [
+    :ref,
+    :group,
+    :to,
+    :message
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t(),
+          to: term() | nil,
+          message: term() | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false},
+    %{key: :to, name: "to", kind: :target, required: false, host: true},
+    %{key: :message, name: "message", kind: :message, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Call do
+  @moduledoc false
+  # The message "call".
+  defstruct [
+    :ref,
+    :group,
+    :fn,
+    :args,
+    :limits
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t(),
+          fn: term() | nil,
+          args: term() | nil,
+          limits: term() | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false},
+    %{key: :fn, name: "fn", kind: :value, required: false, host: true},
+    %{key: :args, name: "args", kind: :values, required: false, host: true},
+    %{key: :limits, name: "limits", kind: :limits, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Pump do
+  @moduledoc false
+  # The message "pump".
+  defstruct [
+    :ref,
+    :group,
+    :now,
+    :fuel_slice,
+    :fuel_cap
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t(),
+          now: String.t() | nil,
+          fuel_slice: integer() | nil,
+          fuel_cap: integer() | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false},
+    %{key: :now, name: "now", kind: :instant, required: false, host: true},
+    %{key: :fuel_slice, name: "fuelSlice", kind: :int, required: false, host: true},
+    %{key: :fuel_cap, name: "fuelCap", kind: :int, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.RequestPump do
+  @moduledoc false
+  # The message "request-pump".
+  defstruct [
+    :ref,
+    :group,
+    :token,
+    :to,
+    :message,
+    :now,
+    :fuel_slice,
+    :fuel_cap
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t(),
+          token: non_neg_integer() | nil,
+          to: term() | nil,
+          message: term() | nil,
+          now: String.t() | nil,
+          fuel_slice: integer() | nil,
+          fuel_cap: integer() | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false},
+    %{key: :token, name: "token", kind: :uint, required: false, host: false},
+    %{key: :to, name: "to", kind: :target, required: false, host: true},
+    %{key: :message, name: "message", kind: :message, required: false, host: true},
+    %{key: :now, name: "now", kind: :instant, required: false, host: true},
+    %{key: :fuel_slice, name: "fuelSlice", kind: :int, required: false, host: true},
+    %{key: :fuel_cap, name: "fuelCap", kind: :int, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.CallPump do
+  @moduledoc false
+  # The message "call-pump".
+  defstruct [
+    :ref,
+    :group,
+    :token,
+    :fn,
+    :args,
+    :limits,
+    :now,
+    :fuel_slice,
+    :fuel_cap
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t(),
+          token: non_neg_integer() | nil,
+          fn: term() | nil,
+          args: term() | nil,
+          limits: term() | nil,
+          now: String.t() | nil,
+          fuel_slice: integer() | nil,
+          fuel_cap: integer() | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false},
+    %{key: :token, name: "token", kind: :uint, required: false, host: false},
+    %{key: :fn, name: "fn", kind: :value, required: false, host: true},
+    %{key: :args, name: "args", kind: :values, required: false, host: true},
+    %{key: :limits, name: "limits", kind: :limits, required: false, host: true},
+    %{key: :now, name: "now", kind: :instant, required: false, host: true},
+    %{key: :fuel_slice, name: "fuelSlice", kind: :int, required: false, host: true},
+    %{key: :fuel_cap, name: "fuelCap", kind: :int, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.OpResult do
+  @moduledoc false
+  # The message "op-result".
+  defstruct [
+    :ref,
+    :group,
+    :outcome,
+    :value,
+    :code,
+    :message,
+    :charged
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t(),
+          outcome: String.t(),
+          value: term() | nil,
+          code: String.t() | nil,
+          message: String.t() | nil,
+          charged: non_neg_integer() | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false},
+    %{key: :outcome, name: "outcome", kind: :text, required: true, host: true},
+    %{key: :value, name: "value", kind: :value, required: false, host: true},
+    %{key: :code, name: "code", kind: :text, required: false, host: true},
+    %{key: :message, name: "message", kind: :text, required: false, host: true},
+    %{key: :charged, name: "charged", kind: :uint, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.PropResult do
+  @moduledoc false
+  # The message "prop-result".
+  defstruct [
+    :ref,
+    :group,
+    :outcome,
+    :value,
+    :code,
+    :message,
+    :charged
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t(),
+          outcome: String.t(),
+          value: term() | nil,
+          code: String.t() | nil,
+          message: String.t() | nil,
+          charged: non_neg_integer() | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false},
+    %{key: :outcome, name: "outcome", kind: :text, required: true, host: true},
+    %{key: :value, name: "value", kind: :value, required: false, host: true},
+    %{key: :code, name: "code", kind: :text, required: false, host: true},
+    %{key: :message, name: "message", kind: :text, required: false, host: true},
+    %{key: :charged, name: "charged", kind: :uint, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.EffectResult do
+  @moduledoc false
+  # The message "effect-result".
+  defstruct [
+    :ref,
+    :group,
+    :status
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t(),
+          status: String.t() | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false},
+    %{key: :status, name: "status", kind: :text, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.ReleaseResult do
+  @moduledoc false
+  # The message "release-result".
+  defstruct [
+    :ref,
+    :group
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t()
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.SettlePump do
+  @moduledoc false
+  # The message "settle-pump".
+  defstruct [
+    :ref,
+    :group,
+    :now,
+    :fuel_slice,
+    :fuel_cap,
+    :settlements
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t(),
+          now: String.t() | nil,
+          fuel_slice: integer() | nil,
+          fuel_cap: integer() | nil,
+          settlements: term() | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false},
+    %{key: :now, name: "now", kind: :instant, required: false, host: true},
+    %{key: :fuel_slice, name: "fuelSlice", kind: :int, required: false, host: true},
+    %{key: :fuel_cap, name: "fuelCap", kind: :int, required: false, host: true},
+    %{key: :settlements, name: "settlements", kind: :settlements, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Load do
+  @moduledoc false
+  # The message "load".
+  defstruct [
+    :ref,
+    :group,
+    :name,
+    :source,
+    :grants,
+    :grants_as_used,
+    :owner,
+    :objects,
+    :limits,
+    :new_group,
+    :refuse_worker,
+    :forbid_suspension
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t(),
+          name: String.t(),
+          source: String.t(),
+          grants: term() | nil,
+          grants_as_used: boolean() | nil,
+          owner: term() | nil,
+          objects: term() | nil,
+          limits: term() | nil,
+          new_group: term() | nil,
+          refuse_worker: boolean() | nil,
+          forbid_suspension: boolean() | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false},
+    %{key: :name, name: "name", kind: :text, required: true, host: true},
+    %{key: :source, name: "source", kind: :text, required: true, host: true},
+    %{key: :grants, name: "grants", kind: :record, required: false, host: true},
+    %{key: :grants_as_used, name: "grantsAsUsed", kind: :bool, required: false, host: true},
+    %{key: :owner, name: "owner", kind: :record, required: false, host: true},
+    %{key: :objects, name: "objects", kind: :record, required: false, host: true},
+    %{key: :limits, name: "limits", kind: :limits, required: false, host: true},
+    %{key: :new_group, name: "newGroup", kind: :record, required: false, host: false},
+    %{key: :refuse_worker, name: "refuseWorker", kind: :bool, required: false, host: false},
+    %{key: :forbid_suspension, name: "forbidSuspension", kind: :bool, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Deliver do
+  @moduledoc false
+  # The message "deliver".
+  defstruct [
+    :ref,
+    :group,
+    :to,
+    :message
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t(),
+          to: term() | nil,
+          message: term() | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false},
+    %{key: :to, name: "to", kind: :target, required: false, host: true},
+    %{key: :message, name: "message", kind: :message, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Broadcast do
+  @moduledoc false
+  # The message "broadcast".
+  defstruct [
+    :ref,
+    :group,
+    :message
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t(),
+          message: term() | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false},
+    %{key: :message, name: "message", kind: :message, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Decide do
+  @moduledoc false
+  # The message "decide".
+  defstruct [
+    :ref,
+    :group,
+    :to,
+    :message,
+    :broadcast
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t(),
+          to: term() | nil,
+          message: term() | nil,
+          broadcast: boolean() | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false},
+    %{key: :to, name: "to", kind: :target, required: false, host: true},
+    %{key: :message, name: "message", kind: :message, required: false, host: true},
+    %{key: :broadcast, name: "broadcast", kind: :bool, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Admission do
+  @moduledoc false
+  # The message "admission".
+  defstruct [
+    :ref,
+    :delivery,
+    :err,
+    :abandoned,
+    :settled,
+    :trace
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          delivery: String.t() | nil,
+          err: term() | nil,
+          abandoned: [String.t()] | nil,
+          settled: [String.t()] | nil,
+          trace: [String.t()] | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :delivery, name: "delivery", kind: :text, required: false, host: true},
+    %{key: :err, name: "err", kind: :err, required: false, host: true},
+    %{key: :abandoned, name: "abandoned", kind: :texts, required: false, host: true},
+    %{key: :settled, name: "settled", kind: :texts, required: false, host: true},
+    %{key: :trace, name: "trace", kind: :texts, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Completion do
+  @moduledoc false
+  # The message "completion".
+  defstruct [
+    :ref,
+    :delivery,
+    :token,
+    :state,
+    :next_deadline,
+    :fuel_used,
+    :reports,
+    :gone,
+    :err,
+    :abandoned,
+    :settled,
+    :trace
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          delivery: String.t() | nil,
+          token: non_neg_integer() | nil,
+          state: String.t() | nil,
+          next_deadline: String.t() | nil,
+          fuel_used: non_neg_integer() | nil,
+          reports: term() | nil,
+          gone: [String.t()] | nil,
+          err: term() | nil,
+          abandoned: [String.t()] | nil,
+          settled: [String.t()] | nil,
+          trace: [String.t()] | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :delivery, name: "delivery", kind: :text, required: false, host: true},
+    %{key: :token, name: "token", kind: :uint, required: false, host: false},
+    %{key: :state, name: "state", kind: :text, required: false, host: true},
+    %{key: :next_deadline, name: "nextDeadline", kind: :instant, required: false, host: true},
+    %{key: :fuel_used, name: "fuelUsed", kind: :uint, required: false, host: true},
+    %{key: :reports, name: "reports", kind: :reports, required: false, host: true},
+    %{key: :gone, name: "gone", kind: :texts, required: false, host: true},
+    %{key: :err, name: "err", kind: :err, required: false, host: true},
+    %{key: :abandoned, name: "abandoned", kind: :texts, required: false, host: true},
+    %{key: :settled, name: "settled", kind: :texts, required: false, host: true},
+    %{key: :trace, name: "trace", kind: :texts, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Op do
+  @moduledoc false
+  # The message "op".
+  defstruct [
+    :ref,
+    :call,
+    :script,
+    :run,
+    :segment,
+    :grant,
+    :capability,
+    :operation,
+    :mode,
+    :now,
+    :args,
+    :scope,
+    :automatic,
+    :fuel_left,
+    :delivery,
+    :abandoned,
+    :settled,
+    :trace
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          call: String.t(),
+          script: String.t(),
+          run: String.t(),
+          segment: String.t(),
+          grant: String.t(),
+          capability: String.t(),
+          operation: String.t(),
+          mode: String.t(),
+          now: String.t(),
+          args: term(),
+          scope: String.t() | nil,
+          automatic: boolean() | nil,
+          fuel_left: non_neg_integer() | nil,
+          delivery: String.t() | nil,
+          abandoned: [String.t()] | nil,
+          settled: [String.t()] | nil,
+          trace: [String.t()] | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :call, name: "call", kind: :text, required: true, host: true},
+    %{key: :script, name: "script", kind: :text, required: true, host: true},
+    %{key: :run, name: "run", kind: :text, required: true, host: true},
+    %{key: :segment, name: "segment", kind: :text, required: true, host: true},
+    %{key: :grant, name: "grant", kind: :text, required: true, host: true},
+    %{key: :capability, name: "capability", kind: :text, required: true, host: true},
+    %{key: :operation, name: "operation", kind: :text, required: true, host: true},
+    %{key: :mode, name: "mode", kind: :text, required: true, host: true},
+    %{key: :now, name: "now", kind: :instant, required: true, host: true},
+    %{key: :args, name: "args", kind: :values, required: true, host: true},
+    %{key: :scope, name: "scope", kind: :text, required: false, host: true},
+    %{key: :automatic, name: "automatic", kind: :bool, required: false, host: true},
+    %{key: :fuel_left, name: "fuelLeft", kind: :uint, required: false, host: true},
+    %{key: :delivery, name: "delivery", kind: :text, required: false, host: true},
+    %{key: :abandoned, name: "abandoned", kind: :texts, required: false, host: true},
+    %{key: :settled, name: "settled", kind: :texts, required: false, host: true},
+    %{key: :trace, name: "trace", kind: :texts, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Prop do
+  @moduledoc false
+  # The message "prop".
+  defstruct [
+    :ref,
+    :object,
+    :prop,
+    :set,
+    :value,
+    :op,
+    :selector,
+    :abandoned,
+    :settled,
+    :trace
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          object: [String.t()],
+          prop: String.t(),
+          set: boolean() | nil,
+          value: term() | nil,
+          op: String.t() | nil,
+          selector: term() | nil,
+          abandoned: [String.t()] | nil,
+          settled: [String.t()] | nil,
+          trace: [String.t()] | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :object, name: "object", kind: :texts, required: true, host: true},
+    %{key: :prop, name: "prop", kind: :text, required: true, host: true},
+    %{key: :set, name: "set", kind: :bool, required: false, host: true},
+    %{key: :value, name: "value", kind: :value, required: false, host: true},
+    %{key: :op, name: "op", kind: :text, required: false, host: true},
+    %{key: :selector, name: "selector", kind: :value, required: false, host: true},
+    %{key: :abandoned, name: "abandoned", kind: :texts, required: false, host: true},
+    %{key: :settled, name: "settled", kind: :texts, required: false, host: true},
+    %{key: :trace, name: "trace", kind: :texts, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Effect do
+  @moduledoc false
+  # The message "effect".
+  defstruct [
+    :ref,
+    :script,
+    :run,
+    :segment,
+    :grant,
+    :grants,
+    :coordinator,
+    :phase,
+    :now,
+    :abandoned,
+    :settled,
+    :trace
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          script: String.t(),
+          run: String.t(),
+          segment: String.t(),
+          grant: String.t(),
+          grants: [String.t()],
+          coordinator: String.t() | nil,
+          phase: String.t(),
+          now: String.t(),
+          abandoned: [String.t()] | nil,
+          settled: [String.t()] | nil,
+          trace: [String.t()] | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :script, name: "script", kind: :text, required: true, host: true},
+    %{key: :run, name: "run", kind: :text, required: true, host: true},
+    %{key: :segment, name: "segment", kind: :text, required: true, host: true},
+    %{key: :grant, name: "grant", kind: :text, required: true, host: true},
+    %{key: :grants, name: "grants", kind: :texts, required: true, host: true},
+    %{key: :coordinator, name: "coordinator", kind: :text, required: false, host: true},
+    %{key: :phase, name: "phase", kind: :text, required: true, host: true},
+    %{key: :now, name: "now", kind: :instant, required: true, host: true},
+    %{key: :abandoned, name: "abandoned", kind: :texts, required: false, host: true},
+    %{key: :settled, name: "settled", kind: :texts, required: false, host: true},
+    %{key: :trace, name: "trace", kind: :texts, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Release do
+  @moduledoc false
+  # The message "release".
+  defstruct [
+    :ref,
+    :script,
+    :grant,
+    :reason,
+    :now,
+    :abandoned,
+    :settled,
+    :trace
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          script: String.t(),
+          grant: String.t(),
+          reason: String.t(),
+          now: String.t(),
+          abandoned: [String.t()] | nil,
+          settled: [String.t()] | nil,
+          trace: [String.t()] | nil
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :script, name: "script", kind: :text, required: true, host: true},
+    %{key: :grant, name: "grant", kind: :text, required: true, host: true},
+    %{key: :reason, name: "reason", kind: :text, required: true, host: true},
+    %{key: :now, name: "now", kind: :instant, required: true, host: true},
+    %{key: :abandoned, name: "abandoned", kind: :texts, required: false, host: true},
+    %{key: :settled, name: "settled", kind: :texts, required: false, host: true},
+    %{key: :trace, name: "trace", kind: :texts, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Inspect do
+  @moduledoc false
+  # The json message "inspect".
+  defstruct [
+    :ref,
+    :group
+  ]
+
+  @type t :: %__MODULE__{
+          ref: integer(),
+          group: String.t()
+        }
+
+  @fields [
+    %{key: :ref, name: "ref", kind: :int, required: true, host: false},
+    %{key: :group, name: "group", kind: :text, required: true, host: false}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.RunEndReport do
+  @moduledoc false
+  # The Report "run end".
+  defstruct [
+    :script,
+    :run,
+    :delivery,
+    :broadcast,
+    :handler,
+    :fallback,
+    :climbed,
+    :outcome,
+    :result,
+    :error,
+    :limit,
+    :effect,
+    :cleanup_failed,
+    :at,
+    :fuel,
+    :alloc
+  ]
+
+  @type t :: %__MODULE__{
+          script: String.t() | nil,
+          run: String.t() | nil,
+          delivery: String.t() | nil,
+          broadcast: String.t() | nil,
+          handler: String.t() | nil,
+          fallback: boolean() | nil,
+          climbed: boolean() | nil,
+          outcome: String.t() | nil,
+          result: term() | nil,
+          error: term() | nil,
+          limit: String.t() | nil,
+          effect: term() | nil,
+          cleanup_failed: term() | nil,
+          at: term() | nil,
+          fuel: non_neg_integer() | nil,
+          alloc: non_neg_integer() | nil
+        }
+
+  @fields [
+    %{key: :script, name: "script", kind: :text, required: false, host: true},
+    %{key: :run, name: "run", kind: :text, required: false, host: true},
+    %{key: :delivery, name: "delivery", kind: :text, required: false, host: true},
+    %{key: :broadcast, name: "broadcast", kind: :text, required: false, host: true},
+    %{key: :handler, name: "handler", kind: :text, required: false, host: true},
+    %{key: :fallback, name: "fallback", kind: :bool, required: false, host: true},
+    %{key: :climbed, name: "climbed", kind: :bool, required: false, host: true},
+    %{key: :outcome, name: "outcome", kind: :text, required: false, host: true},
+    %{key: :result, name: "result", kind: :value, required: false, host: true},
+    %{key: :error, name: "error", kind: :value, required: false, host: true},
+    %{key: :limit, name: "limit", kind: :text, required: false, host: true},
+    %{key: :effect, name: "effect", kind: :record, required: false, host: true},
+    %{key: :cleanup_failed, name: "cleanupFailed", kind: :record, required: false, host: true},
+    %{key: :at, name: "at", kind: :record, required: false, host: true},
+    %{key: :fuel, name: "fuel", kind: :uint, required: false, host: true},
+    %{key: :alloc, name: "alloc", kind: :uint, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.RunStartedReport do
+  @moduledoc false
+  # The Report "run started".
+  defstruct [
+    :script,
+    :run,
+    :args,
+    :root_delivery,
+    :parent_run,
+    :parent_call,
+    :delivery,
+    :selector,
+    :fn
+  ]
+
+  @type t :: %__MODULE__{
+          script: String.t() | nil,
+          run: String.t() | nil,
+          args: term() | nil,
+          root_delivery: String.t() | nil,
+          parent_run: String.t() | nil,
+          parent_call: String.t() | nil,
+          delivery: String.t() | nil,
+          selector: String.t() | nil,
+          fn: term() | nil
+        }
+
+  @fields [
+    %{key: :script, name: "script", kind: :text, required: false, host: true},
+    %{key: :run, name: "run", kind: :text, required: false, host: true},
+    %{key: :args, name: "args", kind: :values, required: false, host: true},
+    %{key: :root_delivery, name: "rootDelivery", kind: :text, required: false, host: true},
+    %{key: :parent_run, name: "parentRun", kind: :text, required: false, host: true},
+    %{key: :parent_call, name: "parentCall", kind: :text, required: false, host: true},
+    %{key: :delivery, name: "delivery", kind: :text, required: false, host: true},
+    %{key: :selector, name: "selector", kind: :text, required: false, host: true},
+    %{key: :fn, name: "fn", kind: :value, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.RunDiscardedReport do
+  @moduledoc false
+  # The Report "run discarded".
+  defstruct [
+    :script,
+    :run,
+    :reason,
+    :root_delivery,
+    :parent_run,
+    :parent_call
+  ]
+
+  @type t :: %__MODULE__{
+          script: String.t() | nil,
+          run: String.t() | nil,
+          reason: String.t() | nil,
+          root_delivery: String.t() | nil,
+          parent_run: String.t() | nil,
+          parent_call: String.t() | nil
+        }
+
+  @fields [
+    %{key: :script, name: "script", kind: :text, required: false, host: true},
+    %{key: :run, name: "run", kind: :text, required: false, host: true},
+    %{key: :reason, name: "reason", kind: :text, required: false, host: true},
+    %{key: :root_delivery, name: "rootDelivery", kind: :text, required: false, host: true},
+    %{key: :parent_run, name: "parentRun", kind: :text, required: false, host: true},
+    %{key: :parent_call, name: "parentCall", kind: :text, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.RunAccountingReport do
+  @moduledoc false
+  # The Report "run accounting".
+  defstruct [
+    :script,
+    :run,
+    :fuel,
+    :state,
+    :root_delivery,
+    :parent_run,
+    :parent_call
+  ]
+
+  @type t :: %__MODULE__{
+          script: String.t() | nil,
+          run: String.t() | nil,
+          fuel: non_neg_integer() | nil,
+          state: String.t() | nil,
+          root_delivery: String.t() | nil,
+          parent_run: String.t() | nil,
+          parent_call: String.t() | nil
+        }
+
+  @fields [
+    %{key: :script, name: "script", kind: :text, required: false, host: true},
+    %{key: :run, name: "run", kind: :text, required: false, host: true},
+    %{key: :fuel, name: "fuel", kind: :uint, required: false, host: true},
+    %{key: :state, name: "state", kind: :text, required: false, host: true},
+    %{key: :root_delivery, name: "rootDelivery", kind: :text, required: false, host: true},
+    %{key: :parent_run, name: "parentRun", kind: :text, required: false, host: true},
+    %{key: :parent_call, name: "parentCall", kind: :text, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.CausalWorkReport do
+  @moduledoc false
+  # The Report "causal work".
+  defstruct [
+    :root_delivery,
+    :live_runs,
+    :queued_messages,
+    :discarded_messages
+  ]
+
+  @type t :: %__MODULE__{
+          root_delivery: String.t() | nil,
+          live_runs: non_neg_integer() | nil,
+          queued_messages: non_neg_integer() | nil,
+          discarded_messages: non_neg_integer() | nil
+        }
+
+  @fields [
+    %{key: :root_delivery, name: "rootDelivery", kind: :text, required: false, host: true},
+    %{key: :live_runs, name: "liveRuns", kind: :uint, required: false, host: true},
+    %{key: :queued_messages, name: "queuedMessages", kind: :uint, required: false, host: true},
+    %{key: :discarded_messages, name: "discardedMessages", kind: :uint, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.StopReport do
+  @moduledoc false
+  # The Report "stop".
+  defstruct [
+    :script,
+    :reason,
+    :discarded_runs,
+    :dropped_messages,
+    :pending_calls
+  ]
+
+  @type t :: %__MODULE__{
+          script: String.t() | nil,
+          reason: String.t() | nil,
+          discarded_runs: [String.t()] | nil,
+          dropped_messages: [String.t()] | nil,
+          pending_calls: [String.t()] | nil
+        }
+
+  @fields [
+    %{key: :script, name: "script", kind: :text, required: false, host: true},
+    %{key: :reason, name: "reason", kind: :text, required: false, host: true},
+    %{key: :discarded_runs, name: "discardedRuns", kind: :texts, required: false, host: true},
+    %{key: :dropped_messages, name: "droppedMessages", kind: :texts, required: false, host: true},
+    %{key: :pending_calls, name: "pendingCalls", kind: :texts, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.UnhandledReport do
+  @moduledoc false
+  # The Report "unhandled".
+  defstruct [
+    :delivery,
+    :message,
+    :target
+  ]
+
+  @type t :: %__MODULE__{
+          delivery: String.t() | nil,
+          message: term() | nil,
+          target: term() | nil
+        }
+
+  @fields [
+    %{key: :delivery, name: "delivery", kind: :text, required: false, host: true},
+    %{key: :message, name: "message", kind: :message, required: false, host: true},
+    %{key: :target, name: "target", kind: :value, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.CallFailedReport do
+  @moduledoc false
+  # The Report "call failed".
+  defstruct [
+    :script,
+    :call,
+    :operation,
+    :detail
+  ]
+
+  @type t :: %__MODULE__{
+          script: String.t() | nil,
+          call: String.t() | nil,
+          operation: term() | nil,
+          detail: String.t() | nil
+        }
+
+  @fields [
+    %{key: :script, name: "script", kind: :text, required: false, host: true},
+    %{key: :call, name: "call", kind: :text, required: false, host: true},
+    %{key: :operation, name: "operation", kind: :record, required: false, host: true},
+    %{key: :detail, name: "detail", kind: :text, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.EffectFailureReport do
+  @moduledoc false
+  # The Report "effect failure".
+  defstruct [
+    :script,
+    :run,
+    :grant,
+    :segment,
+    :phase,
+    :status,
+    :scope
+  ]
+
+  @type t :: %__MODULE__{
+          script: String.t() | nil,
+          run: String.t() | nil,
+          grant: String.t() | nil,
+          segment: String.t() | nil,
+          phase: String.t() | nil,
+          status: String.t() | nil,
+          scope: String.t() | nil
+        }
+
+  @fields [
+    %{key: :script, name: "script", kind: :text, required: false, host: true},
+    %{key: :run, name: "run", kind: :text, required: false, host: true},
+    %{key: :grant, name: "grant", kind: :text, required: false, host: true},
+    %{key: :segment, name: "segment", kind: :text, required: false, host: true},
+    %{key: :phase, name: "phase", kind: :text, required: false, host: true},
+    %{key: :status, name: "status", kind: :text, required: false, host: true},
+    %{key: :scope, name: "scope", kind: :text, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.DecidedReport do
+  @moduledoc false
+  # The Report "decided".
+  defstruct [
+    :delivery,
+    :broadcast,
+    :verdict,
+    :vetoes,
+    :undecided
+  ]
+
+  @type t :: %__MODULE__{
+          delivery: String.t() | nil,
+          broadcast: String.t() | nil,
+          verdict: String.t() | nil,
+          vetoes: term() | nil,
+          undecided: term() | nil
+        }
+
+  @fields [
+    %{key: :delivery, name: "delivery", kind: :text, required: false, host: true},
+    %{key: :broadcast, name: "broadcast", kind: :text, required: false, host: true},
+    %{key: :verdict, name: "verdict", kind: :text, required: false, host: true},
+    %{key: :vetoes, name: "vetoes", kind: :record, required: false, host: true},
+    %{key: :undecided, name: "undecided", kind: :record, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.HostErrorReport do
+  @moduledoc false
+  # The Report "host error".
+  defstruct [
+    :code,
+    :detail
+  ]
+
+  @type t :: %__MODULE__{
+          code: String.t() | nil,
+          detail: String.t() | nil
+        }
+
+  @fields [
+    %{key: :code, name: "code", kind: :text, required: false, host: true},
+    %{key: :detail, name: "detail", kind: :text, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.ChargeResultReport do
+  @moduledoc false
+  # The Report "charge result".
+  defstruct [
+    :request,
+    :call,
+    :fuel,
+    :status
+  ]
+
+  @type t :: %__MODULE__{
+          request: String.t() | nil,
+          call: String.t() | nil,
+          fuel: non_neg_integer() | nil,
+          status: String.t() | nil
+        }
+
+  @fields [
+    %{key: :request, name: "request", kind: :text, required: false, host: true},
+    %{key: :call, name: "call", kind: :text, required: false, host: true},
+    %{key: :fuel, name: "fuel", kind: :uint, required: false, host: true},
+    %{key: :status, name: "status", kind: :text, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.SettlementRecord do
+  @moduledoc false
+  # The settlement "settlement".
+  defstruct [
+    :call,
+    :outcome,
+    :value,
+    :fuel,
+    :code,
+    :message
+  ]
+
+  @type t :: %__MODULE__{
+          call: String.t(),
+          outcome: String.t(),
+          value: term() | nil,
+          fuel: integer() | nil,
+          code: String.t() | nil,
+          message: String.t() | nil
+        }
+
+  @fields [
+    %{key: :call, name: "call", kind: :text, required: true, host: true},
+    %{key: :outcome, name: "outcome", kind: :text, required: true, host: true},
+    %{key: :value, name: "value", kind: :value, required: false, host: true},
+    %{key: :fuel, name: "fuel", kind: :int, required: false, host: true},
+    %{key: :code, name: "code", kind: :text, required: false, host: true},
+    %{key: :message, name: "message", kind: :text, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Inspection do
+  @moduledoc false
+  # The view "inspection".
+  defstruct [
+    :scripts
+  ]
+
+  @type t :: %__MODULE__{
+          scripts: [NorthTalk.Generated.Envelope.InspectedScript.t()]
+        }
+
+  @fields [
+    %{key: :scripts, name: "scripts", kind: :views, required: true, host: true, view: "inspected-script"}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.InspectedScript do
+  @moduledoc false
+  # The view "inspected-script".
+  defstruct [
+    :name,
+    :disabled_grants,
+    :forbid_suspension,
+    :vars,
+    :runs,
+    :mailbox
+  ]
+
+  @type t :: %__MODULE__{
+          name: String.t(),
+          disabled_grants: [String.t()] | nil,
+          forbid_suspension: boolean() | nil,
+          vars: [[term()]],
+          runs: [NorthTalk.Generated.Envelope.InspectedRun.t()],
+          mailbox: [NorthTalk.Generated.Envelope.InspectedMessage.t()]
+        }
+
+  @fields [
+    %{key: :name, name: "name", kind: :text, required: true, host: true},
+    %{key: :disabled_grants, name: "disabledGrants", kind: :texts, required: false, host: true},
+    %{key: :forbid_suspension, name: "forbidSuspension", kind: :bool, required: false, host: true},
+    %{key: :vars, name: "vars", kind: :pairs, required: true, host: true},
+    %{key: :runs, name: "runs", kind: :views, required: true, host: true, view: "inspected-run"},
+    %{key: :mailbox, name: "mailbox", kind: :views, required: true, host: true, view: "inspected-message"}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.InspectedRun do
+  @moduledoc false
+  # The view "inspected-run".
+  defstruct [
+    :id,
+    :status,
+    :handler,
+    :wait,
+    :until,
+    :calls
+  ]
+
+  @type t :: %__MODULE__{
+          id: String.t(),
+          status: String.t(),
+          handler: String.t(),
+          wait: String.t() | nil,
+          until: String.t() | nil,
+          calls: [String.t()] | nil
+        }
+
+  @fields [
+    %{key: :id, name: "id", kind: :text, required: true, host: true},
+    %{key: :status, name: "status", kind: :text, required: true, host: true},
+    %{key: :handler, name: "handler", kind: :text, required: true, host: true},
+    %{key: :wait, name: "wait", kind: :text, required: false, host: true},
+    %{key: :until, name: "until", kind: :instant, required: false, host: true},
+    %{key: :calls, name: "calls", kind: :texts, required: false, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.InspectedMessage do
+  @moduledoc false
+  # The view "inspected-message".
+  defstruct [
+    :delivery,
+    :from,
+    :message
+  ]
+
+  @type t :: %__MODULE__{
+          delivery: String.t() | nil,
+          from: String.t() | nil,
+          message: term()
+        }
+
+  @fields [
+    %{key: :delivery, name: "delivery", kind: :text, required: false, host: true},
+    %{key: :from, name: "from", kind: :text, required: false, host: true},
+    %{key: :message, name: "message", kind: :message, required: true, host: true}
+  ]
+  def fields, do: @fields
+end
+
+defmodule NorthTalk.Generated.Envelope.Records do
+  @moduledoc false
+  @records %{
+    {"message", "request"} => NorthTalk.Generated.Envelope.Request,
+    {"message", "call"} => NorthTalk.Generated.Envelope.Call,
+    {"message", "pump"} => NorthTalk.Generated.Envelope.Pump,
+    {"message", "request-pump"} => NorthTalk.Generated.Envelope.RequestPump,
+    {"message", "call-pump"} => NorthTalk.Generated.Envelope.CallPump,
+    {"message", "op-result"} => NorthTalk.Generated.Envelope.OpResult,
+    {"message", "prop-result"} => NorthTalk.Generated.Envelope.PropResult,
+    {"message", "effect-result"} => NorthTalk.Generated.Envelope.EffectResult,
+    {"message", "release-result"} => NorthTalk.Generated.Envelope.ReleaseResult,
+    {"message", "settle-pump"} => NorthTalk.Generated.Envelope.SettlePump,
+    {"message", "load"} => NorthTalk.Generated.Envelope.Load,
+    {"message", "deliver"} => NorthTalk.Generated.Envelope.Deliver,
+    {"message", "broadcast"} => NorthTalk.Generated.Envelope.Broadcast,
+    {"message", "decide"} => NorthTalk.Generated.Envelope.Decide,
+    {"message", "admission"} => NorthTalk.Generated.Envelope.Admission,
+    {"message", "completion"} => NorthTalk.Generated.Envelope.Completion,
+    {"message", "op"} => NorthTalk.Generated.Envelope.Op,
+    {"message", "prop"} => NorthTalk.Generated.Envelope.Prop,
+    {"message", "effect"} => NorthTalk.Generated.Envelope.Effect,
+    {"message", "release"} => NorthTalk.Generated.Envelope.Release,
+    {"json message", "inspect"} => NorthTalk.Generated.Envelope.Inspect,
+    {"Report", "run end"} => NorthTalk.Generated.Envelope.RunEndReport,
+    {"Report", "run started"} => NorthTalk.Generated.Envelope.RunStartedReport,
+    {"Report", "run discarded"} => NorthTalk.Generated.Envelope.RunDiscardedReport,
+    {"Report", "run accounting"} => NorthTalk.Generated.Envelope.RunAccountingReport,
+    {"Report", "causal work"} => NorthTalk.Generated.Envelope.CausalWorkReport,
+    {"Report", "stop"} => NorthTalk.Generated.Envelope.StopReport,
+    {"Report", "unhandled"} => NorthTalk.Generated.Envelope.UnhandledReport,
+    {"Report", "call failed"} => NorthTalk.Generated.Envelope.CallFailedReport,
+    {"Report", "effect failure"} => NorthTalk.Generated.Envelope.EffectFailureReport,
+    {"Report", "decided"} => NorthTalk.Generated.Envelope.DecidedReport,
+    {"Report", "host error"} => NorthTalk.Generated.Envelope.HostErrorReport,
+    {"Report", "charge result"} => NorthTalk.Generated.Envelope.ChargeResultReport,
+    {"settlement", "settlement"} => NorthTalk.Generated.Envelope.SettlementRecord,
+    {"view", "inspection"} => NorthTalk.Generated.Envelope.Inspection,
+    {"view", "inspected-script"} => NorthTalk.Generated.Envelope.InspectedScript,
+    {"view", "inspected-run"} => NorthTalk.Generated.Envelope.InspectedRun,
+    {"view", "inspected-message"} => NorthTalk.Generated.Envelope.InspectedMessage
+  }
+  def records, do: @records
 end

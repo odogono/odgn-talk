@@ -5,6 +5,7 @@ import frames from '../../impl/testdata/envelope-frames.json';
 import { validateCatalogue, type Catalogue, type Vector } from './catalogue';
 import { checkVectors } from './vectors';
 import { checkMethodTable } from './table';
+import { records, typeName } from './records';
 import { emitElixir, emitGo, emitTypeScript, emitZig } from './generate';
 
 const catalogue = (): Catalogue => {
@@ -128,6 +129,32 @@ test('the method table names each JSON message field a Host maps', () => {
     .find(m => m.name === 'load')!
     .fields.find(f => f.name === 'grantsAsUsed')!.host = false;
   checkMethodTable(hostFilled, chapter.replace('`grantsAsUsed`, ', ''));
+});
+
+test('every catalogue entry gets one typed record in each Host', async () => {
+  const d = catalogue();
+  const all = records(d);
+  expect(all.length).toBe(
+    d.messages.length +
+      d.json_messages.length +
+      d.reports.length +
+      1 +
+      d.views.length,
+  );
+  expect(typeName('run end')).toBe('RunEnd');
+  const ts = await emitTypeScript(d);
+  const go = emitGo(d);
+  const zig = emitZig(d);
+  const ex = emitElixir(d);
+  for (const r of all) {
+    expect(ts).toContain(`export type Envelope${r.type} = {`);
+    expect(go).toContain(`type Envelope${r.type} struct {`);
+    expect(zig).toContain(`pub const ${r.type} = struct {`);
+    expect(ex).toContain(`defmodule NorthTalk.Generated.Envelope.${r.type} do`);
+  }
+  const clash = catalogue();
+  clash.views.push({ name: 'load', fields: clash.views[0]!.fields });
+  expect(() => records(clash)).toThrow('Record type Load is generated twice');
 });
 
 test('all four generated catalogues are reproducible', async () => {

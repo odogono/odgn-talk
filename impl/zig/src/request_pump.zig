@@ -574,6 +574,10 @@ test "shared fields frame vectors decode and re-encode every field" {
     try @import("envelope_vectors_test.zig").check();
 }
 
+test "shared JSON vectors fill the generated envelope records" {
+    try @import("envelope_vectors_test.zig").checkRecords();
+}
+
 test "envelope integer bounds and canonical magnitudes" {
     for ([_][]const u8{
         &.{ 0x10, 0 }, // Negative zero.
