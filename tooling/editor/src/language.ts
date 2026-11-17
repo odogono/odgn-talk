@@ -3,7 +3,7 @@ import {
   parseSourceRecovering,
   parseEntry,
   type SyntaxElement,
-} from '@northtalk/ts';
+} from '@northtalk/ts/lean';
 import { StreamLanguage, type StreamParser } from '@codemirror/language';
 
 const KEYWORDS = new Set([
@@ -181,4 +181,5 @@ export const northtalkParser: StreamParser<State> = {
     return 'operator';
   },
 };
-export const northtalk = StreamLanguage.define(northtalkParser);
+/** NorthTalk's language: its tokens, and `--` line comments for Mod-/. */
+export const northtalkLanguage = StreamLanguage.define(northtalkParser);

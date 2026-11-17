@@ -183,7 +183,7 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
       top: '0',
       bottom: '0',
       width: '2px',
-      background: 'var(--number)',
+      background: 'var(--northtalk-number)',
       pointerEvents: 'none',
     },
     { class: 'piano-roll-playhead' },
@@ -483,7 +483,7 @@ const open = (host: LiteralEditorHost): LiteralEditorView => {
       }
       for (const bar of lit) {
         bar.classList.add('playing');
-        bar.style.background = 'var(--number)';
+        bar.style.background = 'var(--northtalk-number)';
         const timer = setTimeout(() => {
           timers.delete(timer);
           bar.classList.remove('playing');

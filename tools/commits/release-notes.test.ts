@@ -205,3 +205,41 @@ test('fails without an impl/go/v* tag, even with a sqlite tag', () => {
     'no impl/go/v* tag',
   );
 });
+
+test('collects editor and unscoped breaking fragments, not spec ones, since the latest editor-v* tag', () => {
+  const { commit, root, tag } = repo();
+  commit({ 'tooling/editor/CHANGELOG.md': CHANGELOG });
+  tag('editor-v0.1.0');
+  tag('ts-v0.9.0');
+  commit({
+    'changelog/unreleased/editor.md': fragment(
+      'type: fix\nscope: editor',
+      'Editor.',
+    ),
+    'changelog/unreleased/repo-break.md': fragment(
+      'type: fix\nscope: repo\nbreaking: true',
+      'Break.',
+    ),
+    'changelog/unreleased/spec.md': fragment('type: fix\nscope: spec', 'Spec.'),
+    'changelog/unreleased/ts.md': fragment('type: feat\nscope: ts', 'TS.'),
+  });
+
+  const notes = releaseNotes(root, 'editor', '0.1.1', '2026-11-17');
+  expect(notes.tag).toBe('editor-v0.1.0');
+  expect(notes.section).toBe(
+    [
+      '## [0.1.1] - 2026-11-17',
+      '',
+      '### Breaking',
+      '',
+      '- **repo:** Break.',
+      '',
+      '### Fixed',
+      '',
+      '- **editor:** Editor.',
+    ].join('\n'),
+  );
+  expect(releaseNotes(root, 'ts', '0.9.1', '2026-11-17').section).not.toContain(
+    'Editor.',
+  );
+});

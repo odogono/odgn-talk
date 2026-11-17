@@ -7,6 +7,7 @@
 //
 //   bun tools/commits/release-notes.ts ts 0.1.1 [--dry-run]
 //   bun tools/commits/release-notes.ts go 0.1.0 [--dry-run]
+//   bun tools/commits/release-notes.ts editor 0.1.1 [--dry-run]
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -16,10 +17,17 @@ import { changelogSection, type Fragment, parseFragment } from './fragment';
 const UNRELEASED = 'changelog/unreleased';
 const VERSION = /^\d+\.\d+\.\d+(?:-[\d.A-Za-z-]+)?$/;
 
-// Each published package: its scope, its changelog and its release tags.
+// Each published package: its scope, its changelog, its release tags, and
+// whether spec changes ship in it. The editor only highlights, with the Host's
+// own @northtalk/ts, so a language change reaches it through that package.
 export const PACKAGES = {
-  go: { changelog: 'impl/go/CHANGELOG.md', tagPrefix: 'impl/go/v' },
-  ts: { changelog: 'impl/ts/CHANGELOG.md', tagPrefix: 'ts-v' },
+  editor: {
+    changelog: 'tooling/editor/CHANGELOG.md',
+    spec: false,
+    tagPrefix: 'editor-v',
+  },
+  go: { changelog: 'impl/go/CHANGELOG.md', spec: true, tagPrefix: 'impl/go/v' },
+  ts: { changelog: 'impl/ts/CHANGELOG.md', spec: true, tagPrefix: 'ts-v' },
 } as const;
 
 export type Package = keyof typeof PACKAGES;
@@ -28,11 +36,11 @@ const isPackage = (name: string): name is Package =>
   Object.hasOwn(PACKAGES, name);
 
 // Whether a fragment belongs in `pkg`'s notes. tools, repo and cli code
-// doesn't ship in it; spec changes alter its behaviour. A breaking change
+// doesn't ship in it; spec changes alter the Cores' behaviour. A breaking change
 // ships unless another package's scope says it is that package's alone.
 export const shipsIn = (pkg: Package, fragment: Fragment): boolean =>
   fragment.scope === pkg ||
-  fragment.scope === 'spec' ||
+  (fragment.scope === 'spec' && PACKAGES[pkg].spec) ||
   (fragment.breaking &&
     !(fragment.scope !== undefined && isPackage(fragment.scope)));
 

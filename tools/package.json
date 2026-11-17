@@ -27,6 +27,7 @@
     "changelog": "bun commits/changelog.ts",
     "release-notes:ts": "bun commits/release-notes.ts ts",
     "release-notes:go": "bun commits/release-notes.ts go",
+    "release-notes:editor": "bun commits/release-notes.ts editor",
     "lints:generate": "bun lints/generate.ts",
     "lints:check": "bun lints/generate.ts --check",
     "stdlib-fuel:generate": "bun costs/stdlib-fuel.ts",

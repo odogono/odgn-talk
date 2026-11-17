@@ -2,7 +2,6 @@
 // highlighting, suspension marks, and the language server's diagnostics,
 // completion, hover and navigation. A page adds its own gutters, marks and
 // keys around these extensions.
-import type { LspDiagnostic, Position } from '@northtalk/tooling/lsp';
 import {
   autocompletion,
   type CompletionContext,
@@ -15,20 +14,8 @@ import {
   historyKeymap,
   indentWithTab,
 } from '@codemirror/commands';
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import {
-  lintGutter,
-  setDiagnostics,
-  type Action,
-  type Diagnostic,
-} from '@codemirror/lint';
-import {
-  StateEffect,
-  StateField,
-  type EditorState,
-  type Extension,
-  type Text,
-} from '@codemirror/state';
+import { lintGutter } from '@codemirror/lint';
+import { StateEffect, StateField, type Extension } from '@codemirror/state';
 import {
   Decoration,
   drawSelection,
@@ -40,32 +27,10 @@ import {
   type DecorationSet,
   type KeyBinding,
 } from '@codemirror/view';
-import { tags } from '@lezer/highlight';
 import type { LspClient } from './lsp-client';
-import { northtalk } from './language';
-
-// ------------------------------------------------------------- language
-
-// Colours come from the page's CSS variables, so each page sets its theme.
-const style = HighlightStyle.define([
-  { tag: tags.keyword, color: 'var(--keyword)', fontWeight: '600' },
-  { tag: tags.labelName, color: 'var(--keyword)', fontStyle: 'italic' },
-  { tag: tags.string, color: 'var(--string)' },
-  { tag: tags.number, color: 'var(--number)' },
-  { tag: tags.comment, color: 'var(--comment)', fontStyle: 'italic' },
-  { tag: tags.operator, color: 'var(--operator)' },
-]);
-
-// ------------------------------------------------------------- positions
-
-export const offsetOf = (doc: Text, p: Position): number => {
-  const line = doc.line(Math.min(doc.lines, p.line + 1));
-  return Math.min(line.to, line.from + p.character);
-};
-export const positionOf = (doc: Text, offset: number): Position => {
-  const line = doc.lineAt(offset);
-  return { line: line.number - 1, character: offset - line.from };
-};
+import { offsetOf, positionOf, type Position } from './diagnostics';
+import { northtalkLanguage } from './language';
+import { northtalkHighlighting, northtalkTheme } from './theme';
 
 // ------------------------------------------------------------- suspension marks
 
@@ -280,8 +245,9 @@ export const northtalkEditor = (
     history(),
     drawSelection(),
     highlightActiveLine(),
-    northtalk,
-    syntaxHighlighting(style),
+    northtalkLanguage,
+    northtalkHighlighting,
+    northtalkTheme,
     autocompletion({ override: [completion] }),
     hover,
     keymap.of([
@@ -312,31 +278,6 @@ let editHook: (
 export const onEdits = (hook: typeof editHook) => {
   editHook = hook;
 };
-
-/**
- * The language server's diagnostics, as a CodeMirror transaction. A page
- * may offer quick fixes on some of them through `actions`.
- */
-export const diagnosticsSpec = (
-  state: EditorState,
-  diagnostics: readonly LspDiagnostic[],
-  actions: (diagnostic: LspDiagnostic) => readonly Action[] = () => [],
-) =>
-  setDiagnostics(
-    state,
-    diagnostics.map((d): Diagnostic => ({
-      from: offsetOf(state.doc, d.range.start),
-      to: Math.max(
-        offsetOf(state.doc, d.range.start),
-        offsetOf(state.doc, d.range.end),
-      ),
-      severity:
-        d.severity === 1 ? 'error' : d.severity === 2 ? 'warning' : 'info',
-      message: `${d.message} (${d.code})`,
-      source: d.source,
-      actions: [...actions(d)],
-    })),
-  );
 
 /** Fetches the suspension marks for a document and shows them. */
 export const refreshHints = async (
