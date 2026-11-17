@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"reflect"
 	"slices"
 	"time"
 	"unicode/utf8"
@@ -661,15 +662,17 @@ func (b *zigGroup) zbDecodeValue(span []byte) (Value, error) {
 	return b.replyReader().zbDecodeValue(span)
 }
 
-// zbLoad writes protocol data directly; source is raw UTF-8 with a byte length,
-// so quotes, newlines and backslashes need no JSON escaping.
-func zbLoad(fields map[string]any) ([]byte, error) {
-	w := &zbWriter{buf: make([]byte, 0, 256)}
+// zbLoad writes the Load record's catalogued fields in order; source is raw
+// UTF-8 with a byte length, so quotes, newlines and backslashes need no JSON
+// escaping.
+func zbLoad(rec *generated.EnvelopeLoad) ([]byte, error) {
+	w := &zbWriter{buf: make([]byte, 0, 256+len(rec.Source))}
 	w.buf = append(append(w.buf, zbPrefix...), zbFields, zbLoadTag)
 	w.begin(zbEnvelopes[zbLoadTag].fields, true)
-	for _, name := range zbEnvelopes[zbLoadTag].fields {
+	v := reflect.ValueOf(rec).Elem()
+	for i, name := range zbEnvelopes[zbLoadTag].fields {
 		w.key(name)
-		if err := w.protocol(fields[name]); err != nil {
+		if err := w.protocol(zigLoadRecord.get(v, i)); err != nil {
 			return nil, err
 		}
 	}

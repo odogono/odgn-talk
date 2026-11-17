@@ -7,10 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"northtalk.org/go/internal/generated"
 )
 
 func TestZigBackendLoadStartsGroupInBinaryFrame(t *testing.T) {
@@ -107,6 +110,8 @@ func TestZigBackendLoadFailureLeavesGroupUsable(t *testing.T) {
 	}
 }
 
+// Each Load vector's tree decodes into the generated record, which writes
+// the vector's fields frame and, in the JSON layout, the tree itself.
 func TestZigBackendLoadFrameVectors(t *testing.T) {
 	data, err := os.ReadFile("../testdata/envelope-frames.json")
 	if err != nil {
@@ -116,38 +121,79 @@ func TestZigBackendLoadFrameVectors(t *testing.T) {
 	if err := json.Unmarshal(data, &vectors); err != nil {
 		t.Fatal(err)
 	}
+	checked := 0
 	for _, vector := range vectors {
 		if !strings.HasPrefix(vector.Name, "load-") {
 			continue
 		}
+		checked++
 		t.Run(vector.Name, func(t *testing.T) {
-			var fields map[string]any
-			if err := json.Unmarshal([]byte(vector.Tree), &fields); err != nil {
+			tree := zigTestTree(t, vector.Tree)
+			delete(tree, "m")
+			plain, _ := json.Marshal(tree)
+			strict := json.NewDecoder(bytes.NewReader(plain))
+			strict.DisallowUnknownFields()
+			strict.UseNumber()
+			var load generated.EnvelopeLoad
+			if err := strict.Decode(&load); err != nil {
 				t.Fatal(err)
 			}
 			// These metadata vectors contain only small exact integers.
-			stack := []map[string]any{fields}
-			for len(stack) > 0 {
-				node := stack[len(stack)-1]
-				stack = stack[:len(stack)-1]
-				for k, v := range node {
-					switch v := v.(type) {
-					case float64:
-						node[k] = int64(v)
-					case map[string]any:
-						stack = append(stack, v)
-					}
-				}
+			for _, field := range []*any{&load.Grants, &load.Owner, &load.Objects, &load.Limits, &load.NewGroup} {
+				*field = zigTestInts(t, *field)
 			}
-			data, err := zbLoad(fields)
+			data, err := zbLoad(&load)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if got := hex.EncodeToString(data); got != vector.Hex {
 				t.Fatalf("Load frame %s, want %s", got, vector.Hex)
 			}
+			text, err := zigLoadJSON(&load)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, want := zigTestTree(t, string(text)), zigTestTree(t, vector.Tree); !reflect.DeepEqual(got, want) {
+				t.Fatalf("Load JSON %s, want %s", text, vector.Tree)
+			}
 		})
 	}
+	if checked == 0 {
+		t.Fatal("no Load vectors")
+	}
+}
+
+func zigTestTree(t *testing.T, text string) map[string]any {
+	t.Helper()
+	d := json.NewDecoder(strings.NewReader(text))
+	d.UseNumber()
+	var tree map[string]any
+	if err := d.Decode(&tree); err != nil {
+		t.Fatal(err)
+	}
+	return tree
+}
+
+// zigTestInts turns a decoded tree's numbers into the int64 a Host writes.
+func zigTestInts(t *testing.T, v any) any {
+	t.Helper()
+	switch v := v.(type) {
+	case json.Number:
+		n, err := v.Int64()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	case map[string]any:
+		for k, item := range v {
+			v[k] = zigTestInts(t, item)
+		}
+	case []any:
+		for i, item := range v {
+			v[i] = zigTestInts(t, item)
+		}
+	}
+	return v
 }
 
 func TestZigBackendLoadWithoutBinaryFeature(t *testing.T) {

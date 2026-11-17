@@ -5,7 +5,9 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -310,4 +312,57 @@ func envelopeItem(t *testing.T, w *zbWriter, span []byte, expected zigReply, kin
 		t.Fatal(key, "integer", want, got)
 	}
 	w.int(got)
+}
+
+// The Inspect reply view decodes through its generated record into the
+// public Inspection, with each Value read from its own bytes.
+func TestZigBackendInspectionViewVector(t *testing.T) {
+	var tree string
+	for _, vector := range envelopeVectors(t) {
+		if vector.Name == "inspection" {
+			tree = vector.Tree
+		}
+	}
+	if tree == "" {
+		t.Fatal("no inspection vector")
+	}
+	reply, err := zigParseReply([]byte(tree))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var view generated.EnvelopeInspection
+	if err := zigInspectionRecord.decode(reply, reflect.ValueOf(&view).Elem()); err != nil {
+		t.Fatal(err)
+	}
+	b := New().NewGroup(GroupOptions{}).backend.(*zigGroup)
+	got, err := b.inspection(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := func(encoding string) Value {
+		v, err := zigDecodeValue([]byte(encoding), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	until := time.Date(2026, 10, 19, 12, 0, 0, 250_000_000, time.UTC)
+	want := Inspection{Scripts: []ScriptView{
+		{
+			Name: "s", DisabledGrants: []string{"api"}, ForbidSuspension: true,
+			Vars: []Pair{{"count", value(`{"$dec":"1.00"}`)}, {"label", value(`"é"`)}},
+			Runs: []RunView{
+				{ID: "r1", Status: Suspended, Handler: "ping", Wait: "call", Until: until, Calls: []CallID{"c1"}},
+				{ID: "r2", Status: Ready, Handler: "tick"},
+			},
+			Mailbox: []MessageView{
+				{Delivery: "d1", From: "t", Message: Message{Name: "ping", Args: []Value{Nothing, value(`{"$dec":"0.00"}`)}}},
+				{Message: Message{Name: "tick", Args: []Value{}}},
+			},
+		},
+		{Name: "t", Vars: []Pair{}, Runs: []RunView{}, Mailbox: []MessageView{}},
+	}}
+	if fmt.Sprintf("%#v", got) != fmt.Sprintf("%#v", want) {
+		t.Fatalf("Inspection\n got %#v\nwant %#v", got, want)
+	}
 }

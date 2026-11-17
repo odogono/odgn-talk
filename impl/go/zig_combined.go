@@ -119,7 +119,7 @@ func (b *zigGroup) queueBinary(s *Script, to *Object, fn *Value, m Message, ctx 
 	})
 	var id DeliveryID
 	var pending *Pending
-	packet, err := b.exchangeFrame(method, map[string]any{}, frame, func(p zigResponse) error {
+	packet, err := b.exchangeFrame(method, zigOut{fields: map[string]any{}, bin: frame}, func(p zigResponse) error {
 		if !p.admission.assigned {
 			return nil
 		}
@@ -174,7 +174,7 @@ func (b *zigGroup) queueFieldsBinary(s *Script, to *Object, m Message, ctx conte
 	frame := w.frame(split, false, func() (map[string]any, error) { return fields, nil })
 	var id DeliveryID
 	var pending *Pending
-	packet, err := b.exchangeFrame(method, map[string]any{}, frame, func(p zigResponse) error {
+	packet, err := b.exchangeFrame(method, zigOut{fields: map[string]any{}, bin: frame}, func(p zigResponse) error {
 		if !p.admission.assigned {
 			return nil
 		}
@@ -212,7 +212,7 @@ func (b *zigGroup) pumpBinary(now time.Time, options PumpOptions) (PumpResult, e
 		frame.trailer = func() []byte { return settlementsItem(taken) }
 	}
 	var result PumpResult
-	packet, err := b.exchangeFrame("pump", map[string]any{}, frame, func(p zigResponse) error {
+	packet, err := b.exchangeFrame("pump", zigOut{fields: map[string]any{}, bin: frame}, func(p zigResponse) error {
 		if p.failure != nil {
 			return nil
 		}
@@ -312,7 +312,7 @@ func (b *zigGroup) queueCombined(s *Script, to *Object, fn *Value, m Message, ct
 	var id DeliveryID
 	frame := w.frame(split, true, nil)
 	frame.sent = func() { corr.sent = true }
-	packet, err := b.exchangeFrame(method, map[string]any{}, frame, func(p zigResponse) error {
+	packet, err := b.exchangeFrame(method, zigOut{fields: map[string]any{}, bin: frame}, func(p zigResponse) error {
 		if !p.admission.assigned {
 			corr.refused = true
 			return nil
