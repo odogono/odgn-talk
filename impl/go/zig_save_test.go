@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"northtalk.org/go/internal/generated"
 )
 
 func TestZigBackendRestoreRejectsMalformedSaves(t *testing.T) {
@@ -75,14 +77,19 @@ func TestZigBackendSaveRefusesLiveEffects(t *testing.T) {
 	for _, step := range []struct {
 		method string
 		fields map[string]any
+		load   *generated.EnvelopeLoad
 	}{
-		{"define-capability", map[string]any{"name": "resource", "segmentLifecycle": true, "ops": []any{map[string]any{"name": "touch", "mode": "immediate", "result": "nothing", "segmentBound": true}}}},
-		{"grant", map[string]any{"capability": "resource", "ops": "all"}},
-		{"load", map[string]any{"name": "s", "source": "on go\n ask api to touch\n repeat forever\n end repeat\nend go\n", "grants": map[string]any{"api": 1}}},
-		{"deliver", map[string]any{"to": map[string]any{"script": "s"}, "message": map[string]any{"name": "go"}}},
+		{"define-capability", map[string]any{"name": "resource", "segmentLifecycle": true, "ops": []any{map[string]any{"name": "touch", "mode": "immediate", "result": "nothing", "segmentBound": true}}}, nil},
+		{"grant", map[string]any{"capability": "resource", "ops": "all"}, nil},
+		{"load", nil, &generated.EnvelopeLoad{Name: "s", Source: "on go\n ask api to touch\n repeat forever\n end repeat\nend go\n", Grants: map[string]any{"api": 1}}},
+		{"deliver", map[string]any{"to": map[string]any{"script": "s"}, "message": map[string]any{"name": "go"}}, nil},
 	} {
-		if _, err := b.send(step.method, step.fields); err != nil {
-			t.Fatal(err)
+		out := zigOut{fields: step.fields, load: step.load}
+		if out.fields == nil {
+			out.fields = map[string]any{}
+		}
+		if reply, err := b.exchangeFrame(step.method, out, nil); err != nil || reply.failure != nil {
+			t.Fatal(err, reply.failure)
 		}
 	}
 	fields := map[string]any{"m": "pump", "ref": int64(100), "group": b.groupHandle(), "now": "2026-10-15T12:00:00Z", "fuelSlice": 30}

@@ -3,6 +3,8 @@ package northtalk
 import (
 	"fmt"
 	"slices"
+
+	"northtalk.org/go/internal/generated"
 )
 
 // zigNull acknowledges an inline event; inlineIO copies it.
@@ -13,6 +15,7 @@ var zigNull = []byte("null")
 type zigAdmission struct {
 	fields   map[string]any
 	bin      *zbFrame // a binary worker input, served only at the boundary
+	load     *generated.EnvelopeLoad
 	receipt  zigReceipt
 	done     chan struct{}
 	finished chan struct{}
@@ -28,10 +31,12 @@ func (b *zigGroup) wakeInline() {
 }
 
 // zigOut is one outgoing frame: fields, or for a binary input (#1245) the
-// frame whose ref fields carries.
+// frame whose ref fields carries, or a Load record whose m, ref and group
+// fields carries.
 type zigOut struct {
 	fields map[string]any
 	bin    *zbFrame
+	load   *generated.EnvelopeLoad
 }
 
 // zigReceipt records a completed reply under the receipt lock.
@@ -72,7 +77,7 @@ func (b *zigGroup) export(out zigOut, receipt zigReceipt) (zigResponse, error) {
 			json["m"], json["ref"], json["group"] = fields["m"], fields["ref"], fields["group"]
 			fields, out = json, zigOut{fields: json}
 		}
-		req := &zigAdmission{fields: fields, bin: out.bin, receipt: receipt, done: make(chan struct{}), finished: make(chan struct{})}
+		req := &zigAdmission{fields: fields, bin: out.bin, load: out.load, receipt: receipt, done: make(chan struct{}), finished: make(chan struct{})}
 		b.admissions = append(b.admissions, req)
 		b.frameMu.Unlock()
 		b.wakeInline()
@@ -115,7 +120,7 @@ func (b *zigGroup) export(out zigOut, receipt zigReceipt) (zigResponse, error) {
 		if err != nil {
 			b.finishAdmission(next, zigResponse{}, err)
 		} else {
-			reply, e := b.frame(zigOut{fields: next.fields, bin: next.bin})
+			reply, e := b.frame(zigOut{fields: next.fields, bin: next.bin, load: next.load})
 			b.finishAdmission(next, reply, e)
 		}
 	}
@@ -196,6 +201,9 @@ func (b *zigGroup) inlineEvent(data []byte) ([]byte, error) {
 			b.inlineRequest = req
 			b.correlate(req.fields)
 			b.frameMu.Unlock()
+			if req.load != nil {
+				return zigLoadJSON(zigHeaded(req.load, req.fields))
+			}
 			return zigJSON(nil, req.fields)
 		}
 		b.frameMu.Unlock()

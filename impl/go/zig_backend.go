@@ -195,7 +195,7 @@ func (b *zigGroup) exchange(m string, fields map[string]any, receipt func(zigRep
 }
 
 func (b *zigGroup) exchangeDecoded(m string, fields map[string]any, receipt zigReceipt) (zigResponse, error) {
-	reply, err := b.exchangeFrame(m, fields, nil, receipt)
+	reply, err := b.exchangeFrame(m, zigOut{fields: fields}, receipt)
 	if err == nil {
 		err = reply.failure
 	}
@@ -204,11 +204,11 @@ func (b *zigGroup) exchangeDecoded(m string, fields map[string]any, receipt zigR
 
 // exchangeFrame sends the first frame and answers decoded needs until a final
 // reply. Refusals stay in the reply so combined receipts retain admission.
-func (b *zigGroup) exchangeFrame(m string, fields map[string]any, first *zbFrame, receipt zigReceipt) (zigResponse, error) {
+func (b *zigGroup) exchangeFrame(m string, out zigOut, receipt zigReceipt) (zigResponse, error) {
 	defer runtime.KeepAlive(b)
 	// Queued settlements go first, unless this frame carries them or is
 	// one of them.
-	if b.reg.settlements && m != "answer" && m != "fail" && (first == nil || first.trailer == nil) {
+	if b.reg.settlements && m != "answer" && m != "fail" && (out.bin == nil || out.bin.trailer == nil) {
 		if err := b.flushSettlements(); err != nil {
 			return zigResponse{}, err
 		}
@@ -220,20 +220,20 @@ func (b *zigGroup) exchangeFrame(m string, fields map[string]any, first *zbFrame
 			b.ref++
 			ref = b.ref
 		}
-		fields["m"], fields["ref"], fields["group"] = m, ref, b.groupHandle()
+		out.fields["m"], out.fields["ref"], out.fields["group"] = m, ref, b.groupHandle()
 		if m != "new-group" && m != "define-object-kind" {
 			b.untouched = false
 		}
 		b.frameMu.Unlock()
-		packet, err := b.export(zigOut{fields: fields, bin: first}, receipt)
-		first = nil
+		packet, err := b.export(out, receipt)
+		out = zigOut{}
 		if err != nil {
 			return zigResponse{}, err
 		}
 		if packet.need == nil {
 			return packet, nil
 		}
-		fields, first, err = b.callback(packet.need)
+		out.fields, out.bin, err = b.callback(packet.need)
 		if err != nil {
 			return zigResponse{}, err
 		}
@@ -261,7 +261,7 @@ func (b *zigGroup) frame(out zigOut) (zigResponse, error) {
 	// Session declarations do not require a Group. Every other first frame
 	// creates it, with Load folding creation into its own binary envelope.
 	firstGroup := b.shared != nil && !b.created && method != "new-group" && method != "hello" && method != "define-object-kind" && method != "define-capability" && method != "grant"
-	if firstGroup && !(method == "load" && b.reg.load) {
+	if firstGroup && !(out.load != nil && b.reg.load) {
 		init := b.groupFields()
 		init["m"], init["ref"], init["group"] = "new-group", fields["ref"], b.handle
 		reply, err := b.frame(zigOut{fields: init})
@@ -275,16 +275,21 @@ func (b *zigGroup) frame(out zigOut) (zigResponse, error) {
 	}
 	var data []byte
 	var err error
-	if method == "load" && b.reg.load {
+	if out.load != nil && b.reg.load {
+		load := zigHeaded(out.load, fields)
 		if firstGroup {
-			fields["newGroup"] = b.groupFields()
+			load.NewGroup = b.groupFields()
 		}
-		data, err = zbLoad(fields)
+		data, err = zbLoad(load)
 		if err != nil {
 			return zigResponse{}, err
 		}
 		if firstGroup {
 			b.createdGroup()
+		}
+	} else if out.load != nil {
+		if data, err = zigLoadJSON(zigHeaded(out.load, fields)); err != nil {
+			return zigResponse{}, err
 		}
 	} else if out.bin != nil {
 		data = out.bin.bytes(fields["ref"].(int64))
@@ -323,6 +328,15 @@ func (b *zigGroup) beginWorker(m string, fields map[string]any) error {
 
 // beginWorkerWith builds the refusal's fields only when it is refused.
 func (b *zigGroup) beginWorkerWith(m string, makeFields func() map[string]any) error {
+	return b.beginWorkerOut(m, func() zigOut {
+		fields := makeFields()
+		fields["refuseWorker"] = true
+		return zigOut{fields: fields}
+	})
+}
+
+// beginWorkerOut builds the refusal frame only when it is refused.
+func (b *zigGroup) beginWorkerOut(m string, refusal func() zigOut) error {
 	err := b.group.beginWorker()
 	if err == nil {
 		return nil
@@ -333,9 +347,11 @@ func (b *zigGroup) beginWorkerWith(m string, makeFields func() map[string]any) e
 	if active {
 		// The export may finish before this queued refusal is serviced.
 		// It must still never turn into a second guest worker.
-		fields := makeFields()
-		fields["refuseWorker"] = true
-		if _, frameErr := b.send(m, fields); frameErr != nil {
+		reply, frameErr := b.exchangeFrame(m, refusal(), nil)
+		if frameErr == nil {
+			frameErr = reply.failure
+		}
+		if frameErr != nil {
 			err = frameErr
 		}
 	}
@@ -343,7 +359,10 @@ func (b *zigGroup) beginWorkerWith(m string, makeFields func() map[string]any) e
 }
 
 func (b *zigGroup) load(o LoadOptions) (*Script, error) {
-	if err := b.beginWorker("load", map[string]any{"name": o.Name, "source": o.Source}); err != nil {
+	refusal := func() zigOut {
+		return zigOut{fields: map[string]any{}, load: &generated.EnvelopeLoad{Name: o.Name, Source: o.Source, RefuseWorker: zigTrue(true)}}
+	}
+	if err := b.beginWorkerOut("load", refusal); err != nil {
 		return nil, err
 	}
 	defer b.group.endWorker()
@@ -358,45 +377,71 @@ func (b *zigGroup) load(o LoadOptions) (*Script, error) {
 	if err != nil {
 		return nil, err
 	}
-	fields := map[string]any{"name": o.Name, "source": o.Source, "grants": grants, "grantsAsUsed": o.GrantsAsUsed}
-	if o.ForbidSuspension {
-		fields["forbidSuspension"] = true
-	}
-	// The guest refuses another Group's handle, named by a placeholder it
-	// never made, as wrong group with this Load's records.
-	handle := func(h *Object) map[string]any {
-		if h == nil || h.group != b.group {
-			return map[string]any{"$object": []any{"", ""}}
-		}
-		return zigObject(h)
-	}
-	if o.Owner != nil {
-		fields["owner"] = handle(o.Owner)
-	}
-	if len(o.Objects) > 0 {
-		bound := map[string]any{}
-		for name, h := range o.Objects {
-			bound[name] = handle(h)
-		}
-		fields["objects"] = bound
-	}
 	limits, err := zigLimits(o.Limits)
 	if err != nil {
 		return nil, err
 	}
-	fields["limits"] = limits
+	load := &generated.EnvelopeLoad{
+		Name:             o.Name,
+		Source:           o.Source,
+		Grants:           grants,
+		GrantsAsUsed:     &o.GrantsAsUsed,
+		Owner:            b.loadOwner(o.Owner),
+		Objects:          b.loadHandles(o.Objects),
+		Limits:           limits,
+		ForbidSuspension: zigTrue(o.ForbidSuspension),
+	}
 	var s *Script
-	_, err = b.exchange("load", fields, func(zigReply) error {
+	reply, err := b.exchangeFrame("load", zigOut{fields: map[string]any{}, load: load}, okReceipt(func(zigReply) error {
 		s = &Script{group: b.group, name: o.Name, source: o.Source, limits: o.Limits, grants: kept, owner: o.Owner}
 		b.group.mu.Lock()
 		b.group.scripts = append(b.group.scripts, s)
 		b.group.mu.Unlock()
 		return nil
-	})
+	}))
+	if err == nil {
+		err = reply.failure
+	}
 	if err != nil {
 		return nil, err
 	}
 	return s, nil
+}
+
+// zigTrue is an optional flag the catalogue omits unless set.
+func zigTrue(set bool) *bool {
+	if !set {
+		return nil
+	}
+	return &set
+}
+
+// loadHandle names an Object for Load. The guest refuses another Group's
+// handle, or a missing one, named by a placeholder it never made, as wrong
+// group with this Load's records.
+func (b *zigGroup) loadHandle(h *Object) any {
+	if h == nil || h.group != b.group {
+		return map[string]any{"$object": []any{"", ""}}
+	}
+	return zigObject(h)
+}
+
+func (b *zigGroup) loadOwner(h *Object) any {
+	if h == nil {
+		return nil
+	}
+	return b.loadHandle(h)
+}
+
+func (b *zigGroup) loadHandles(objects map[string]*Object) any {
+	if len(objects) == 0 {
+		return nil
+	}
+	bound := make(map[string]any, len(objects))
+	for name, h := range objects {
+		bound[name] = b.loadHandle(h)
+	}
+	return bound
 }
 
 func (b *zigGroup) queue(s *Script, to *Object, fn *Value, m Message, ctx context.Context, how string, d *Deciding) (DeliveryID, *Pending, error) {
@@ -414,7 +459,7 @@ func (b *zigGroup) queue(s *Script, to *Object, fn *Value, m Message, ctx contex
 	// may enqueue or Pump immediately after that lock is released.
 	var id DeliveryID
 	var pending *Pending
-	reply, err := b.exchangeFrame(method, fields, nil, func(reply zigResponse) error {
+	reply, err := b.exchangeFrame(method, zigOut{fields: fields}, func(reply zigResponse) error {
 		if reply.failure != nil {
 			return nil
 		}
@@ -558,7 +603,7 @@ func (b *zigGroup) pump(now time.Time, options PumpOptions) (PumpResult, error) 
 		return b.pumpBinary(now, options)
 	}
 	var result PumpResult
-	reply, err := b.exchangeFrame("pump", zigPumpFields(now, options), nil, func(reply zigResponse) error {
+	reply, err := b.exchangeFrame("pump", zigOut{fields: zigPumpFields(now, options)}, func(reply zigResponse) error {
 		if reply.failure != nil {
 			return nil
 		}
@@ -696,8 +741,12 @@ func (b *zigGroup) inspect() Inspection {
 	if err != nil {
 		panic(err)
 	}
-	var inspection Inspection
-	if err = b.decode(reply, reflect.ValueOf(&inspection).Elem()); err != nil {
+	var view generated.EnvelopeInspection
+	if err = zigInspectionRecord.decode(reply, reflect.ValueOf(&view).Elem()); err != nil {
+		panic(err)
+	}
+	inspection, err := b.inspection(view)
+	if err != nil {
 		panic(err)
 	}
 	return inspection
