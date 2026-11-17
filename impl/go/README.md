@@ -340,6 +340,8 @@ without Zig or a WASM runtime download. The maintainer command
 committed Core/spec sources and records its provenance, including the version
 `CoreVersions()` reports as `zig/<version>`. Given a `reactor-v*` tag, it
 builds that release instead, whose bytes match the tag's published `talk.wasm`.
+It refuses any Zig but the `minimum_zig_version` in `impl/zig/build.zig.zon`,
+which the release workflow uses; set `ZIG` to that Zig's path if `zig` is newer.
 The Go Session Host and REPL use the embedded
 Core's negotiated `analysis-v1` exchanges for Entry classification and
 continuation, positioned syntax diagnostics, implicit Script Variables,
