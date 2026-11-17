@@ -73,7 +73,7 @@ jobs:
       # (#625).
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.17.0
+          version: 0.17.1
       - uses: ./.github/actions/setup-ts
       - run: bun test tests
         working-directory: tooling/fuzz
