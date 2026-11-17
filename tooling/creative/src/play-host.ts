@@ -53,6 +53,7 @@ import { type Report } from '@northtalk/ts';
 import { kindOf } from './elements/registry';
 import { type DebugInstruction } from '@northtalk/ts/debug';
 import { type SoundBackend } from './sounds';
+import { type AddOnLoader } from './add-ons/loader';
 import { type InstrumentMessage } from './instruments/session';
 import { text } from '@northtalk/ts';
 import { pointerValue } from './pointer';
@@ -195,6 +196,21 @@ const timers: Scheduler = {
   cancel: timer => clearTimeout(timer as ReturnType<typeof setTimeout>),
 };
 
+/** What the Play worker loads a session's Add-ons with (#1901). */
+export type AddOnLoading = Pick<AddOnLoader, 'load'>;
+
+export type PlayHostOptions = {
+  /**
+   * Builds the Add-on loader, given whether the reader trusts a Project
+   * Add-on by hash. Without one, an `open` doesn't wait for Add-ons.
+   */
+  addOns?: (trusted: (hash: string) => boolean) => AddOnLoading;
+  epochNow?: () => number;
+  now?: () => bigint;
+  performanceNow?: () => number;
+  scheduler?: Scheduler;
+};
+
 export class PlayHost {
   #session: PlaySession | undefined;
   readonly #play: PlayClock;
@@ -272,21 +288,81 @@ export class PlayHost {
     });
   };
 
+  readonly #performanceNow: () => number;
+  readonly #scheduler: Scheduler;
+  readonly #epochNow: () => number;
+  // Add-on load gating (#1901): the hashes the page says the reader trusts,
+  // and the requests held while an `open`'s Add-ons load.
+  readonly #trusted = new Set<string>();
+  readonly #addOns: AddOnLoading | undefined;
+  #waiting: Envelope<PlayRequest>[] | undefined;
+
   constructor(
     private readonly post: (reply: Reply<PlayResponse>) => void,
-    private readonly now: () => bigint = wallClock,
-    private readonly performanceNow: () => number = () => performance.now(),
-    private readonly scheduler: Scheduler = timers,
-    private readonly epochNow: () => number = () =>
-      performance.timeOrigin + performance.now(),
+    {
+      now = wallClock,
+      performanceNow = () => performance.now(),
+      scheduler = timers,
+      epochNow = () => performance.timeOrigin + performance.now(),
+      addOns,
+    }: PlayHostOptions = {},
   ) {
+    this.#performanceNow = performanceNow;
+    this.#scheduler = scheduler;
+    this.#epochNow = epochNow;
+    this.#addOns = addOns?.(hash => this.#trusted.has(hash));
     this.#play = new PlayClock(performanceNow);
     this.#audio = new AudioClock(epochNow);
-    const host = pausableClock(this.now, () => this.#play.pausedTime());
+    const host = pausableClock(now, () => this.#play.pausedTime());
     this.#clock = () => (this.#audio.active ? this.#audio.now() : host());
   }
 
-  receive({ id, request }: Envelope<PlayRequest>): void {
+  /**
+   * Takes one of the page's requests. An `open` whose Project lists Add-ons
+   * waits for them to load; the requests that arrive meanwhile wait behind
+   * it, in order.
+   */
+  receive(envelope: Envelope<PlayRequest>): void {
+    if (this.#waiting) {
+      this.#waiting.push(envelope);
+    } else {
+      this.#admit(envelope);
+    }
+  }
+
+  #admit(envelope: Envelope<PlayRequest>): void {
+    const { request } = envelope;
+    if (
+      !this.#addOns ||
+      request.kind !== 'open' ||
+      !request.project.addOns?.length
+    ) {
+      this.#handle(envelope);
+      return;
+    }
+    for (const hash of request.trustedAddOns ?? []) {
+      this.#trusted.add(hash);
+    }
+    this.#waiting = [];
+    // An Add-on that doesn't load is the Project's problem to report; the
+    // session opens without it.
+    void this.#addOns.load(request.project.addOns).then(() => {
+      this.#handle(envelope);
+      const queued = this.#waiting!;
+      this.#waiting = undefined;
+      // Another open among them waits again, holding the rest behind it.
+      for (const [i, next] of queued.entries()) {
+        const held = this.#waiting as Envelope<PlayRequest>[] | undefined;
+        if (held) {
+          held.push(...queued.slice(i));
+          break;
+        }
+        this.#admit(next);
+      }
+    });
+  }
+
+  #handle({ id, request }: Envelope<PlayRequest>): void {
     const reply = (response: PlayResponse) => this.post({ id, response });
     if (request.kind === 'soundEnded') {
       const voice = this.#voices.get(request.voice);
@@ -609,7 +685,7 @@ export class PlayHost {
     this.#breakpoints = [];
     this.#placedIn = undefined;
     this.#play.newSession();
-    this.#audio = new AudioClock(this.epochNow);
+    this.#audio = new AudioClock(this.#epochNow);
     const port = request.instrumentPort;
     this.#instrumentPort = port;
     if (request.audioClock) {
@@ -619,7 +695,7 @@ export class PlayHost {
       // A different game each time (ADR 0096).
       seed: request.seed,
       // The Performance window leaves out paused time too.
-      performanceNow: () => this.performanceNow() - this.#play.pausedTime(),
+      performanceNow: () => this.#performanceNow() - this.#play.pausedTime(),
       soundBackend: this.#relaySound,
       heard: this.#hear,
       // Commands go straight to the worklet over the session's port, never
@@ -779,7 +855,7 @@ export class PlayHost {
   }
 
   #close(): void {
-    this.scheduler.cancel(this.#timer);
+    this.#scheduler.cancel(this.#timer);
     this.#timer = undefined;
     clearInterval(this.#performanceTimer);
     this.#performanceTimer = undefined;
@@ -794,9 +870,9 @@ export class PlayHost {
       if (delay !== 0) {
         return;
       }
-      this.scheduler.cancel(this.#timer);
+      this.#scheduler.cancel(this.#timer);
     }
-    this.#timer = this.scheduler.schedule(() => {
+    this.#timer = this.#scheduler.schedule(() => {
       this.#timer = undefined;
       if (this.#session !== session) {
         return;

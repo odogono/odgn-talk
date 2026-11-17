@@ -283,13 +283,11 @@ const hostWithAudio = (project: Project, audio: boolean) => {
   const { port1, port2 } = new MessageChannel();
   port1.onmessage = ({ data }: MessageEvent<InstrumentMessage>) =>
     messages.push(data);
-  const host = new PlayHost(
-    () => {},
-    () => BigInt(Math.round(clock.wall * 1000)),
-    () => clock.wall,
-    undefined,
-    () => clock.wall,
-  );
+  const host = new PlayHost(() => {}, {
+    now: () => BigInt(Math.round(clock.wall * 1000)),
+    performanceNow: () => clock.wall,
+    epochNow: () => clock.wall,
+  });
   let id = 1;
   const request = (body: PlayRequest) =>
     host.receive({ id: id++, request: body } satisfies Envelope<PlayRequest>);

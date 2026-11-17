@@ -88,8 +88,10 @@ const hosted = (project: Project, clock?: () => number) => {
         mirror.apply(reply.response);
       }
     },
-    clock && (() => BigInt(Math.round(clock() * 1000))),
-    clock,
+    clock && {
+      now: () => BigInt(Math.round(clock() * 1000)),
+      performanceNow: clock,
+    },
   );
   const request = (request: PlayRequest) =>
     host.receive({ id: id++, request } satisfies Envelope<PlayRequest>);
@@ -538,11 +540,10 @@ test('worker targets carry loaded scope, reject stale instances and session ids'
 test('performance telemetry is opt-in, updates quiet views at 4 Hz and ends with a final snapshot', async () => {
   const replies: Reply<PlayResponse>[] = [];
   let clock = 0;
-  const host = new PlayHost(
-    reply => replies.push(structuredClone(reply)),
-    () => 0n,
-    () => clock,
-  );
+  const host = new PlayHost(reply => replies.push(structuredClone(reply)), {
+    now: () => 0n,
+    performanceNow: () => clock,
+  });
   const send = (request: PlayRequest) => host.receive({ id: 1, request });
   const snapshots = () =>
     replies.flatMap(reply =>
@@ -843,11 +844,10 @@ test('Variables rows copy as source, a cut-off list only when it carries its sou
 test('the Performance window leaves out paused time', () => {
   const replies: Reply<PlayResponse>[] = [];
   let ms = 0;
-  const host = new PlayHost(
-    reply => replies.push(structuredClone(reply)),
-    () => BigInt(ms * 1000),
-    () => ms,
-  );
+  const host = new PlayHost(reply => replies.push(structuredClone(reply)), {
+    now: () => BigInt(ms * 1000),
+    performanceNow: () => ms,
+  });
   const send = (request: PlayRequest) => host.receive({ id: 1, request });
   send({
     kind: 'open',

@@ -1,48 +1,17 @@
 // The Play worker (#1225): Browse and Present run their Play Session here,
 // so a Script that never yields holds only this worker, which the page's
-// supervisor ends. A session's Add-ons load before it opens (#1901); the
-// requests that arrive meanwhile wait, in order.
+// supervisor ends. `PlayHost` holds a session's requests while its Add-ons
+// load (#1901).
 import { type Envelope } from '@northtalk/tooling/worker-supervisor';
 import { AddOnLoader } from './add-ons/loader';
 import { PlayHost } from './play-host';
 import { type PlayRequest } from './play-protocol';
 
-const host = new PlayHost(reply => postMessage(reply));
-// The page asks the reader; the worker runs what the page says they trust.
-const trusted = new Set<string>();
-const addOns = new AddOnLoader({ trusted: hash => trusted.has(hash) });
-let waiting: Envelope<PlayRequest>[] | undefined;
-
-const receive = (data: Envelope<PlayRequest>): void => {
-  const { request } = data;
-  if (request.kind !== 'open' || !request.project.addOns?.length) {
-    host.receive(data);
-    return;
-  }
-  for (const hash of request.trustedAddOns ?? []) {
-    trusted.add(hash);
-  }
-  waiting = [];
-  void addOns.load(request.project.addOns).then(() => {
-    host.receive(data);
-    const queued = waiting!;
-    waiting = undefined;
-    // Another open among them waits again, holding the rest behind it.
-    for (const [i, next] of queued.entries()) {
-      const held = waiting as Envelope<PlayRequest>[] | undefined;
-      if (held) {
-        held.push(...queued.slice(i));
-        break;
-      }
-      receive(next);
-    }
-  });
-};
+const host = new PlayHost(reply => postMessage(reply), {
+  // The page asks the reader; the worker runs what the page says they trust.
+  addOns: trusted => new AddOnLoader({ trusted }),
+});
 
 onmessage = ({ data }: MessageEvent<Envelope<PlayRequest>>) => {
-  if (waiting) {
-    waiting.push(data);
-  } else {
-    receive(data);
-  }
+  host.receive(data);
 };
