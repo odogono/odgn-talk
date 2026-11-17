@@ -63,8 +63,7 @@ import { mountInfoPanel, type NameRefusal } from './info-panel';
 import { mountSoundsWindow } from './sounds-window';
 import { showRemoveSoundDialog, showRenameSoundDialog } from './sound-dialogs';
 import { soundUses } from './sound-uses';
-import { auditionStep } from './pattern-audition';
-import { previewInstruments } from './instruments/preview';
+import { assetSoundBytes, auditionStep, playPreview } from './edit-preview';
 import { mountInstrumentsWindow } from './instruments-window';
 import {
   changedParameters,
@@ -381,13 +380,7 @@ export const mountStack = (
       byId('notice-text').textContent = message;
       byId('notice-banner').hidden = false;
     },
-    soundBytes: async asset => {
-      const bytes = images.bytes.get(asset.hash);
-      if (bytes === undefined) {
-        throw new Error('its bytes are missing');
-      }
-      return bytes.slice().buffer;
-    },
+    soundBytes: assetSoundBytes(images),
     redraw: redrawVersion,
     selected: selectedInstrument,
     add: kind => void addInstrument(kind),
@@ -1234,19 +1227,8 @@ export const mountStack = (
   // A Literal Editor's press plays its note through Edit's preview audio.
   scripts.onAudition((name, on) => {
     void auditionStep(editor.project, name, on).then(sent => {
-      if (Array.isArray(sent) && sent.length) {
-        previewInstruments(
-          editor.project,
-          async asset => {
-            const url = images.url(asset);
-            if (url === undefined) {
-              throw new Error('its bytes are missing');
-            }
-            return (await fetch(url)).arrayBuffer();
-          },
-          sent,
-          () => {},
-        );
+      if (Array.isArray(sent)) {
+        playPreview(editor.project, assetSoundBytes(images), sent);
       }
     });
   });

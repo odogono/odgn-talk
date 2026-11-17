@@ -47,11 +47,11 @@ import {
 } from './instruments/audition';
 import {
   holdInstruments,
-  previewInstruments,
   type HeldPreview,
   type SoundBytes,
 } from './instruments/preview';
 import type { PlayingParameters } from './instruments/live';
+import { playPreview } from './edit-preview';
 import { boundControls } from './bindings';
 import type { PlayMode } from './stack';
 import { pageAddOns } from './add-ons/page';
@@ -975,7 +975,7 @@ const InstrumentsPanel = (props: InstrumentsProps & { root: HTMLElement }) => {
     const messages = auditionMessages(current, sound);
     if (messages.length) {
       setAuditioned(true);
-      previewInstruments(
+      playPreview(
         now,
         props.soundBytes,
         messages,

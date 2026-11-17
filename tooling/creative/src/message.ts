@@ -7,7 +7,8 @@ import { apropos, describe, scriptNames } from '@northtalk/ts/session';
 import { type StackEditor } from './editing';
 import { runLine } from './message-line';
 import type { InstrumentMessage } from './instruments/session';
-import { PlaySession } from './play';
+import type { PlaySession } from './play';
+import { editPreview } from './edit-preview';
 import { scriptOwners } from './script-manifest';
 import { valueEncoder, type VariableValue } from './variables';
 
@@ -131,15 +132,12 @@ const editRun = async (
   }
   editor.finishPendingEdit();
   const expected = editor.stamp();
-  const sent: InstrumentMessage[] = [];
-  const play = new PlaySession(editor.project, editor.pageIndex, {
-    events: false,
-    instrumentBackend: message => sent.push(message),
-  });
+  const preview = editPreview(editor.project, editor.pageIndex);
+  const { play } = preview;
   const loadedTarget =
     target === undefined ? undefined : play.messageTargetForOwner(target);
   if (target !== undefined && loadedTarget === undefined) {
-    play.stop(0n);
+    preview.finish();
     return {
       error:
         'That Script could not load; fix its problems before running a command.',
@@ -149,7 +147,7 @@ const editRun = async (
     ? play.runWatch(text, loadedTarget)
     : play.runMessage(text, loadedTarget);
   if (!started.ok) {
-    play.stop(0n);
+    preview.finish();
     return { error: started.error };
   }
   // Elements are placed in the authored Project, which `authored` maps to.
@@ -162,8 +160,7 @@ const editRun = async (
   const reply = await settle(play, started.result, () => play.pump(0n), encode);
   // In Edit, `play` is only a preview and a loop waits for Browse.
   const looped = play.patterns.looping;
-  play.patterns.flush();
-  play.stop(0n);
+  const sent = preview.finish();
   if (reply.error) {
     return reply;
   }
