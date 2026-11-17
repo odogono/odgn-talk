@@ -10,12 +10,13 @@ type Source = {
 };
 
 /** The CodeMirror packages the Host shares with the editor (ADR 0182). */
-const codemirrorPeers = [
-  '@codemirror/language',
-  '@codemirror/lint',
-  '@codemirror/state',
-  '@codemirror/view',
-] as const;
+const codemirrorPeers = {
+  '@codemirror/language': '^6.0.0',
+  // 6.4.0 added the hint severity that LSP severity 4 maps to.
+  '@codemirror/lint': '^6.4.0',
+  '@codemirror/state': '^6.0.0',
+  '@codemirror/view': '^6.0.0',
+};
 
 /** The Core range the editor's highlighting supports. */
 export const corePeer = '>=0.9.0 <1.0.0';
@@ -46,6 +47,6 @@ export const manifest = (source: Source) => ({
   },
   peerDependencies: {
     '@northtalk/ts': corePeer,
-    ...Object.fromEntries(codemirrorPeers.map(name => [name, '^6.0.0'])),
+    ...codemirrorPeers,
   },
 });

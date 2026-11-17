@@ -8,11 +8,11 @@ export type Position = { character: number; line: number };
 
 /** One check result, in the shape of an LSP diagnostic. */
 export type Diagnostic = {
-  code?: string;
+  code?: number | string;
   message: string;
   range: { end: Position; start: Position };
-  /** 1 error, 2 warning, 3 information, 4 hint. */
-  severity: number;
+  /** 1 error, 2 warning, 3 information, 4 hint; an error when absent. */
+  severity?: number;
   source?: string;
 };
 
@@ -69,8 +69,12 @@ export function diagnosticsSpec<D extends Diagnostic>(
       return {
         from,
         to: Math.max(from, offsetOf(state.doc, d.range.end)),
-        severity: severities[d.severity as keyof typeof severities] ?? 'info',
-        message: d.code ? `${d.message} (${d.code})` : d.message,
+        severity:
+          severities[(d.severity ?? 1) as keyof typeof severities] ?? 'info',
+        message:
+          d.code === undefined || d.code === ''
+            ? d.message
+            : `${d.message} (${d.code})`,
         ...(d.source === undefined ? {} : { source: d.source }),
         actions: [...actions(d)],
       };

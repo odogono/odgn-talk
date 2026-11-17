@@ -233,7 +233,7 @@ A declaration word such as `constant` or `shape` touches every stage; `rg -n -w 
 
 ## Published editor (`@northtalk/editor`)
 
-- Implementation: [public entry](../../tooling/editor/src/index.ts), [highlighting](../../tooling/editor/src/language.ts), [theme](../../tooling/editor/src/theme.ts), [diagnostics](../../tooling/editor/src/diagnostics.ts), [build](../../tooling/editor/tools/package/build.ts) and [published manifest](../../tooling/editor/tools/package/manifest.ts)
+- Implementation: [public entry](../../tooling/editor/src/index.ts) (`northtalk()`, the extension an embedding app adds; `diagnosticsSpec()`, which sets its check results), [highlighting](../../tooling/editor/src/language.ts), [theme](../../tooling/editor/src/theme.ts), [diagnostics](../../tooling/editor/src/diagnostics.ts), [build](../../tooling/editor/tools/package/build.ts) and [published manifest](../../tooling/editor/tools/package/manifest.ts)
 - Rules: [ADR 0182](../../docs/adr/0182-northtalk-editor-publishes-framework-free-codemirror-extensions.md), [npm README](../../tooling/editor/tools/package/README.md), [releasing](../../docs/agents/commits.md#when-a-changelog-fragment-is-needed)
 - Tests and cases: [editor tests](../../tooling/editor/tests/), [tarball check](../../tooling/editor/tools/package/check.ts) and its [consumer](../../tooling/editor/tools/package/consumer/)
 - First check: `bun test tooling/editor/tests`; after `bun run --cwd impl/ts build`, `bun run --cwd tooling/editor build && bun run --cwd tooling/editor package:check`

@@ -33,7 +33,7 @@ if (spec) {
 
 - **`northtalk()`:** the language, highlighting and theme, as one extension.
 - **`northtalkLanguage`, `northtalkHighlighting`, `northtalkTheme`:** the same pieces, to use or replace one at a time.
-- **`diagnosticsSpec(state, diagnostics, options?)`:** a transaction that replaces the field's diagnostics. Each diagnostic has a zero-based `range` in UTF-16 columns, a `severity` (1 error, 2 warning, 3 information, 4 hint), a `message`, and optionally a `code` and a `source`. Pass `checked`, the text you checked, and it returns `null` when the field has changed since, so late results never land on the wrong characters. Pass `actions` to offer quick fixes.
+- **`diagnosticsSpec(state, diagnostics, options?)`:** a transaction that replaces the field's diagnostics. Each diagnostic has a zero-based `range` in UTF-16 columns and a `message`, and optionally a `severity` (1 error, the default, 2 warning, 3 information, 4 hint), a `code` and a `source`, as in LSP. Pass `checked`, the text you checked, and it returns `null` when the field has changed since, so late results never land on the wrong characters. Pass `actions` to offer quick fixes.
 - **`offsetOf`, `positionOf`:** convert between a document offset and an LSP position.
 
 The field has no key bindings of its own: add CodeMirror's `history`, `keymap` and the rest as your form needs. Show the diagnostics with `@codemirror/lint`'s `lintGutter` if you want a gutter.

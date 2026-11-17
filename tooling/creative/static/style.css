@@ -12,6 +12,9 @@
   --northtalk-number: #b25b00;
   --northtalk-comment: #8a8478;
   --northtalk-operator: #4a4a4a;
+  /* Add-ons such as the Piano Roll colour with the number colour; keep the
+     name their cached chunks use. */
+  --number: var(--northtalk-number);
   --error: #b3261e;
   --paused: #fff3c4;
   color-scheme: light;

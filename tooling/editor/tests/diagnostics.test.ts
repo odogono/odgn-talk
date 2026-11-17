@@ -42,6 +42,15 @@ test('adds the code to the message only when there is one', () => {
   ).toEqual(['a (x)', 'b']);
 });
 
+test('takes LSP numeric codes and a missing severity', () => {
+  expect(
+    shown([{ range: at(0, 0, 3), message: 'a', code: 0 }]).map(d => [
+      d.message,
+      d.severity,
+    ]),
+  ).toEqual([['a (0)', 'error']]);
+});
+
 test('places UTF-16 ranges on their line, clamped to it', () => {
   expect(
     shown([{ range: at(1, 4, 99), severity: 1, message: 'm' }]).map(d =>
