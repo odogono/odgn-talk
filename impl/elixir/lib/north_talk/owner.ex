@@ -28,6 +28,8 @@ defmodule NorthTalk.Owner do
     Verdict
   }
 
+  alias NorthTalk.Generated.Envelope
+
   @protocol 1
   @paused_inputs "paused-inputs-v1"
   @elements "object-elements-v1"
@@ -411,23 +413,20 @@ defmodule NorthTalk.Owner do
     with :ok <- own_grants(given),
          {:ok, grants} <- with_musical_clock(given, state.groups[g].musical_clock),
          {:ok, limits} <- limits(Keyword.get(opts, :limits, [])) do
-      fields = %{
-        "group" => g,
-        "name" => name,
-        "source" => source,
-        "grants" => Map.new(grants, fn {k, %Grant{handle: h}} -> {k, h} end),
-        "limits" => Map.merge(state.limits, limits)
+      # Each public option fills one field of the generated record (ADR 0183).
+      load = %Envelope.Load{
+        group: g,
+        name: name,
+        source: source,
+        grants: Map.new(grants, fn {k, %Grant{handle: h}} -> {k, h} end),
+        limits: Map.merge(state.limits, limits),
+        owner: if(o = opts[:owner], do: object_ref(state, g, o)),
+        objects:
+          if(objects = opts[:objects], do: Map.new(objects, fn {k, o} -> {to_string(k), object_ref(state, g, o)} end)),
+        forbid_suspension: if(opts[:forbid_suspension], do: true)
       }
 
-      fields = if o = opts[:owner], do: Map.put(fields, "owner", object_ref(state, g, o)), else: fields
-      fields = if opts[:forbid_suspension], do: Map.put(fields, "forbidSuspension", true), else: fields
-
-      fields =
-        if objects = opts[:objects],
-          do: Map.put(fields, "objects", Map.new(objects, fn {k, o} -> {to_string(k), object_ref(state, g, o)} end)),
-          else: fields
-
-      case exchange(state, "load", fields) do
+      case exchange(state, "load", json_fields(load)) do
         {{:ok, ok}, state} ->
           script = ok["script"]
           bindings = Map.new(grants, fn {k, grant} -> {{g, script, k}, grant} end)
@@ -1114,6 +1113,15 @@ defmodule NorthTalk.Owner do
     if group.timer, do: Process.cancel_timer(group.timer)
     delay = max(0, div(at - Clock.now(state.clock) + 999, 1000))
     put_in(state.groups[g], %{group | timer: Process.send_after(self(), {:pump, g}, delay)})
+  end
+
+  # A generated record's JSON layout: each set field under its wire name.
+  # `exchange/3` adds `m` and `ref`.
+  defp json_fields(%module{} = record) do
+    for %{key: key, name: name} <- module.fields(),
+        (value = Map.fetch!(record, key)) != nil,
+        into: %{},
+        do: {name, value}
   end
 
   # One complete exchange: the message, then every need the Core replies
