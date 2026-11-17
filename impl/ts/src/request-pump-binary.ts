@@ -16,7 +16,7 @@ import {
 } from './binary-value';
 import { formatInstant, parseInstant } from './dates';
 import {
-  envelopeFeatures,
+  envelopeFeature,
   envelopeMessages,
   envelopeReports,
   envelopeSettlement,
@@ -39,8 +39,8 @@ import {
   Value,
 } from './values';
 
-export const requestPumpFeature = envelopeFeatures[0];
-export const callbacksFeature = envelopeFeatures[1];
+export const requestPumpFeature = envelopeFeature.requestPumpFieldsV1;
+export const callbacksFeature = envelopeFeature.callbacksFieldsV1;
 const prefix = [0x4e, 0x54, 0x42, 1, 1];
 const object = (j: Json): JsonObject => (isObject(j) ? j : binaryFailure());
 const field = (j: Json, k: string): Json | undefined =>

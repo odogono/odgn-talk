@@ -489,16 +489,17 @@ fn fieldsResult(gpa: Allocator, c: rp.Callback, wire: []const u8, options: binar
 
 test "shared callback vectors have the same result and Answer in both layouts (#1568)" {
     const gpa = std.testing.allocator;
-    const Vector = struct { name: []const u8, tag: u8, hex: []const u8, tree: []const u8 };
+    const Vector = struct { name: []const u8, tag: ?u8 = null, hex: ?[]const u8 = null, tree: []const u8 };
     const vectors = try std.json.parseFromSlice([]Vector, gpa, @embedFile("envelope-frames"), .{ .ignore_unknown_fields = true });
     defer vectors.deinit();
     var checked: usize = 0;
     for (vectors.value) |v| {
-        const c = rp.Callback.result(v.tag) orelse continue;
+        const c = rp.Callback.result(v.tag orelse continue) orelse continue;
+        const hex = v.hex.?;
         errdefer std.debug.print("callback vector: {s}\n", .{v.name});
-        const wire = try gpa.alloc(u8, v.hex.len / 2);
+        const wire = try gpa.alloc(u8, hex.len / 2);
         defer gpa.free(wire);
-        _ = try std.fmt.hexToBytes(wire, v.hex);
+        _ = try std.fmt.hexToBytes(wire, hex);
         const parsed = try std.json.parseFromSlice(Json, gpa, v.tree, .{ .parse_numbers = false });
         defer parsed.deinit();
         const left = try readJson(gpa, callbackKind(c), parsed.value, .{});

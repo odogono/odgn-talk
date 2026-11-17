@@ -37,6 +37,9 @@ func envelopeVectors(t *testing.T) []envelopeVector {
 // tree before re-encoding it. In particular, no span is copied to the output.
 func TestZigBackendSharedEnvelopeVectors(t *testing.T) {
 	for _, vector := range envelopeVectors(t) {
+		if vector.Hex == "" {
+			continue // JSON-only; envelope:check owns it
+		}
 		t.Run(vector.Name, func(t *testing.T) {
 			data, err := hex.DecodeString(vector.Hex)
 			if err != nil {

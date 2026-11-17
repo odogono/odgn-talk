@@ -33,7 +33,7 @@ func zigRequestPumpFeature() (string, bool, error) {
 	case "":
 		return "", false, nil
 	case "fields":
-		return "request-pump-fields-v1", true, nil
+		return generated.EnvelopeFeatureRequestPumpFieldsV1, true, nil
 	}
 	return "", false, fmt.Errorf("TALK_ZIG_REQUEST_PUMP must be fields or empty, not %q", zigRequestPump)
 }

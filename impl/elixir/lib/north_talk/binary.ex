@@ -11,8 +11,8 @@ defmodule NorthTalk.Binary do
   alias Jason.OrderedObject
   alias NorthTalk.Generated.Envelope
 
-  @feature Enum.at(Envelope.features(), 0)
-  @callbacks_feature Enum.at(Envelope.features(), 1)
+  @feature Envelope.feature(:request_pump_fields_v1)
+  @callbacks_feature Envelope.feature(:callbacks_fields_v1)
   @prefix <<0x4E, 0x54, 0x42, 1, 1>>
   @max 18_446_744_073_709_551_616
   @max_plain 9_007_199_254_740_992

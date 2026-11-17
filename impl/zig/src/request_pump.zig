@@ -8,9 +8,9 @@ const envelope = @import("generated/envelope.zig");
 const Allocator = std.mem.Allocator;
 
 pub const prefix = "NTB\x01";
-pub const feature_load = envelope.features[3];
+pub const feature_load = envelope.feature.load_fields_v1;
 
-pub const feature_fields = envelope.features[0];
+pub const feature_fields = envelope.feature.request_pump_fields_v1;
 
 /// The layout byte after the prefix: the fields layout, the only one.
 pub const layout_fields: u8 = 0x01;
@@ -68,11 +68,11 @@ pub const Message = enum(u8) {
 
 /// `queue-fields-v1` (#1374): queued `deliver`, `broadcast` and `decide`
 /// inputs cross as fields-layout frames.
-pub const feature_queue = envelope.features[4];
+pub const feature_queue = envelope.feature.queue_fields_v1;
 
 /// `settlements-fields-v1` (#1320): a Host's queued `answer` and `fail`
 /// inputs cross inside the `settle-pump` that would drain them.
-pub const feature_settlements = envelope.features[2];
+pub const feature_settlements = envelope.feature.settlements_fields_v1;
 /// One settlement, positionally. `outcome` is `answer` or `fail`; `value`
 /// is the answer or the failure's Data; `fuel` an answer's late cost; `code`
 /// and `message` a failure's, with no `code` failing the call as broken.
@@ -101,7 +101,7 @@ pub const Report = enum(u8) {
 
 /// `callbacks-fields-v1` (#1311): Host callback needs and their results
 /// cross as fields-layout frames.
-pub const feature_callbacks = envelope.features[1];
+pub const feature_callbacks = envelope.feature.callbacks_fields_v1;
 
 /// A callback need's or result's message tag and positional fields. A need
 /// ends with its notices, so they can be filled in after it is written.

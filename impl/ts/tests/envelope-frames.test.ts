@@ -7,7 +7,10 @@ import {
 import { readOrderedJSON } from '../src/readers';
 import { plain } from '../src/wasm/wire';
 
-for (const frame of frames) {
+// JSON-only vectors, without `hex`, are checked by `envelope:check`.
+for (const frame of frames.flatMap(f =>
+  'hex' in f && f.hex ? [{ ...f, hex: f.hex }] : [],
+)) {
   test(`shared fields envelope: ${frame.name}`, () => {
     const bytes = Uint8Array.from(Buffer.from(frame.hex, 'hex'));
     expect(

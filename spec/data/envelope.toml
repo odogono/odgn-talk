@@ -1,5 +1,8 @@
 # Fields envelope tables (ADR 0110). Tags are hexadecimal in generated views.
 # Required means structurally present; conditional checks remain in codecs.
+# `layouts` names where a message travels; a JSON tree uses the same field
+# names (ADR 0183). `host = false` marks a field the Host fills itself rather
+# than from a public option.
 
 features = ["request-pump-fields-v1", "callbacks-fields-v1", "settlements-fields-v1", "load-fields-v1", "queue-fields-v1"]
 
@@ -37,9 +40,10 @@ reason = "Reports carry nonnegative consumption; settlement late costs cross as 
 tag = 0x01
 name = "request"
 direction = "host-to-guest"
+layouts = ["fields", "json"]
 fields = [
-  { name = "ref", kind = "int", required = true },
-  { name = "group", kind = "text", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
   { name = "to", kind = "target", required = false },
   { name = "message", kind = "message", required = false },
 ]
@@ -48,9 +52,10 @@ fields = [
 tag = 0x02
 name = "call"
 direction = "host-to-guest"
+layouts = ["fields", "json"]
 fields = [
-  { name = "ref", kind = "int", required = true },
-  { name = "group", kind = "text", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
   { name = "fn", kind = "value", required = false },
   { name = "args", kind = "values", required = false },
   { name = "limits", kind = "limits", required = false },
@@ -60,9 +65,10 @@ fields = [
 tag = 0x03
 name = "pump"
 direction = "host-to-guest"
+layouts = ["fields", "json"]
 fields = [
-  { name = "ref", kind = "int", required = true },
-  { name = "group", kind = "text", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
   { name = "now", kind = "instant", required = false },
   { name = "fuelSlice", kind = "int", required = false },
   { name = "fuelCap", kind = "int", required = false },
@@ -72,10 +78,11 @@ fields = [
 tag = 0x04
 name = "request-pump"
 direction = "host-to-guest"
+layouts = ["fields"]
 fields = [
-  { name = "ref", kind = "int", required = true },
-  { name = "group", kind = "text", required = true },
-  { name = "token", kind = "uint", required = false },
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
+  { name = "token", kind = "uint", required = false, host = false },
   { name = "to", kind = "target", required = false },
   { name = "message", kind = "message", required = false },
   { name = "now", kind = "instant", required = false },
@@ -87,10 +94,11 @@ fields = [
 tag = 0x05
 name = "call-pump"
 direction = "host-to-guest"
+layouts = ["fields"]
 fields = [
-  { name = "ref", kind = "int", required = true },
-  { name = "group", kind = "text", required = true },
-  { name = "token", kind = "uint", required = false },
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
+  { name = "token", kind = "uint", required = false, host = false },
   { name = "fn", kind = "value", required = false },
   { name = "args", kind = "values", required = false },
   { name = "limits", kind = "limits", required = false },
@@ -103,9 +111,10 @@ fields = [
 tag = 0x06
 name = "op-result"
 direction = "host-to-guest"
+layouts = ["fields"]
 fields = [
-  { name = "ref", kind = "int", required = true },
-  { name = "group", kind = "text", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
   { name = "outcome", kind = "text", required = true },
   { name = "value", kind = "value", required = false },
   { name = "code", kind = "text", required = false },
@@ -117,9 +126,10 @@ fields = [
 tag = 0x07
 name = "prop-result"
 direction = "host-to-guest"
+layouts = ["fields"]
 fields = [
-  { name = "ref", kind = "int", required = true },
-  { name = "group", kind = "text", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
   { name = "outcome", kind = "text", required = true },
   { name = "value", kind = "value", required = false },
   { name = "code", kind = "text", required = false },
@@ -131,9 +141,10 @@ fields = [
 tag = 0x08
 name = "effect-result"
 direction = "host-to-guest"
+layouts = ["fields"]
 fields = [
-  { name = "ref", kind = "int", required = true },
-  { name = "group", kind = "text", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
   { name = "status", kind = "text", required = false },
 ]
 
@@ -141,18 +152,20 @@ fields = [
 tag = 0x09
 name = "release-result"
 direction = "host-to-guest"
+layouts = ["fields"]
 fields = [
-  { name = "ref", kind = "int", required = true },
-  { name = "group", kind = "text", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
 ]
 
 [[messages]]
 tag = 0x0a
 name = "settle-pump"
 direction = "host-to-guest"
+layouts = ["fields"]
 fields = [
-  { name = "ref", kind = "int", required = true },
-  { name = "group", kind = "text", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
   { name = "now", kind = "instant", required = false },
   { name = "fuelSlice", kind = "int", required = false },
   { name = "fuelCap", kind = "int", required = false },
@@ -163,9 +176,10 @@ fields = [
 tag = 0x0b
 name = "load"
 direction = "host-to-guest"
+layouts = ["fields", "json"]
 fields = [
-  { name = "ref", kind = "int", required = true },
-  { name = "group", kind = "text", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
   { name = "name", kind = "text", required = true },
   { name = "source", kind = "text", required = true },
   { name = "grants", kind = "record", required = false },
@@ -173,8 +187,8 @@ fields = [
   { name = "owner", kind = "record", required = false },
   { name = "objects", kind = "record", required = false },
   { name = "limits", kind = "limits", required = false },
-  { name = "newGroup", kind = "record", required = false },
-  { name = "refuseWorker", kind = "bool", required = false },
+  { name = "newGroup", kind = "record", required = false, host = false },
+  { name = "refuseWorker", kind = "bool", required = false, host = false },
   { name = "forbidSuspension", kind = "bool", required = false },
 ]
 
@@ -182,9 +196,10 @@ fields = [
 tag = 0x0c
 name = "deliver"
 direction = "host-to-guest"
+layouts = ["fields", "json"]
 fields = [
-  { name = "ref", kind = "int", required = true },
-  { name = "group", kind = "text", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
   { name = "to", kind = "target", required = false },
   { name = "message", kind = "message", required = false },
 ]
@@ -193,9 +208,10 @@ fields = [
 tag = 0x0d
 name = "broadcast"
 direction = "host-to-guest"
+layouts = ["fields", "json"]
 fields = [
-  { name = "ref", kind = "int", required = true },
-  { name = "group", kind = "text", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
   { name = "message", kind = "message", required = false },
 ]
 
@@ -203,9 +219,10 @@ fields = [
 tag = 0x0e
 name = "decide"
 direction = "host-to-guest"
+layouts = ["fields", "json"]
 fields = [
-  { name = "ref", kind = "int", required = true },
-  { name = "group", kind = "text", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
   { name = "to", kind = "target", required = false },
   { name = "message", kind = "message", required = false },
   { name = "broadcast", kind = "bool", required = false },
@@ -215,8 +232,9 @@ fields = [
 tag = 0x81
 name = "admission"
 direction = "guest-to-host"
+layouts = ["fields"]
 fields = [
-  { name = "ref", kind = "int", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
   { name = "delivery", kind = "text", required = false },
   { name = "err", kind = "err", required = false },
   { name = "abandoned", kind = "texts", required = false },
@@ -228,10 +246,11 @@ fields = [
 tag = 0x82
 name = "completion"
 direction = "guest-to-host"
+layouts = ["fields"]
 fields = [
-  { name = "ref", kind = "int", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
   { name = "delivery", kind = "text", required = false },
-  { name = "token", kind = "uint", required = false },
+  { name = "token", kind = "uint", required = false, host = false },
   { name = "state", kind = "text", required = false },
   { name = "nextDeadline", kind = "instant", required = false },
   { name = "fuelUsed", kind = "uint", required = false },
@@ -247,8 +266,9 @@ fields = [
 tag = 0x83
 name = "op"
 direction = "guest-to-host"
+layouts = ["fields"]
 fields = [
-  { name = "ref", kind = "int", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
   { name = "call", kind = "text", required = true },
   { name = "script", kind = "text", required = true },
   { name = "run", kind = "text", required = true },
@@ -272,8 +292,9 @@ fields = [
 tag = 0x84
 name = "prop"
 direction = "guest-to-host"
+layouts = ["fields"]
 fields = [
-  { name = "ref", kind = "int", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
   { name = "object", kind = "texts", required = true },
   { name = "prop", kind = "text", required = true },
   { name = "set", kind = "bool", required = false },
@@ -289,8 +310,9 @@ fields = [
 tag = 0x85
 name = "effect"
 direction = "guest-to-host"
+layouts = ["fields"]
 fields = [
-  { name = "ref", kind = "int", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
   { name = "script", kind = "text", required = true },
   { name = "run", kind = "text", required = true },
   { name = "segment", kind = "text", required = true },
@@ -308,8 +330,9 @@ fields = [
 tag = 0x86
 name = "release"
 direction = "guest-to-host"
+layouts = ["fields"]
 fields = [
-  { name = "ref", kind = "int", required = true },
+  { name = "ref", kind = "int", required = true, host = false },
   { name = "script", kind = "text", required = true },
   { name = "grant", kind = "text", required = true },
   { name = "reason", kind = "text", required = true },
@@ -483,4 +506,51 @@ fields = [
   { name = "fuel", kind = "int", required = false },
   { name = "code", kind = "text", required = false },
   { name = "message", kind = "text", required = false },
+]
+
+# JSON-only messages and the views their replies carry (ADR 0183). The
+# remaining JSON-only messages join as their Hosts move (#2306).
+[[json_messages]]
+name = "inspect"
+direction = "host-to-guest"
+reply = "inspection"
+fields = [
+  { name = "ref", kind = "int", required = true, host = false },
+  { name = "group", kind = "text", required = true, host = false },
+]
+
+[[views]]
+name = "inspection"
+fields = [
+  { name = "scripts", kind = "views", view = "inspected-script", required = true },
+]
+
+[[views]]
+name = "inspected-script"
+fields = [
+  { name = "name", kind = "text", required = true },
+  { name = "disabledGrants", kind = "texts", required = false },
+  { name = "forbidSuspension", kind = "bool", required = false },
+  { name = "vars", kind = "pairs", required = true },
+  { name = "runs", kind = "views", view = "inspected-run", required = true },
+  { name = "mailbox", kind = "views", view = "inspected-message", required = true },
+]
+
+[[views]]
+name = "inspected-run"
+fields = [
+  { name = "id", kind = "text", required = true },
+  { name = "status", kind = "text", required = true },
+  { name = "handler", kind = "text", required = true },
+  { name = "wait", kind = "text", required = false },
+  { name = "until", kind = "instant", required = false },
+  { name = "calls", kind = "texts", required = false },
+]
+
+[[views]]
+name = "inspected-message"
+fields = [
+  { name = "delivery", kind = "text", required = false },
+  { name = "from", kind = "text", required = false },
+  { name = "message", kind = "message", required = true },
 ]

@@ -15,7 +15,13 @@ import {
   readOrderedJSON,
   type Json,
 } from '../../impl/ts/src/readers';
-import { type Catalogue, type Field, type Vector, hexTag } from './catalogue';
+import {
+  type Catalogue,
+  type Field,
+  type Vector,
+  type View,
+  hexTag,
+} from './catalogue';
 
 // Protocol object order is immaterial; numeric source text must stay exact.
 // Re-encoding separately checks ordered Value Maps and canonical bytes.
@@ -75,7 +81,91 @@ const checkItem = (item: BinaryItem, field: Field) => {
   }
 };
 
+type Plain =
+  null | boolean | number | string | Plain[] | { [k: string]: Plain };
+const isRecord = (x: Plain): x is { [k: string]: Plain } =>
+  typeof x === 'object' && x !== null && !Array.isArray(x);
+const isTexts = (x: Plain) =>
+  Array.isArray(x) && x.every(i => typeof i === 'string');
+
+// A JSON tree's keys are exactly catalogue fields, kinds checked loosely:
+// Values and nested records keep their own codecs.
+const checkJson = (
+  tree: Plain,
+  fields: Field[],
+  where: string,
+  views: Map<string, View>,
+  present: Set<string>,
+  extra: string[] = [],
+) => {
+  if (!isRecord(tree)) {
+    throw new Error(`${where} is not an object`);
+  }
+  for (const key of Object.keys(tree)) {
+    if (!extra.includes(key) && !fields.some(f => f.name === key)) {
+      throw new Error(`${where} has field ${key} the catalogue lacks`);
+    }
+  }
+  for (const field of fields) {
+    const x = tree[field.name];
+    if (x === undefined) {
+      if (field.required) {
+        throw new Error(`${where} lacks required ${field.name}`);
+      }
+      continue;
+    }
+    present.add(`${where.split(' ')[0]} ${field.name}`);
+    const valid = (() => {
+      switch (field.kind) {
+        case 'text':
+        case 'instant':
+          return typeof x === 'string';
+        case 'texts':
+          return isTexts(x);
+        case 'bool':
+          return typeof x === 'boolean';
+        case 'int':
+        case 'uint':
+          return typeof x === 'number';
+        case 'pairs':
+          return (
+            Array.isArray(x) &&
+            x.every(
+              p =>
+                Array.isArray(p) && p.length === 2 && typeof p[0] === 'string',
+            )
+          );
+        case 'message':
+          return isRecord(x) && typeof x.name === 'string';
+        case 'views': {
+          const view = views.get(field.view!)!;
+          if (!Array.isArray(x)) {
+            return false;
+          }
+          x.forEach((item, i) =>
+            checkJson(
+              item,
+              view.fields,
+              `${view.name} ${where}.${field.name}[${i}]`,
+              views,
+              present,
+            ),
+          );
+          return true;
+        }
+        default:
+          return true;
+      }
+    })();
+    if (!valid) {
+      throw new Error(`Wrong ${field.kind} for ${where}.${field.name}`);
+    }
+  }
+};
+
 export const checkVectors = (data: Catalogue, vectors: Vector[]) => {
+  const views = new Map(data.views.map(v => [v.name, v]));
+  const jsonPresent = new Set<string>();
   const covered = new Set<number>();
   const reports = new Set<number>();
   const names = new Set<string>();
@@ -96,10 +186,39 @@ export const checkVectors = (data: Catalogue, vectors: Vector[]) => {
       throw new Error(`Missing or duplicate vector name: ${vector.name}`);
     }
     names.add(vector.name);
-    if (
-      !/^(?:[\da-f]{2})+$/.test(vector.hex) ||
-      typeof vector.tree !== 'string'
-    ) {
+    if (typeof vector.tree !== 'string') {
+      throw new Error(`Invalid vector ${vector.name}`);
+    }
+    if (vector.hex === undefined) {
+      const plain = JSON.parse(vector.tree) as Plain;
+      const message = data.json_messages.find(m => m.name === vector.message);
+      const view = views.get(vector.view ?? '');
+      if (message && !view && vector.tag === undefined) {
+        if (!isRecord(plain) || plain.m !== message.name) {
+          throw new Error(`Wrong m in ${vector.name}`);
+        }
+        checkJson(
+          plain,
+          message.fields,
+          `${message.name} ${vector.name}`,
+          views,
+          jsonPresent,
+          ['m'],
+        );
+      } else if (view && !message && vector.tag === undefined) {
+        checkJson(
+          plain,
+          view.fields,
+          `${view.name} ${vector.name}`,
+          views,
+          jsonPresent,
+        );
+      } else {
+        throw new Error(`JSON vector ${vector.name} needs one message or view`);
+      }
+      continue;
+    }
+    if (!/^(?:[\da-f]{2})+$/.test(vector.hex)) {
       throw new Error(`Invalid vector ${vector.name}`);
     }
     const bytes = Uint8Array.from(Buffer.from(vector.hex, 'hex'));
@@ -145,6 +264,21 @@ export const checkVectors = (data: Catalogue, vectors: Vector[]) => {
       }
     }
     r.done();
+    // The tree is also the JSON layout of a message that travels in JSON.
+    if (entry.layouts.includes('json')) {
+      const plain = JSON.parse(vector.tree) as Plain;
+      if (!isRecord(plain) || plain.m !== entry.name) {
+        throw new Error(`Wrong m in ${vector.name}`);
+      }
+      checkJson(
+        plain,
+        entry.fields,
+        `${entry.name} ${vector.name}`,
+        views,
+        new Set(),
+        ['m'],
+      );
+    }
     const expected = readOrderedJSON(vector.tree);
     const decoded = decodeBinaryFrame(bytes.buffer);
     if (!isDeepStrictEqual(tree(expected), tree(decoded))) {
@@ -181,6 +315,11 @@ export const checkVectors = (data: Catalogue, vectors: Vector[]) => {
     .map(
       ([family, e, f]) => `${family} ${hexTag(e.tag)} (${e.name}) ${f.name}`,
     );
+  missing.push(
+    ...[...data.json_messages, ...data.views]
+      .flatMap(e => e.fields.map(f => `${e.name} ${f.name}`))
+      .filter(key => !jsonPresent.has(key)),
+  );
   if (missing.length > 0) {
     throw new Error(`No vector carries these fields:\n${missing.join('\n')}`);
   }

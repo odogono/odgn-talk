@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"northtalk.org/go/internal/generated"
 	"northtalk.org/go/internal/shape"
 	corevalue "northtalk.org/go/internal/value"
 )
@@ -22,7 +23,7 @@ var zigCallbacks = func() string {
 	return "fields"
 }()
 
-const zigCallbacksFeature = "callbacks-fields-v1"
+const zigCallbacksFeature = generated.EnvelopeFeatureCallbacksFieldsV1
 
 // zigCallbacksWanted reports whether hello asks for callbacks-fields-v1.
 func zigCallbacksWanted() (bool, error) {

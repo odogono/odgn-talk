@@ -486,7 +486,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `save`, `fingerprint` | – | `save`, `fingerprint`: bytes | `Save`, `Fingerprint` |
 | `state-fingerprint` | – | `stateFingerprint`: bytes | `Group.StateFingerprint` |
 | `save-state-fingerprint` | `save`, naming no Group | `stateFingerprint`: bytes | `Core.StateFingerprint` |
-| `inspect` | – | `scripts`: `[{name, disabledGrants?, vars: [[name, value (V)]], runs: [{id, status, handler, wait, until, calls}], mailbox: [{delivery, from, message}]}]` | `Inspect` |
+| `inspect` | – | `scripts`: `[{name, disabledGrants?, forbidSuspension?, vars: [[name, value (V)]], runs: [{id, status, handler, wait, until, calls}], mailbox: [{delivery, from, message}]}]` | `Inspect` |
 | `restore` | `name`, `save`, `libraries`: identities, `mismatch`, optional `keepMailbox`, `trace` | `variablesOnly`, `reloaded`, `pending`: `[{call, script, grant, operation, args (V)}]`, `disposed`: `[[kind, id]]`, `discardedRuns`, `droppedMessages`, `abandonedCalls`, `reports` | `Restore` |
 | `resolve` (interim) | `grants`: `[[script, name]]`, `objects`: `[[kind, id]]` | `resolve-result`: `grants`: handles or `null`, `objects`: booleans; with `restore-bindings-v1`, `define-capability` and `grant` may first register bindings under distinct refs, without admitting Group work | `Grants`, `Resolve` |
 | `settle` | `call`, `settlement`: `{answer (V)}`, `{fail}`, `{reissue}` or `{adopt}` | – | `Settle`; an adopted call is answered with `answer` or `fail` |

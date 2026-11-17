@@ -9,3 +9,8 @@ The generator emits typed records and field descriptors for every Host. Each Hos
 `impl/testdata/envelope-frames.json` gives each vector an optional `json` encoding beside `hex`, both of the same Host-view tree, and `envelope:check` requires every field in each layout it travels in. Every Host runs the vectors on pull requests, Elixir in its own path-filtered job.
 
 The layouts remain independently negotiable ([ADR 0110](0110-request-and-pump-have-an-optional-binary-exchange.md)), and the Exchange lifecycle stays in `exchange.zig` ([ADR 0127](0127-the-zig-message-layer-keeps-an-exchanges-lifecycle-in-one-module.md)). No frame changes. Load and Inspect move first; the remaining messages follow in later issues.
+
+- Amended by #2301:
+  - **Vectors:** a vector's `tree` already is the JSON layout of a message that travels in JSON, so no separate `json` encoding is added. `hex` becomes optional instead, and a JSON-only message or reply view has a vector with `tree` alone.
+  - **Chapter 9's method table** stays prose. Generating it would move its feature notes into TOML strings. `envelope:check` instead requires each JSON message's row to name every field a Host maps, and to backtick no field the catalogue lacks. Generation is reconsidered once #2306 has catalogued every message.
+  - **Scope:** only `load`, `inspect` and the existing fields-layout messages that also travel as JSON are catalogued in JSON.

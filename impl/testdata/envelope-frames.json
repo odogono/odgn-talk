@@ -306,5 +306,15 @@
     "direction": "guest-to-host",
     "hex": "4e5442010184060a0309060212057468696e6712036f6e65120576616c7565020404322e35300000000000",
     "tree": "{\"ref\":9,\"need\":{\"m\":\"prop\",\"object\":{\"$object\":[\"thing\",\"one\"]},\"prop\":\"value\",\"value\":{\"$dec\":\"2.50\"}}}"
+  },
+  {
+    "name": "inspect",
+    "message": "inspect",
+    "tree": "{\"m\":\"inspect\",\"ref\":4,\"group\":\"g\"}"
+  },
+  {
+    "name": "inspection",
+    "view": "inspection",
+    "tree": "{\"scripts\":[{\"name\":\"s\",\"disabledGrants\":[\"api\"],\"forbidSuspension\":true,\"vars\":[[\"count\",{\"$dec\":\"1.00\"}],[\"label\",\"é\"]],\"runs\":[{\"id\":\"r1\",\"status\":\"suspended\",\"handler\":\"ping\",\"wait\":\"call\",\"until\":\"2026-10-19T12:00:00.25Z\",\"calls\":[\"c1\"]},{\"id\":\"r2\",\"status\":\"ready\",\"handler\":\"tick\"}],\"mailbox\":[{\"delivery\":\"d1\",\"from\":\"t\",\"message\":{\"name\":\"ping\",\"args\":[null,{\"$dec\":\"0.00\"}]}},{\"message\":{\"name\":\"tick\",\"args\":[]}}]},{\"name\":\"t\",\"vars\":[],\"runs\":[],\"mailbox\":[]}]}"
   }
 ]
