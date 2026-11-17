@@ -1163,7 +1163,7 @@ type RunView struct {
 	Handler string    // its Handler, or the display form of the Function Value it runs
 	Wait    string    // Suspended: the `seg` end reason it suspended at (chapter 11)
 	Until   time.Time // Suspended: its deadline, if it has one
-	Calls   []CallID  // Suspended: the calls, replies or Join Members it waits for
+	Calls   []CallID  // Suspended: the calls, replies or Join Members it waits for; nil when empty
 }
 
 type RunStatus int

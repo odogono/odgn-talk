@@ -888,7 +888,7 @@ export interface RunView {
   handler: string;   // its Handler, or the display form of the Function Value it runs
   wait?: string;     // suspended: the `seg` end reason it suspended at (chapter 11)
   until?: bigint;    // suspended: its deadline, if it has one
-  calls?: string[];  // suspended: the calls, replies or Join Members it waits for
+  calls?: string[];  // suspended: the calls, replies or Join Members it waits for; absent when empty
 }
 export interface MessageView {
   delivery?: string; // absent for a message a Script sent

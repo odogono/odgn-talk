@@ -694,11 +694,6 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
     return g.inspect().scripts.map(s => ({
       ...s,
       vars: s.vars.map(([n, v]) => `${n}=${v}`),
-      // The Zig Core lists no calls as `[]`; the TS Core leaves them out.
-      runs: s.runs.map(({ calls, ...r }) => ({
-        ...r,
-        ...(calls?.length ? { calls } : {}),
-      })),
       mailbox: s.mailbox.map(m => ({
         ...m,
         delivery: typeof m.delivery,
