@@ -271,5 +271,40 @@
     "direction": "host-to-guest",
     "hex": "4e544201010e0605030412016700070205046e616d6512036d6179050461726773060002",
     "tree": "{\"m\":\"decide\",\"ref\":4,\"group\":\"g\",\"message\":{\"name\":\"may\",\"args\":[]},\"broadcast\":true}"
+  },
+  {
+    "name": "request-pump-fuel-cap",
+    "tag": 4,
+    "direction": "host-to-guest",
+    "hex": "4e544201010406080302120167030107010506736372697074120173070205046e616d65120470696e6705046172677306000b80c0f08d888caf06030a0314",
+    "tree": "{\"m\":\"request-pump\",\"ref\":2,\"group\":\"g\",\"token\":1,\"to\":{\"script\":\"s\"},\"message\":{\"name\":\"ping\",\"args\":[]},\"now\":\"2026-10-19T12:00:00Z\",\"fuelSlice\":10,\"fuelCap\":20}"
+  },
+  {
+    "name": "call-pump-limits-fuel",
+    "tag": 5,
+    "direction": "host-to-guest",
+    "hex": "4e54420101050609030112016703020f0501730507646973706c617905026631060102070105076d61784a6f696e03020b80c0f08d888caf06030a0314",
+    "tree": "{\"m\":\"call-pump\",\"ref\":1,\"group\":\"g\",\"token\":2,\"fn\":{\"$function\":[\"s\",\"display\",\"f1\"]},\"args\":[true],\"limits\":{\"maxJoin\":2},\"now\":\"2026-10-19T12:00:00Z\",\"fuelSlice\":10,\"fuelCap\":20}"
+  },
+  {
+    "name": "settle-pump-fuel-cap",
+    "tag": 10,
+    "direction": "host-to-guest",
+    "hex": "4e544201010a060603011201670b80c0f08d888caf06030a03140600",
+    "tree": "{\"m\":\"settle-pump\",\"ref\":1,\"group\":\"g\",\"now\":\"2026-10-19T12:00:00Z\",\"fuelSlice\":10,\"fuelCap\":20,\"settlements\":[]}"
+  },
+  {
+    "name": "admission-settled",
+    "tag": 129,
+    "direction": "guest-to-host",
+    "hex": "4e544201018106060301120264310006011202633106011202633206011202c3a9",
+    "tree": "{\"ref\":1,\"abandoned\":[\"c1\"],\"settled\":[\"c2\"],\"trace\":[\"é\"],\"ok\":{\"delivery\":\"d1\"}}"
+  },
+  {
+    "name": "prop-need-set",
+    "tag": 132,
+    "direction": "guest-to-host",
+    "hex": "4e5442010184060a0309060212057468696e6712036f6e65120576616c7565020404322e35300000000000",
+    "tree": "{\"ref\":9,\"need\":{\"m\":\"prop\",\"object\":{\"$object\":[\"thing\",\"one\"]},\"prop\":\"value\",\"value\":{\"$dec\":\"2.50\"}}}"
   }
 ]
