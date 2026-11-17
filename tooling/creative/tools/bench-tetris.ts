@@ -85,8 +85,7 @@ const play = async (create: () => Promise<ExampleContent>): Promise<Result> => {
         snapshot = response.snapshot;
       }
     },
-    () => BigInt(Math.round(ms * 1000)),
-    () => ms,
+    { now: () => BigInt(Math.round(ms * 1000)), performanceNow: () => ms },
   );
   let id = 1;
   let workerMs = 0;

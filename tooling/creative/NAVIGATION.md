@@ -160,8 +160,9 @@ landed, and the Issue graph job ticks it as they close.
   and the service worker keeps on demand. [loader.ts](src/add-ons/loader.ts)
   registers kinds with the registry and `elementShape`;
   [page.ts](src/add-ons/page.ts) is the page's loader, which also registers
-  views, and [play.worker.ts](src/play.worker.ts) loads a session's Add-ons
-  before opening it. [project.ts](src/add-ons/project.ts)'s
+  views; [play-host.ts](src/play-host.ts) loads a session's Add-ons with
+  the loader [play.worker.ts](src/play.worker.ts) gives it, holding later
+  requests until it opens (tests: [play-host-add-ons.test.ts](tests/play-host-add-ons.test.ts)). [project.ts](src/add-ons/project.ts)'s
   `projectWithAddOns` reads a Project again once its Add-ons load, turning
   placeholders into their kinds; [projects.ts](src/projects.ts) calls it on
   every open. [offered.ts](src/add-ons/offered.ts) says which kinds the Tools window and Info's Instrument menu offer: only those of the Add-ons the Project lists (#2025), loaded on first use; Project ▸ Add-ons… ([add-ons-dialog.ts](src/add-ons/add-ons-dialog.ts)) ticks them, and the tree's `stopUsingAddOn` refuses one in use. Tests: [offered-add-ons.test.ts](tests/offered-add-ons.test.ts).

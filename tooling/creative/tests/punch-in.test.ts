@@ -302,13 +302,11 @@ const hosted = (p: Project) => {
     }
   };
   const replies: PlayResponse[] = [];
-  const host = new PlayHost(
-    ({ response }) => replies.push(response),
-    () => BigInt(Math.round(clock.wall * 1000)),
-    () => clock.wall,
-    undefined,
-    () => clock.wall,
-  );
+  const host = new PlayHost(({ response }) => replies.push(response), {
+    now: () => BigInt(Math.round(clock.wall * 1000)),
+    performanceNow: () => clock.wall,
+    epochNow: () => clock.wall,
+  });
   let id = 1;
   const request = (body: PlayRequest) =>
     host.receive({ id: id++, request: body } satisfies Envelope<PlayRequest>);
