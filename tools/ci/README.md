@@ -186,7 +186,7 @@ The nightly and cross-Core pipelines need Zig. Build this variant on each genera
 worker after the default image:
 
 ```sh
-docker build -f tools/ci/Dockerfile.zig -t odgn-talk-ci:2026-10-19-2-zig tools/ci
+docker build -f tools/ci/Dockerfile.zig -t odgn-talk-ci:2026-11-17-zig-0-17-1 tools/ci
 ```
 
 Keep `ZIG_VERSION` in `Dockerfile.zig` aligned with the workflows'
@@ -299,7 +299,7 @@ privileged capabilities are not required.
 ## Native Mac worker
 
 Use Woodpecker's `local` backend with native `darwin/arm64` binaries. Its `PATH`
-must contain Bash, Git, Git LFS, `plugin-git` 2.10.1, Bun, Go, Zig 0.17.0 and Python 3.
+must contain Bash, Git, Git LFS, `plugin-git` 2.10.1, Bun, Go, Zig 0.17.1 and Python 3.
 Bun and Go are needed for the repository's Unicode bootstrap check.
 
 Configure the Mac agent with a mandatory `!backend=local` label so only workflows

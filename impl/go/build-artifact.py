@@ -4,10 +4,17 @@
 With no argument, builds the Zig Core at HEAD and records `git describe`'s
 version, such as 0.15.0-3-gabc1234, for a Zig change not yet released. With a
 reactor-v* tag, builds that release's tree and records its version, as a Go
-release should."""
+release should.
+
+It builds with the Zig that `impl/zig/build.zig.zon` names as
+`minimum_zig_version`, the one the release workflow uses, so a tag's bytes
+match its published `talk.wasm`; a different Zig builds different bytes. Set
+`ZIG` to that Zig's path when `zig` on PATH is another version."""
 import hashlib
 import json
+import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -19,8 +26,13 @@ destination = here / "internal/zigwasm"
 def output(*args, cwd=root):
     return subprocess.check_output(args, cwd=cwd, text=True).strip()
 
+zig = os.environ.get("ZIG", "zig")
+pinned = re.search(r'minimum_zig_version = "([^"]+)"', (root / "impl/zig/build.zig.zon").read_text()).group(1)
+if (found := output(zig, "version")) != pinned:
+    raise SystemExit(f"{zig} is Zig {found}; releases build with {pinned}. Set ZIG to a Zig {pinned}.")
+
 def build(tree):
-    subprocess.run(["zig", "build", "-Dtarget=wasm32-wasi", "-Doptimize=safe"], cwd=tree / "impl/zig", check=True)
+    subprocess.run([zig, "build", "-Dtarget=wasm32-wasi", "-Doptimize=safe"], cwd=tree / "impl/zig", check=True)
     return (tree / "impl/zig/zig-out/bin/talk.wasm").read_bytes()
 
 with tempfile.TemporaryDirectory() as scratch:
@@ -47,7 +59,7 @@ with tempfile.TemporaryDirectory() as scratch:
 metadata = {
     "reactor": reactor,
     "sourceCommit": commit,
-    "zig": output("zig", "version"),
+    "zig": pinned,
     "target": "wasm32-wasi",
     "optimize": "safe",
     "sha256": hashlib.sha256(artifact).hexdigest(),

@@ -54,7 +54,7 @@ properties are checked at runtime ([ADR 0085](../../docs/adr/0085-property-write
 ## Layout
 
 - `build.zig`, `build.zig.zon`: one Zig package, `northtalk`, pinned to Zig
-  0.17.0 by `minimum_zig_version`. It uses Zig's standard library only: no
+  0.17.1 by `minimum_zig_version`. It uses Zig's standard library only: no
   third-party packages and no linked C libraries.
 - `include/talk.h`: the C API. It mirrors
   [`spec/embedding/talk.go`](../../spec/embedding/talk.go)'s names in C style,

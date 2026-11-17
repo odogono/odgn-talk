@@ -15,7 +15,7 @@ clone:
 
 steps:
   - name: workspace
-    image: odgn-talk-ci:2026-10-19-2-zig
+    image: odgn-talk-ci:2026-11-17-zig-0-17-1
     commands:
       - git config --global --add safe.directory "$PWD"
       - bun install --frozen-lockfile --network-concurrency 16
@@ -24,7 +24,7 @@ steps:
   # A fresh seed each night. Woodpecker keeps no artifacts, so a finding's
   # summary and cases go to the log; see tooling/fuzz/README.md to reproduce one.
   - name: fuzz-campaign
-    image: odgn-talk-ci:2026-10-19-2-zig
+    image: odgn-talk-ci:2026-11-17-zig-0-17-1
     depends_on: [workspace]
     commands:
       - (cd impl/zig && zig build fuzzworker --prefix "$PWD/../../.cache/zig-fuzz")
@@ -42,7 +42,7 @@ steps:
 
   # The Zig Core's Linux checks from zig.yml, which Actions now runs weekly.
   - name: zig-core
-    image: odgn-talk-ci:2026-10-19-2-zig
+    image: odgn-talk-ci:2026-11-17-zig-0-17-1
     depends_on: [workspace]
     directory: impl/zig
     commands:

@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.17.0
+          version: 0.17.1
       - run: zig build sidecar -Dtarget=${{ matrix.target }}
         working-directory: impl/zig
 
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.17.0
+          version: 0.17.1
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -59,7 +59,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.17.0
+          version: 0.17.1
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{ matrix.otp }}
@@ -102,7 +102,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.17.0
+          version: 0.17.1
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '28'
@@ -127,7 +127,7 @@ jobs:
       # Upgrading Zig is its own PR (#625).
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.17.0
+          version: 0.17.1
       # The Unicode check formats the Go embedding's table too, with gofmt.
       - uses: actions/setup-go@v5
         with:
@@ -153,7 +153,7 @@ jobs:
       # Upgrading Zig is its own PR (#625).
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.17.0
+          version: 0.17.1
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
@@ -173,7 +173,7 @@ jobs:
       # Upgrading Zig is its own PR (#625).
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.17.0
+          version: 0.17.1
       - run: zig build install corpus
         working-directory: impl/zig
       # Every lifecycle crossing that may defer does so once and resumes,
@@ -190,7 +190,7 @@ jobs:
       # Upgrading Zig is its own PR (#625).
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.17.0
+          version: 0.17.1
       - uses: ./.github/actions/setup-ts
       - run: bun test tests/zig-runner.test.ts
         working-directory: tooling/fuzz
@@ -203,7 +203,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.17.0
+          version: 0.17.1
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -229,7 +229,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.17.0
+          version: 0.17.1
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'

@@ -2,7 +2,7 @@ FROM odgn-talk-ci:2026-10-19-2
 
 # Keep this version aligned with the workflows' mlugg/setup-zig pin. Rebuild
 # under a new image tag when either the base image or Zig changes.
-ARG ZIG_VERSION=0.17.0
+ARG ZIG_VERSION=0.17.1
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl xz-utils \
