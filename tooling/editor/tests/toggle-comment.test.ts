@@ -1,13 +1,13 @@
 import { expect, test } from 'bun:test';
 import { toggleComment } from '@codemirror/commands';
 import { EditorSelection, EditorState } from '@codemirror/state';
-import { northtalk } from '../src/language';
+import { northtalkLanguage } from '../src/language';
 
 const toggle = (doc: string): string => {
   let state = EditorState.create({
     doc,
     selection: EditorSelection.range(0, doc.length),
-    extensions: [northtalk],
+    extensions: [northtalkLanguage],
   });
   toggleComment({ state, dispatch: tr => (state = tr.state) });
   return state.doc.toString();

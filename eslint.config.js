@@ -74,6 +74,7 @@ export default [
       'tooling/fuzz/src/worker.ts',
       'tooling/stack/tools/**/*.ts',
       'tooling/creative/tools/**/*.ts',
+      'tooling/editor/tools/**/*.ts',
       'tooling/site/tools/**/*.ts',
       'bench/ts/src/main.ts',
       'bench/ts/src/character-indexing-worker.ts',

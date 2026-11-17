@@ -172,3 +172,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0179: Zone Rules are plain values that let Built-ins convert in a named zone](0179-zone-rules-are-plain-values-that-let-built-ins-convert-in-a-named-zone.md)
 - [0180: Go sessions run the Zig Session Host through the reactor](0180-go-sessions-run-the-zig-session-host-through-the-reactor.md)
 - [0181: The Peer Router owns Peer Exposure Lifetime, guarded by peer-kit](0181-the-peer-router-owns-peer-exposure-lifetime-guarded-by-peer-kit.md)
+- [0182: @northtalk/editor publishes framework-free CodeMirror extensions](0182-northtalk-editor-publishes-framework-free-codemirror-extensions.md)

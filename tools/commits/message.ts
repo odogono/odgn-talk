@@ -22,6 +22,7 @@ export const SCOPES = [
   'go',
   'zig',
   'cli',
+  'editor',
   'tools',
   'corpus',
   'repo',

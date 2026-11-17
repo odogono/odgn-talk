@@ -1,8 +1,11 @@
 {
   "name": "@northtalk/editor",
+  "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "exports": {
+    ".": "./src/index.ts",
     "./breakpoints": "./src/breakpoints.ts",
     "./editor": "./src/editor.ts",
     "./language": "./src/language.ts",
@@ -11,7 +14,9 @@
   },
   "scripts": {
     "typecheck": "tsc",
-    "test": "bun test tests"
+    "test": "bun test tests",
+    "build": "bun tools/package/build.ts",
+    "package:check": "bun tools/package/check.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -23,5 +28,9 @@
     "@lezer/highlight": "^1.2.5",
     "@northtalk/ts": "workspace:*",
     "@northtalk/tooling": "workspace:*"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1",
+    "tsdown": "0.23.1"
   }
 }

@@ -8,7 +8,8 @@ import {
   markVerified,
   pausedAt,
 } from '@northtalk/editor/breakpoints';
-import { diagnosticsSpec, northtalkEditor } from '@northtalk/editor/editor';
+import { diagnosticsSpec } from '@northtalk/editor';
+import { northtalkEditor } from '@northtalk/editor/editor';
 import { clickAdvice } from './click-advice';
 import {
   patternDiagnostics,
@@ -569,7 +570,9 @@ export class CodeBrowser {
       ...patternDiagnostics(text, projectPatternNames(this.editor.project)),
     ];
     view.dispatch(
-      diagnosticsSpec(view.state, diagnostics, d => this.#fixes(d)),
+      diagnosticsSpec(view.state, diagnostics, {
+        actions: d => this.#fixes(d),
+      }),
     );
     problems.classList.toggle(
       'bad',

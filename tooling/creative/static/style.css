@@ -7,11 +7,14 @@
   --text: #1f1d1a;
   --muted: #6d675d;
   --accent: #2f5d8a;
-  --keyword: #7a3e9d;
-  --string: #2e7d32;
-  --number: #b25b00;
-  --comment: #8a8478;
-  --operator: #4a4a4a;
+  --northtalk-keyword: #7a3e9d;
+  --northtalk-string: #2e7d32;
+  --northtalk-number: #b25b00;
+  --northtalk-comment: #8a8478;
+  --northtalk-operator: #4a4a4a;
+  /* Add-ons such as the Piano Roll colour with the number colour; keep the
+     name their cached chunks use. */
+  --number: var(--northtalk-number);
   --error: #b3261e;
   --paused: #fff3c4;
   color-scheme: light;

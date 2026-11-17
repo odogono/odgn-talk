@@ -68,6 +68,7 @@
     },
     "tooling/editor": {
       "name": "@northtalk/editor",
+      "version": "0.1.0",
       "dependencies": {
         "@codemirror/autocomplete": "^6.20.3",
         "@codemirror/commands": "^6.11.1",
@@ -78,6 +79,10 @@
         "@lezer/highlight": "^1.2.5",
         "@northtalk/tooling": "workspace:*",
         "@northtalk/ts": "workspace:*",
+      },
+      "devDependencies": {
+        "playwright": "^1.64.1",
+        "tsdown": "0.23.1",
       },
     },
     "tooling/fuzz": {

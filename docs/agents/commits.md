@@ -13,10 +13,11 @@ type(scope)!: Sentence-case imperative description (#issue)
   - `fix`: a behavior that was wrong.
   - `perf`: the same behavior, faster or smaller.
   - `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `revert`: no change a user would notice.
-- **scope**, optional, one of `spec`, `ts`, `go`, `zig`, `cli`, `tools`, `corpus`, `repo`. There is one scope per published package, not per Core or app:
+- **scope**, optional, one of `spec`, `ts`, `go`, `zig`, `cli`, `editor`, `tools`, `corpus`, `repo`. There is one scope per published package, not per Core or app:
   - `go` covers the Go embedding, the `northtalk.org/go` and `northtalk.org/go/sqlite` modules in `impl/go/`. A PR refreshing its embedded reactor adds a `go` fragment summarising the Zig changes Go Hosts receive.
   - `zig` covers the Zig Core and its C embedding in `impl/zig/`, including `talk.h`.
   - `repo` covers the Elixir Core and embedding, CI and workspace changes.
+  - `editor` covers the published `@northtalk/editor`, the public entry of `tooling/editor/`. A change only Folio sees, such as its language-server client, is `tools`.
   - `tools` covers `tooling/` (Folio, the LSP, the formatter and Lints) and `tools/`.
   - `ts` covers the TS Core in `impl/ts/`.
 - **!**, before the colon, marks a breaking change. A `BREAKING CHANGE: ...` line in the PR body does too.
@@ -52,9 +53,11 @@ To see the unreleased changelog, run `bun run changelog`.
 
 To release the Go modules, follow [Releasing in the Go guide](../../impl/go/README.md#releasing); `bun run release-notes:go 0.1.1` writes `impl/go/CHANGELOG.md` the same way, from the latest `impl/go/v*` tag.
 
-To release `@northtalk/ts`, run `bun run release-notes:ts 0.1.1` before tagging `ts-v0.1.1`. It writes a dated `## [0.1.1]` section into `impl/ts/CHANGELOG.md`, after `## [Unreleased]`, from the fragments added since the latest `ts-v*` tag whose scope is `ts` or `spec`, or that are breaking and not another package's (`go`). `--dry-run` prints the section instead. Fragments stay where they are, since other packages read them too. With no `ts-v*` tag yet, it fails, and the first section is written by hand.
+To release `@northtalk/ts`, run `bun run release-notes:ts 0.1.1` before tagging `ts-v0.1.1`. It writes a dated `## [0.1.1]` section into `impl/ts/CHANGELOG.md`, after `## [Unreleased]`, from the fragments added since the latest `ts-v*` tag whose scope is `ts` or `spec`, or that are breaking and not another package's (`go`, `editor`). `--dry-run` prints the section instead. Fragments stay where they are, since other packages read them too. With no `ts-v*` tag yet, it fails, and the first section is written by hand.
 
 Then bump `core` in `impl/ts/src/versions.ts` to `ts/0.1.1`, merge both, and push the `ts-v0.1.1` tag from `main`. The `TS publish` workflow (`.github/workflows/ts-publish.yml`) checks the tag matches the built version, runs the tarball checks and publishes with npm trusted publishing. It then runs the tests of [`odogono/northtalk-ts-example`](https://github.com/odogono/northtalk-ts-example) against the published version under Node 24.10, the latest Node and Bun; a failed `verify` job means the release is broken.
+
+To release `@northtalk/editor`, run `bun run release-notes:editor 0.1.1`, which collects fragments scoped `editor`, or breaking and not another package's, into `tooling/editor/CHANGELOG.md`; `spec` fragments reach the editor through `@northtalk/ts`. Bump `version` in `tooling/editor/package.json`, merge, and push an `editor-v0.1.1` tag from `main`. The `Editor publish` workflow (`.github/workflows/editor-publish.yml`) builds `@northtalk/ts` and the editor, checks the tag matches, runs the editor's tarball check (`bun run --cwd tooling/editor package:check`) and publishes with npm trusted publishing. Widen the `@northtalk/ts` peer range in `tooling/editor/tools/package/manifest.ts` before `@northtalk/ts` reaches 1.0.
 
 To check a PR the way CI does, run:
 

@@ -35,7 +35,9 @@ broader matrix on `main` or manually:
   `zig` worker image.
 - `.woodpecker/package.yaml` builds and packs the TS package, installs it outside
   the workspace, and checks Node 24.10.0, Bun, unbundled Chromium and declarations
-  under TypeScript 5.9 and the latest TypeScript.
+  under TypeScript 5.9 and the latest TypeScript. It then does the same for
+  `@northtalk/editor` beside that TS package, with a `Bun.build` bundle in
+  Chromium, for TS and `tooling/editor` changes.
 
 The PR workflows do not yet cover the complete Actions matrix, including fuzz
 campaigns, Elixir, WASI, the remaining Go/Zig formatting and generated-file gates,
