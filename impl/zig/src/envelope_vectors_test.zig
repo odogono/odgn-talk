@@ -56,14 +56,16 @@ pub fn check() !void {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const Vector = struct { name: []const u8, tag: u8, direction: []const u8, hex: []const u8, tree: []const u8 };
+    const Vector = struct { name: []const u8, tag: ?u8 = null, direction: ?[]const u8 = null, hex: ?[]const u8 = null, tree: []const u8, message: ?[]const u8 = null, view: ?[]const u8 = null };
     const vectors = try std.json.parseFromSlice([]Vector, a, @embedFile("envelope-frames"), .{});
     for (vectors.value) |vector| {
+        // JSON-only vectors have no frame; `envelope:check` owns them.
+        const hex = vector.hex orelse continue;
         errdefer std.debug.print("shared vector: {s}\n", .{vector.name});
-        const data = try a.alloc(u8, vector.hex.len / 2);
-        _ = try std.fmt.hexToBytes(data, vector.hex);
-        const entry = try entryFor(env.messages, vector.tag);
-        try std.testing.expectEqualStrings(if (entry.direction == .host_to_guest) "host-to-guest" else "guest-to-host", vector.direction);
+        const data = try a.alloc(u8, hex.len / 2);
+        _ = try std.fmt.hexToBytes(data, hex);
+        const entry = try entryFor(env.messages, vector.tag.?);
+        try std.testing.expectEqualStrings(if (entry.direction == .host_to_guest) "host-to-guest" else "guest-to-host", vector.direction.?);
         const tree = (try std.json.parseFromSlice(Json, a, vector.tree, .{ .parse_numbers = false })).value;
         if (get(tree, "m") != .null) {
             try std.testing.expectEqualStrings(entry.name, get(tree, "m").string);

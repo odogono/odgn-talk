@@ -4,6 +4,7 @@ import data from '../../spec/data/envelope.toml';
 import frames from '../../impl/testdata/envelope-frames.json';
 import { validateCatalogue, type Catalogue, type Vector } from './catalogue';
 import { checkVectors } from './vectors';
+import { checkMethodTable } from './table';
 import { emitElixir, emitGo, emitTypeScript, emitZig } from './generate';
 
 const catalogue = (): Catalogue => {
@@ -80,6 +81,53 @@ test('coverage checks actual message and Report tags and their decoded trees', (
   expect(() => checkVectors(wrongOrder, frames as Vector[])).toThrow(
     'Wrong message item',
   );
+});
+
+test('views and JSON-only vectors are checked against the catalogue', () => {
+  const unknownView = catalogue();
+  unknownView.json_messages[0]!.reply = 'nowhere';
+  expect(() => validateCatalogue(unknownView)).toThrow('Unknown reply view');
+  const json = frames as Vector[];
+  const inspection = json.find(v => v.view === 'inspection')!;
+  const extra = JSON.parse(inspection.tree) as {
+    scripts: Record<string, unknown>[];
+  };
+  extra.scripts[0]!.limits = {};
+  expect(() =>
+    checkVectors(catalogue(), [
+      ...json.filter(v => v !== inspection),
+      { ...inspection, tree: JSON.stringify(extra) },
+    ]),
+  ).toThrow('has field limits the catalogue lacks');
+  const uncovered = catalogue();
+  uncovered.views[0]!.fields.push({
+    name: 'later',
+    kind: 'text',
+    required: false,
+  });
+  expect(() => checkVectors(uncovered, json)).toThrow('inspection later');
+});
+
+test('the method table names each JSON message field a Host maps', () => {
+  const chapter = readFileSync(
+    new URL('../../spec/09-embedding.md', import.meta.url),
+    'utf8',
+  );
+  checkMethodTable(catalogue(), chapter);
+  expect(() =>
+    checkMethodTable(catalogue(), chapter.replace('`grantsAsUsed`, ', '')),
+  ).toThrow('load: row lacks `grantsAsUsed`');
+  expect(() =>
+    checkMethodTable(
+      catalogue(),
+      chapter.replace('forbidSuspension?, vars', 'vars'),
+    ),
+  ).toThrow('inspect: reply lacks forbidSuspension');
+  const hostFilled = catalogue();
+  hostFilled.messages
+    .find(m => m.name === 'load')!
+    .fields.find(f => f.name === 'grantsAsUsed')!.host = false;
+  checkMethodTable(hostFilled, chapter.replace('`grantsAsUsed`, ', ''));
 });
 
 test('all four generated catalogues are reproducible', async () => {

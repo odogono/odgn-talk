@@ -1,16 +1,18 @@
 package northtalk
 
+import "northtalk.org/go/internal/generated"
+
 // Queued settlements (#1320). With settlements-fields-v1, Call.Answer and
 // Call.Fail queue their input, as native does, and the next binary Pump
 // carries the queue in its settle-pump frame instead of one export each.
 // Any other input first sends the queue as ordinary answer and fail inputs,
 // so the guest's input order stays the Host's.
 
-const zigSettlementsFeature = "settlements-fields-v1"
+const zigSettlementsFeature = generated.EnvelopeFeatureSettlementsFieldsV1
 
 // zigQueueFeature moves queued Deliveries, Broadcasts and Decisions to the
 // fields envelope (#1374).
-const zigQueueFeature = "queue-fields-v1"
+const zigQueueFeature = generated.EnvelopeFeatureQueueFieldsV1
 
 // zigSettlement is one queued answer or fail: its settle-pump list item, and
 // its ordinary input for a flush.

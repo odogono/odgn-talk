@@ -151,7 +151,7 @@ var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossi
 
 // zigOptionalFeatures are used when the guest offers them: Object Collection
 // declarations need object-elements-v1 (#1143); binary Load needs load-fields-v1.
-var zigOptionalFeatures = []any{"object-elements-v1", "load-fields-v1"}
+var zigOptionalFeatures = []any{"object-elements-v1", generated.EnvelopeFeatureLoadFieldsV1}
 
 func newZigGroup(g *Group) groupBackend { return newZigSharedGroup(g) }
 
@@ -893,7 +893,9 @@ func (b *zigGroup) checkHello() error {
 		// JSON Load and queued inputs.
 		wantedLoad = false
 		wantedQueue = false
-		features = slices.DeleteFunc(features, func(feature any) bool { return feature == "load-fields-v1" || feature == zigQueueFeature })
+		features = slices.DeleteFunc(features, func(feature any) bool {
+			return feature == generated.EnvelopeFeatureLoadFieldsV1 || feature == zigQueueFeature
+		})
 		hello, err = b.send("hello", map[string]any{"protocol": 1, "features": features})
 	}
 	wantedElements := true
@@ -909,7 +911,7 @@ func (b *zigGroup) checkHello() error {
 		features := hello.get("features").items()
 		for _, offered := range features {
 			switch zigText(offered) {
-			case "load-fields-v1":
+			case generated.EnvelopeFeatureLoadFieldsV1:
 				b.reg.load = wantedLoad
 			case "object-elements-v1":
 				b.reg.elements = wantedElements

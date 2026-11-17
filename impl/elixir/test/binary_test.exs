@@ -5,6 +5,8 @@ defmodule NorthTalk.BinaryTest do
   @vectors "../testdata/envelope-frames.json"
            |> File.read!()
            |> Jason.decode!()
+           # JSON-only vectors have no frame; envelope:check owns them.
+           |> Enum.filter(&Map.has_key?(&1, "hex"))
            |> Enum.map(&[&1["name"], &1["tree"], &1["hex"]])
 
   defp json(text), do: Jason.decode!(text, objects: :ordered_objects, floats: :decimals)

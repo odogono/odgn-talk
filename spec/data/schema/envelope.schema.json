@@ -17,7 +17,7 @@
       "type": "array",
       "minItems": 1,
       "items": {
-        "$ref": "#/$defs/entry"
+        "$ref": "#/$defs/messageEntry"
       }
     },
     "reports": {
@@ -71,7 +71,9 @@
                 "err",
                 "settlements",
                 "reports",
-                "record"
+                "record",
+                "views",
+                "pairs"
               ]
             }
           },
@@ -87,6 +89,65 @@
         ],
         "additionalProperties": false
       }
+    },
+    "json_messages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "direction": {
+            "enum": [
+              "host-to-guest",
+              "guest-to-host"
+            ]
+          },
+          "reply": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fields": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/$defs/field"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "direction",
+          "fields"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "views": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z]+(-[a-z]+)*$"
+          },
+          "fields": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/$defs/field"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "fields"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "required": [
@@ -94,7 +155,9 @@
     "messages",
     "reports",
     "settlement",
-    "intentional_kinds"
+    "intentional_kinds",
+    "json_messages",
+    "views"
   ],
   "additionalProperties": false,
   "$defs": {
@@ -121,11 +184,22 @@
             "err",
             "settlements",
             "reports",
-            "record"
+            "record",
+            "views",
+            "pairs"
           ]
         },
         "required": {
           "type": "boolean"
+        },
+        "host": {
+          "type": "boolean",
+          "description": "false when the Host fills the field itself rather than from a public option"
+        },
+        "view": {
+          "type": "string",
+          "minLength": 1,
+          "description": "the view each item of a views field follows"
         }
       },
       "required": [
@@ -133,7 +207,30 @@
         "kind",
         "required"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "views"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "view"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "view"
+              ]
+            }
+          }
+        }
+      ]
     },
     "entry": {
       "type": "object",
@@ -166,6 +263,52 @@
         "name",
         "direction",
         "fields"
+      ],
+      "additionalProperties": false
+    },
+    "messageEntry": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 255
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "direction": {
+          "enum": [
+            "host-to-guest",
+            "guest-to-host"
+          ]
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        },
+        "layouts": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "fields",
+              "json"
+            ]
+          }
+        }
+      },
+      "required": [
+        "tag",
+        "name",
+        "direction",
+        "fields",
+        "layouts"
       ],
       "additionalProperties": false
     }

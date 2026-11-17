@@ -1,27 +1,55 @@
 import Ajv2020 from 'ajv/dist/2020';
 import schema from '../../spec/data/schema/envelope.schema.json';
 
-export type Field = { kind: string; name: string; required: boolean };
+export type Field = {
+  /** False when the Host fills the field itself, not from a public option. */
+  host?: boolean;
+  kind: string;
+  name: string;
+  required: boolean;
+  /** The view each item of a `views` field follows. */
+  view?: string;
+};
+export type Layout = 'fields' | 'json';
 export type Entry = {
   direction: 'host-to-guest' | 'guest-to-host';
   fields: Field[];
   name: string;
   tag: number;
 };
+export type MessageEntry = Entry & { layouts: Layout[] };
+export type JsonMessage = {
+  direction: Entry['direction'];
+  fields: Field[];
+  name: string;
+  /** The view an `ok` reply carries. */
+  reply?: string;
+};
+export type View = { fields: Field[]; name: string };
 export type Catalogue = {
   features: string[];
   intentional_kinds: { kinds: string[]; name: string; reason: string }[];
-  messages: Entry[];
+  json_messages: JsonMessage[];
+  messages: MessageEntry[];
   reports: Entry[];
   settlement: { fields: Field[] };
+  views: View[];
 };
+/**
+ * A fields-layout vector has `tag`, `direction` and `hex`. A JSON-only one
+ * names its `message` or reply `view` instead. Either way `tree` is the
+ * Message Layer tree, which is also the JSON layout when the message
+ * travels in JSON.
+ */
 export type Vector = {
-  direction: Entry['direction'];
-  hex: string;
+  direction?: Entry['direction'];
+  hex?: string;
+  message?: string;
   name: string;
-  tag: number;
+  tag?: number;
   /** Ordered JSON text preserves u64 numbers and Value Map order. */
   tree: string;
+  view?: string;
 };
 
 const validate = new Ajv2020({ allErrors: true }).compile(schema);
@@ -65,8 +93,35 @@ export const validateCatalogue: (
       }
     }
   }
+  unique(
+    [...data.messages, ...data.json_messages].map(e => e.name),
+    'message name across layouts',
+  );
+  unique(
+    data.views.map(v => v.name),
+    'view name',
+  );
+  const views = new Set(data.views.map(v => v.name));
+  for (const m of data.json_messages) {
+    if (m.reply !== undefined && !views.has(m.reply)) {
+      throw new Error(`Unknown reply view ${m.reply} for ${m.name}`);
+    }
+  }
+  for (const v of data.views) {
+    for (const f of v.fields) {
+      if (f.view !== undefined && !views.has(f.view)) {
+        throw new Error(`Unknown view ${f.view} in ${v.name}.${f.name}`);
+      }
+    }
+  }
   const kinds = new Map<string, Set<string>>();
-  for (const entry of [...data.messages, ...data.reports, data.settlement]) {
+  for (const entry of [
+    ...data.messages,
+    ...data.reports,
+    data.settlement,
+    ...data.json_messages,
+    ...data.views,
+  ]) {
     unique(
       entry.fields.map(f => f.name),
       'field name',

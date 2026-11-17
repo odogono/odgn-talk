@@ -19,11 +19,13 @@ export type EnvelopeField = {
   readonly name: string;
   readonly kind: EnvelopeKind;
   readonly required: boolean;
+  readonly host?: boolean;
 };
 export type EnvelopeEntry = {
   readonly tag: number;
   readonly name: string;
   readonly direction: 'host-to-guest' | 'guest-to-host';
+  readonly layouts?: readonly ('fields' | 'json')[];
   readonly fields: readonly EnvelopeField[];
 };
 export const envelopeFeatures = [
@@ -33,14 +35,22 @@ export const envelopeFeatures = [
   'load-fields-v1',
   'queue-fields-v1',
 ] as const;
+export const envelopeFeature = {
+  requestPumpFieldsV1: 'request-pump-fields-v1',
+  callbacksFieldsV1: 'callbacks-fields-v1',
+  settlementsFieldsV1: 'settlements-fields-v1',
+  loadFieldsV1: 'load-fields-v1',
+  queueFieldsV1: 'queue-fields-v1',
+} as const;
 export const envelopeMessages: readonly EnvelopeEntry[] = [
   {
     tag: 1,
     name: 'request',
     direction: 'host-to-guest',
+    layouts: ['fields', 'json'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
-      { name: 'group', kind: 'text', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
+      { name: 'group', kind: 'text', required: true, host: false },
       { name: 'to', kind: 'target', required: false },
       { name: 'message', kind: 'message', required: false },
     ],
@@ -49,9 +59,10 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 2,
     name: 'call',
     direction: 'host-to-guest',
+    layouts: ['fields', 'json'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
-      { name: 'group', kind: 'text', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
+      { name: 'group', kind: 'text', required: true, host: false },
       { name: 'fn', kind: 'value', required: false },
       { name: 'args', kind: 'values', required: false },
       { name: 'limits', kind: 'limits', required: false },
@@ -61,9 +72,10 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 3,
     name: 'pump',
     direction: 'host-to-guest',
+    layouts: ['fields', 'json'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
-      { name: 'group', kind: 'text', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
+      { name: 'group', kind: 'text', required: true, host: false },
       { name: 'now', kind: 'instant', required: false },
       { name: 'fuelSlice', kind: 'int', required: false },
       { name: 'fuelCap', kind: 'int', required: false },
@@ -73,10 +85,11 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 4,
     name: 'request-pump',
     direction: 'host-to-guest',
+    layouts: ['fields'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
-      { name: 'group', kind: 'text', required: true },
-      { name: 'token', kind: 'uint', required: false },
+      { name: 'ref', kind: 'int', required: true, host: false },
+      { name: 'group', kind: 'text', required: true, host: false },
+      { name: 'token', kind: 'uint', required: false, host: false },
       { name: 'to', kind: 'target', required: false },
       { name: 'message', kind: 'message', required: false },
       { name: 'now', kind: 'instant', required: false },
@@ -88,10 +101,11 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 5,
     name: 'call-pump',
     direction: 'host-to-guest',
+    layouts: ['fields'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
-      { name: 'group', kind: 'text', required: true },
-      { name: 'token', kind: 'uint', required: false },
+      { name: 'ref', kind: 'int', required: true, host: false },
+      { name: 'group', kind: 'text', required: true, host: false },
+      { name: 'token', kind: 'uint', required: false, host: false },
       { name: 'fn', kind: 'value', required: false },
       { name: 'args', kind: 'values', required: false },
       { name: 'limits', kind: 'limits', required: false },
@@ -104,9 +118,10 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 6,
     name: 'op-result',
     direction: 'host-to-guest',
+    layouts: ['fields'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
-      { name: 'group', kind: 'text', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
+      { name: 'group', kind: 'text', required: true, host: false },
       { name: 'outcome', kind: 'text', required: true },
       { name: 'value', kind: 'value', required: false },
       { name: 'code', kind: 'text', required: false },
@@ -118,9 +133,10 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 7,
     name: 'prop-result',
     direction: 'host-to-guest',
+    layouts: ['fields'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
-      { name: 'group', kind: 'text', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
+      { name: 'group', kind: 'text', required: true, host: false },
       { name: 'outcome', kind: 'text', required: true },
       { name: 'value', kind: 'value', required: false },
       { name: 'code', kind: 'text', required: false },
@@ -132,9 +148,10 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 8,
     name: 'effect-result',
     direction: 'host-to-guest',
+    layouts: ['fields'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
-      { name: 'group', kind: 'text', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
+      { name: 'group', kind: 'text', required: true, host: false },
       { name: 'status', kind: 'text', required: false },
     ],
   },
@@ -142,18 +159,20 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 9,
     name: 'release-result',
     direction: 'host-to-guest',
+    layouts: ['fields'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
-      { name: 'group', kind: 'text', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
+      { name: 'group', kind: 'text', required: true, host: false },
     ],
   },
   {
     tag: 10,
     name: 'settle-pump',
     direction: 'host-to-guest',
+    layouts: ['fields'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
-      { name: 'group', kind: 'text', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
+      { name: 'group', kind: 'text', required: true, host: false },
       { name: 'now', kind: 'instant', required: false },
       { name: 'fuelSlice', kind: 'int', required: false },
       { name: 'fuelCap', kind: 'int', required: false },
@@ -164,9 +183,10 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 11,
     name: 'load',
     direction: 'host-to-guest',
+    layouts: ['fields', 'json'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
-      { name: 'group', kind: 'text', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
+      { name: 'group', kind: 'text', required: true, host: false },
       { name: 'name', kind: 'text', required: true },
       { name: 'source', kind: 'text', required: true },
       { name: 'grants', kind: 'record', required: false },
@@ -174,8 +194,8 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
       { name: 'owner', kind: 'record', required: false },
       { name: 'objects', kind: 'record', required: false },
       { name: 'limits', kind: 'limits', required: false },
-      { name: 'newGroup', kind: 'record', required: false },
-      { name: 'refuseWorker', kind: 'bool', required: false },
+      { name: 'newGroup', kind: 'record', required: false, host: false },
+      { name: 'refuseWorker', kind: 'bool', required: false, host: false },
       { name: 'forbidSuspension', kind: 'bool', required: false },
     ],
   },
@@ -183,9 +203,10 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 12,
     name: 'deliver',
     direction: 'host-to-guest',
+    layouts: ['fields', 'json'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
-      { name: 'group', kind: 'text', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
+      { name: 'group', kind: 'text', required: true, host: false },
       { name: 'to', kind: 'target', required: false },
       { name: 'message', kind: 'message', required: false },
     ],
@@ -194,9 +215,10 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 13,
     name: 'broadcast',
     direction: 'host-to-guest',
+    layouts: ['fields', 'json'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
-      { name: 'group', kind: 'text', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
+      { name: 'group', kind: 'text', required: true, host: false },
       { name: 'message', kind: 'message', required: false },
     ],
   },
@@ -204,9 +226,10 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 14,
     name: 'decide',
     direction: 'host-to-guest',
+    layouts: ['fields', 'json'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
-      { name: 'group', kind: 'text', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
+      { name: 'group', kind: 'text', required: true, host: false },
       { name: 'to', kind: 'target', required: false },
       { name: 'message', kind: 'message', required: false },
       { name: 'broadcast', kind: 'bool', required: false },
@@ -216,8 +239,9 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 129,
     name: 'admission',
     direction: 'guest-to-host',
+    layouts: ['fields'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
       { name: 'delivery', kind: 'text', required: false },
       { name: 'err', kind: 'err', required: false },
       { name: 'abandoned', kind: 'texts', required: false },
@@ -229,10 +253,11 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 130,
     name: 'completion',
     direction: 'guest-to-host',
+    layouts: ['fields'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
       { name: 'delivery', kind: 'text', required: false },
-      { name: 'token', kind: 'uint', required: false },
+      { name: 'token', kind: 'uint', required: false, host: false },
       { name: 'state', kind: 'text', required: false },
       { name: 'nextDeadline', kind: 'instant', required: false },
       { name: 'fuelUsed', kind: 'uint', required: false },
@@ -248,8 +273,9 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 131,
     name: 'op',
     direction: 'guest-to-host',
+    layouts: ['fields'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
       { name: 'call', kind: 'text', required: true },
       { name: 'script', kind: 'text', required: true },
       { name: 'run', kind: 'text', required: true },
@@ -273,8 +299,9 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 132,
     name: 'prop',
     direction: 'guest-to-host',
+    layouts: ['fields'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
       { name: 'object', kind: 'texts', required: true },
       { name: 'prop', kind: 'text', required: true },
       { name: 'set', kind: 'bool', required: false },
@@ -290,8 +317,9 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 133,
     name: 'effect',
     direction: 'guest-to-host',
+    layouts: ['fields'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
       { name: 'script', kind: 'text', required: true },
       { name: 'run', kind: 'text', required: true },
       { name: 'segment', kind: 'text', required: true },
@@ -309,8 +337,9 @@ export const envelopeMessages: readonly EnvelopeEntry[] = [
     tag: 134,
     name: 'release',
     direction: 'guest-to-host',
+    layouts: ['fields'],
     fields: [
-      { name: 'ref', kind: 'int', required: true },
+      { name: 'ref', kind: 'int', required: true, host: false },
       { name: 'script', kind: 'text', required: true },
       { name: 'grant', kind: 'text', required: true },
       { name: 'reason', kind: 'text', required: true },
