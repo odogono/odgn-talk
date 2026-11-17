@@ -3665,8 +3665,9 @@ const Inspected = struct {
         fn until(v: @This()) ?model.dates.Instant {
             return if (v.suspended() and v.of.has_until) .{ .seconds = v.of.until_seconds, .micros = v.of.until_micros } else null;
         }
+        // Absent when the Run waits on nothing, as in a timed `wait`.
         fn calls(v: @This()) ?[]const talk.Id {
-            return if (v.suspended()) v.of.calls[0..v.of.calls_len] else null;
+            return if (v.suspended() and v.of.calls_len > 0) v.of.calls[0..v.of.calls_len] else null;
         }
     };
     // `talk.Message.limits` is not in the view: a mailbox entry shows its

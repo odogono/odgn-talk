@@ -1478,21 +1478,16 @@ export class WasmGroup implements Group {
           ...(r.until !== undefined ? { until: parseInstant(r.until) } : {}),
           ...(r.calls ? { calls: [...r.calls] } : {}),
         })),
-        mailbox: s.mailbox.map(item => {
-          // The Zig worker writes no `limits` here yet; read it if present.
-          const limits = plain(field(item.message, 'limits'));
-          return {
-            ...(item.delivery !== undefined ? { delivery: item.delivery } : {}),
-            ...(item.from !== undefined ? { from: item.from } : {}),
-            message: {
-              name: textOf(field(item.message, 'name'))!,
-              args: listOf(field(item.message, 'args')).map(a =>
-                decode(this.#codec, a),
-              ),
-              ...(limits ? { limits: limits as Message['limits'] } : {}),
-            },
-          };
-        }),
+        mailbox: s.mailbox.map(item => ({
+          ...(item.delivery !== undefined ? { delivery: item.delivery } : {}),
+          ...(item.from !== undefined ? { from: item.from } : {}),
+          message: {
+            name: textOf(field(item.message, 'name'))!,
+            args: listOf(field(item.message, 'args')).map(a =>
+              decode(this.#codec, a),
+            ),
+          },
+        })),
       })),
     };
   }
