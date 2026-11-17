@@ -25,10 +25,57 @@ const initial = [
   0x9b_05_68_8c, 0x1f_83_d9_ab, 0x5b_e0_cd_19,
 ];
 
+// Shared by every hash: compress never re-enters, and `w` is scratch.
+const w = new Uint32Array(64);
+
+/** One 64-byte block of `view` at `block`, folded into `h`. */
+const compress = (h: Uint32Array, view: DataView, block: number): void => {
+  for (let i = 0; i < 16; i++) {
+    w[i] = view.getUint32(block + i * 4);
+  }
+  for (let i = 16; i < 64; i++) {
+    const s0 = rotr(w[i - 15]!, 7) ^ rotr(w[i - 15]!, 18) ^ (w[i - 15]! >>> 3);
+    const s1 = rotr(w[i - 2]!, 17) ^ rotr(w[i - 2]!, 19) ^ (w[i - 2]! >>> 10);
+    w[i] = (w[i - 16]! + s0 + w[i - 7]! + s1) >>> 0;
+  }
+  // Indexed reads: destructuring iterates the array, once per block.
+  let a = h[0]!,
+    b = h[1]!,
+    c = h[2]!,
+    d = h[3]!,
+    e = h[4]!,
+    f = h[5]!,
+    g = h[6]!,
+    hh = h[7]!;
+  for (let i = 0; i < 64; i++) {
+    const s1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+    const ch = (e & f) ^ (~e & g);
+    const t1 = (hh + s1 + ch + K[i]! + w[i]!) >>> 0;
+    const s0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+    const maj = (a & b) ^ (a & c) ^ (b & c);
+    const t2 = (s0 + maj) >>> 0;
+    hh = g;
+    g = f;
+    f = e;
+    e = (d + t1) >>> 0;
+    d = c;
+    c = b;
+    b = a;
+    a = (t1 + t2) >>> 0;
+  }
+  h[0] = (h[0]! + a) >>> 0;
+  h[1] = (h[1]! + b) >>> 0;
+  h[2] = (h[2]! + c) >>> 0;
+  h[3] = (h[3]! + d) >>> 0;
+  h[4] = (h[4]! + e) >>> 0;
+  h[5] = (h[5]! + f) >>> 0;
+  h[6] = (h[6]! + g) >>> 0;
+  h[7] = (h[7]! + hh) >>> 0;
+};
+
 /** An incremental SHA-256: `update` with bytes, then `final` once. */
 export class Sha256 {
   private readonly h = new Uint32Array(initial);
-  private readonly w = new Uint32Array(64);
   private readonly block = new Uint8Array(64);
   private readonly blockView = new DataView(this.block.buffer);
   private filled = 0;
@@ -49,14 +96,14 @@ export class Sha256 {
       if (this.filled < 64) {
         return this;
       }
-      this.compress(this.blockView, 0);
+      compress(this.h, this.blockView, 0);
       this.filled = 0;
     }
     const whole = at + Math.floor((bytes.length - at) / 64) * 64;
     if (whole > at) {
       const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
       for (; at < whole; at += 64) {
-        this.compress(view, at);
+        compress(this.h, view, at);
       }
     }
     this.block.set(bytes.subarray(at));
@@ -69,81 +116,78 @@ export class Sha256 {
     if (this.done) {
       throw new Error('Sha256.final twice');
     }
-    const length = this.length;
-    const tail = new Uint8Array(this.filled < 56 ? 64 : 128);
-    tail.set(this.block.subarray(0, this.filled));
-    tail[this.filled] = 0x80;
-    const view = new DataView(tail.buffer);
-    // The bit length's high word: length * 8 / 2^32.
-    view.setUint32(tail.length - 8, Math.floor(length / 0x20_00_00_00));
-    view.setUint32(tail.length - 4, (length * 8) >>> 0);
-    for (let at = 0; at < tail.length; at += 64) {
-      this.compress(view, at);
-    }
     this.done = true;
-    const out = new Uint8Array(32);
-    const outView = new DataView(out.buffer);
-    for (let i = 0; i < 8; i++) {
-      outView.setUint32(i * 4, this.h[i]!);
-    }
-    return out;
-  }
-
-  private compress(view: DataView, block: number): void {
-    const { h, w } = this;
-    for (let i = 0; i < 16; i++) {
-      w[i] = view.getUint32(block + i * 4);
-    }
-    for (let i = 16; i < 64; i++) {
-      const s0 =
-        rotr(w[i - 15]!, 7) ^ rotr(w[i - 15]!, 18) ^ (w[i - 15]! >>> 3);
-      const s1 = rotr(w[i - 2]!, 17) ^ rotr(w[i - 2]!, 19) ^ (w[i - 2]! >>> 10);
-      w[i] = (w[i - 16]! + s0 + w[i - 7]! + s1) >>> 0;
-    }
-    // Indexed reads: destructuring iterates the array, once per block.
-    let a = h[0]!,
-      b = h[1]!,
-      c = h[2]!,
-      d = h[3]!,
-      e = h[4]!,
-      f = h[5]!,
-      g = h[6]!,
-      hh = h[7]!;
-    for (let i = 0; i < 64; i++) {
-      const s1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
-      const ch = (e & f) ^ (~e & g);
-      const t1 = (hh + s1 + ch + K[i]! + w[i]!) >>> 0;
-      const s0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
-      const maj = (a & b) ^ (a & c) ^ (b & c);
-      const t2 = (s0 + maj) >>> 0;
-      hh = g;
-      g = f;
-      f = e;
-      e = (d + t1) >>> 0;
-      d = c;
-      c = b;
-      b = a;
-      a = (t1 + t2) >>> 0;
-    }
-    h[0] = (h[0]! + a) >>> 0;
-    h[1] = (h[1]! + b) >>> 0;
-    h[2] = (h[2]! + c) >>> 0;
-    h[3] = (h[3]! + d) >>> 0;
-    h[4] = (h[4]! + e) >>> 0;
-    h[5] = (h[5]! + f) >>> 0;
-    h[6] = (h[6]! + g) >>> 0;
-    h[7] = (h[7]! + hh) >>> 0;
+    return wordBytes(finish(this.h, this.block, this.filled, this.length));
   }
 }
 
+/**
+ * Pads the last `filled` bytes of `tail`, of `length` bytes hashed in all,
+ * and compresses them into `h`, which it returns.
+ */
+const finish = (
+  h: Uint32Array,
+  tail: Uint8Array,
+  filled: number,
+  length: number,
+): Uint32Array => {
+  const padded = new Uint8Array(filled < 56 ? 64 : 128);
+  padded.set(tail.subarray(0, filled));
+  padded[filled] = 0x80;
+  const view = new DataView(padded.buffer);
+  // The bit length's high word: length * 8 / 2^32.
+  view.setUint32(padded.length - 8, Math.floor(length / 0x20_00_00_00));
+  view.setUint32(padded.length - 4, (length * 8) >>> 0);
+  for (let at = 0; at < padded.length; at += 64) {
+    compress(h, view, at);
+  }
+  return h;
+};
+
+/**
+ * All of `bytes` hashed at once, as the eight state words. Every Load hashes
+ * a code identity, so this skips `Sha256`'s block buffering (#2230).
+ */
+const digest = (bytes: Uint8Array): Uint32Array => {
+  const h = new Uint32Array(initial);
+  const whole = bytes.length - (bytes.length % 64);
+  if (whole > 0) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
+    for (let at = 0; at < whole; at += 64) {
+      compress(h, view, at);
+    }
+  }
+  return finish(h, bytes.subarray(whole), bytes.length - whole, bytes.length);
+};
+
+const wordBytes = (h: Uint32Array): Uint8Array => {
+  const out = new Uint8Array(32);
+  const view = new DataView(out.buffer);
+  for (let i = 0; i < 8; i++) {
+    view.setUint32(i * 4, h[i]!);
+  }
+  return out;
+};
+
+const encoder = new TextEncoder();
+const hex = Array.from({ length: 256 }, (_, i) =>
+  i.toString(16).padStart(2, '0'),
+);
+
 /** The SHA-256 of `bytes`, as 32 bytes. */
 export const sha256Bytes = (bytes: Uint8Array): Uint8Array =>
-  new Sha256().update(bytes).final();
+  wordBytes(digest(bytes));
 
 export const sha256 = (input: string | Uint8Array): string => {
-  const bytes =
-    typeof input === 'string' ? new TextEncoder().encode(input) : input;
-  return Array.from(sha256Bytes(bytes), x =>
-    x.toString(16).padStart(2, '0'),
-  ).join('');
+  const h = digest(typeof input === 'string' ? encoder.encode(input) : input);
+  let out = '';
+  for (let i = 0; i < 8; i++) {
+    const x = h[i]!;
+    out +=
+      hex[x >>> 24]! +
+      hex[(x >>> 16) & 0xff]! +
+      hex[(x >>> 8) & 0xff]! +
+      hex[x & 0xff]!;
+  }
+  return out;
 };
