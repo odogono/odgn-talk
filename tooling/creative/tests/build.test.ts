@@ -165,7 +165,9 @@ test('First Sounds carries every kit sound its patterns play (ADR 0161)', async 
 
 // Music's content at each version. Changing what Music holds without
 // bumping MUSIC_BASE_VERSION fails here; bump both together. The file
-// format's number is left out, so a format change alone keeps the version.
+// format's number and the built-in Add-on versions are left out, so a
+// format change or an Add-on release alone keeps the version (ADR 0161,
+// amended by #2273). Versions 1 to 11 were hashed with Add-on versions in.
 const MUSIC_FINGERPRINTS: Record<number, string> = {
   1: 'baec8a15f77e0622',
   // The synth moved into the Instruments Add-on (#1901).
@@ -189,7 +191,24 @@ const MUSIC_FINGERPRINTS: Record<number, string> = {
   // The Piano Roll plays notes as they are pressed, from 1.4.0 (#2190).
   11: 'ee1af39253452e26',
   // The Piano Roll keeps rows for a rest-only pattern, from 1.4.1 (#2214).
-  12: '119d48f69ceafa86',
+  // Rehashed without Add-on versions (#2273).
+  12: '146b101d5b7d34b3',
+};
+
+/** Music's content as the fingerprint sees it: no format, no Add-on versions. */
+const musicFingerprint = (saved: Record<string, unknown>): string => {
+  const { format: _format, addOns, ...content } = saved;
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        ...content,
+        addOns: (addOns as { version?: string }[] | undefined)?.map(
+          ({ version: _version, ...ref }) => ref,
+        ),
+      }),
+    )
+    .digest('hex')
+    .slice(0, 16);
 };
 
 test('the Music Base Project carries every kit sound, fetched on demand (ADR 0161)', async () => {
@@ -214,12 +233,17 @@ test('the Music Base Project carries every kit sound, fetched on demand (ADR 016
       (await readZip(readFileSync(path))).get('project.json')!,
     ),
   ) as Record<string, unknown>;
-  const { format: _format, ...content } = saved;
-  const fingerprint = createHash('sha256')
-    .update(JSON.stringify(content))
-    .digest('hex')
-    .slice(0, 16);
+  const fingerprint = musicFingerprint(saved);
   expect(fingerprint).toBe(MUSIC_FINGERPRINTS[MUSIC_BASE_VERSION]!);
+  // A built-in Add-on release alone leaves Music's version where it is.
+  const addOns = saved.addOns as { version: string }[];
+  expect(addOns.length).toBeGreaterThan(0);
+  expect(
+    musicFingerprint({
+      ...saved,
+      addOns: addOns.map(ref => ({ ...ref, version: '99.0.0' })),
+    }),
+  ).toBe(fingerprint);
 }, 60_000);
 
 test('the build writes no kit sounds outside Project files (ADR 0161)', async () => {
