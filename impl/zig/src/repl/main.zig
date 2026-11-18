@@ -143,7 +143,7 @@ const Repl = struct {
     }
 
     /// `:export <directory>`: one file in it.
-    fn write(context: *anyopaque, directory: []const u8, name: []const u8, data: []const u8) bool {
+    fn write(context: *anyopaque, directory: []const u8, name: []const u8, data: []const u8) ?bool {
         const r: *Repl = @ptrCast(@alignCast(context));
         var dir = std.Io.Dir.cwd().createDirPathOpen(r.io, directory, .{}) catch return false;
         defer dir.close(r.io);

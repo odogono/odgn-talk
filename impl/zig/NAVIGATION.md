@@ -175,10 +175,10 @@ After a Zig change, see [what consumes the Core](#after-changing-the-zig-core).
 
 ## The Session Host, the REPL and Session Transcripts
 
-- Implementation: [Session Host](src/session/session.zig), [language analysis](src/analysis.zig) (also the Message Layer's `analysis-v1`), [Transcripts](src/session/transcript.zig), [REPL](src/repl/main.zig), [Transcript cases](src/corpus/session_case.zig)
+- Implementation: [Session Host](src/session/session.zig), [language analysis](src/analysis.zig) (also the Message Layer's `analysis-v1`), [Transcripts](src/session/transcript.zig) and [their replay](src/session/replay.zig), [REPL](src/repl/main.zig), [Transcript cases](src/corpus/session_case.zig), the reactor's [`session-v1`](src/reactor/session_v1.zig) and [its tests](src/reactor/session_v1_test.zig)
 - Rules: [chapter 12](../../spec/12-sessions-and-tooling.md), [Session observation](../../spec/session-observation.md), [`session.toml`](../../spec/data/session.toml)
 - Tests and cases: `corpus/sessions/`
-- First check: `cd impl/zig && zig build corpus -- sessions`
+- First check: `cd impl/zig && zig build corpus -- sessions`; `session-v1` runs every case through its frames in `zig build test`
 
 ## The Script Runner and the HTTP router
 

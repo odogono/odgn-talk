@@ -34,6 +34,21 @@ const envelope_codec = @import("envelope_codec.zig");
 const Allocator = std.mem.Allocator;
 const Value = model.Value;
 const Json = std.json.Value;
+
+/// A feature the reactor's image serves beside the Core's own: `session-v1`
+/// (ADR 0180), whose Session Host is an ordinary Host over talk.h, so the
+/// Core can't import it. The image's root declares it as
+/// `message_extension`; other builds have none.
+pub const Extension = struct {
+    feature: []const u8,
+    context: *anyopaque,
+    /// Once the feature is negotiated, answers a frame first, or leaves it
+    /// to the Core with null.
+    handle: *const fn (context: *anyopaque, s: *Session, msg: Json, ref: i64, m: []const u8) ?[]u8,
+};
+
+const image_root = @import("root");
+const image_extension: ?Extension = if (@hasDecl(image_root, "message_extension")) image_root.message_extension else null;
 const Direct = talk.direct;
 
 /// The largest frame a Host may write, as the harnesses measure it.
@@ -378,6 +393,9 @@ pub const Session = struct {
     /// Lifecycle contexts, owned here: one per Segment Capability, and one
     /// per named Segment Coordinator.
     effect_contexts: std.ArrayList(*EffectContext) = .empty,
+    /// The image's extension, and whether `hello` negotiated it.
+    extension: ?Extension = image_extension,
+    extension_on: bool = false,
 
     pub fn init(gpa: Allocator) ?*Session {
         const s = gpa.create(Session) catch return null;
@@ -534,7 +552,7 @@ const Out = struct {
     }
 };
 
-fn protocolError(gpa: Allocator, ref: i64, detail: []const u8) []u8 {
+pub fn protocolError(gpa: Allocator, ref: i64, detail: []const u8) []u8 {
     var o = Out.init(gpa);
     defer o.deinit();
     o.raw("{\"ref\":") catch {};
@@ -2302,6 +2320,10 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"function-metadata-v1\",\"core-message-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\",\"queued-inputs-v1\"") catch return oomReply();
     if (builtin.target.os.tag == .wasi) o.raw(",\"chunked-wasi-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
+    if (s.extension) |e| {
+        o.raw(",") catch return oomReply();
+        o.text(e.feature) catch return oomReply();
+    }
     o.raw(",\"" ++ rp.feature_fields ++ "\",\"" ++ rp.feature_callbacks ++ "\",\"" ++ rp.feature_settlements ++ "\",\"" ++ rp.feature_load ++ "\",\"" ++ rp.feature_queue ++ "\"]") catch return oomReply();
     return finishOk(s, &o, null);
 }
@@ -4552,6 +4574,7 @@ fn handleFrame(s: *Session, frame: []const u8) []u8 {
     if (msg != .object) return protocolError(s.gpa, 0, "the frame is not an object");
     const ref = asInt(field(msg, "ref")) orelse return protocolError(s.gpa, 0, "no ref");
     const m = asText(field(msg, "m")) orelse return protocolError(s.gpa, ref, "no message name");
+    if (s.extension_on) if (s.extension.?.handle(s.extension.?.context, s, msg, ref, m)) |reply| return reply;
     if (std.mem.eql(u8, m, "load")) return handleLoad(s, ref, .{
         .group = asText(field(msg, "group")),
         .refuse_worker = asBool(field(msg, "refuseWorker")) orelse false,
@@ -4626,6 +4649,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var settlements = s.settlements;
             var load_fields = s.load_fields;
             var queue_fields = s.queue_fields;
+            var extension_on = s.extension_on;
             for (features.array.items) |feature| {
                 const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
                 if (std.mem.eql(u8, name, rp.feature_fields)) {
@@ -4663,6 +4687,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     chunked_wasi = true;
                 } else if (std.mem.eql(u8, name, "inline-inputs-v1") and s.inline_io != null) {
                     inline_inputs = true;
+                } else if (s.extension != null and std.mem.eql(u8, name, s.extension.?.feature)) {
+                    extension_on = true;
                 } else if (std.mem.eql(u8, name, "standard-refinements-v1")) {
                     // This feature adds declaration and binding fields, with no per-Group state.
                 } else if (!std.mem.eql(u8, name, "paused-inputs-v1") and !std.mem.eql(u8, name, "restore-bindings-v1")) return protocolError(s.gpa, ref, "unsupported feature");
@@ -4686,6 +4712,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             s.group_exchanges = group_exchanges;
             s.object_elements = object_elements;
             s.queued_inputs = queued_inputs;
+            s.extension_on = extension_on;
         }
         return helloReply(s, ref);
     } else if (std.mem.eql(u8, m, "add")) {

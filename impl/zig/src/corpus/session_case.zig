@@ -12,96 +12,8 @@ const Session = session.Session;
 
 /// A replay of a Transcript: the items the session reads in turn, and the
 /// Transcript and Trace it writes as it goes.
-const Replay = struct {
-    gpa: std.mem.Allocator,
-    items: []const transcript.Item,
-    next: usize = 0,
-    written: std.Io.Writer.Allocating,
-    trace: std.ArrayList(u8) = .empty,
-    failure: ?[]const u8 = null,
-
-    fn peek(r: *Replay) ?transcript.Item {
-        // Output lines are what the session prints, not what it reads.
-        while (r.next < r.items.len and r.items[r.next] == .output) r.next += 1;
-        return if (r.next < r.items.len) r.items[r.next] else null;
-    }
-
-    fn reading(context: *anyopaque) ?session.Instant {
-        const r: *Replay = @ptrCast(@alignCast(context));
-        const item = r.peek() orelse return null;
-        if (item != .clock) return null;
-        r.next += 1;
-        r.written.writer.print("@ {s}\n", .{item.clock}) catch {};
-        return instant(item.clock);
-    }
-
-    fn line(context: *anyopaque) ?[]const u8 {
-        const r: *Replay = @ptrCast(@alignCast(context));
-        const item = r.peek() orelse return null;
-        if (item != .line) return null;
-        r.next += 1;
-        if (item.line.len == 0) r.written.writer.writeAll("<\n") catch {} else r.written.writer.print("< {s}\n", .{item.line}) catch {};
-        return item.line;
-    }
-
-    fn answer(context: *anyopaque, call: []const u8, busy: bool) ?session.Answer {
-        _ = busy;
-        const r: *Replay = @ptrCast(@alignCast(context));
-        const item = r.peek() orelse return null;
-        if (item != .answer or !std.mem.eql(u8, item.answer.call, call)) return null;
-        r.next += 1;
-        r.written.writer.print("~ {s} {s}{s}\n", .{ call, if (item.answer.fail) "fail " else "", item.answer.shown }) catch {};
-        return .{ .shown = item.answer.shown, .fail = item.answer.fail };
-    }
-
-    fn output(context: *anyopaque, text: []const u8) void {
-        const r: *Replay = @ptrCast(@alignCast(context));
-        transcript.writeOutput(&r.written.writer, text) catch {};
-    }
-
-    fn traceLine(context: *anyopaque, text: []const u8) void {
-        const r: *Replay = @ptrCast(@alignCast(context));
-        r.trace.appendSlice(r.gpa, text) catch {};
-        r.trace.append(r.gpa, '\n') catch {};
-    }
-
-    fn crossing(context: *anyopaque) ?[]const u8 {
-        const r: *Replay = @ptrCast(@alignCast(context));
-        const item = r.peek() orelse return null;
-        return if (item == .crossing) item.crossing else null;
-    }
-
-    fn take(context: *anyopaque) void {
-        const r: *Replay = @ptrCast(@alignCast(context));
-        const item = r.peek() orelse return;
-        r.next += 1;
-        r.written.writer.print("% {s}\n", .{item.crossing}) catch {};
-    }
-
-    fn sleep(context: *anyopaque, until: session.Instant) void {
-        _ = context;
-        _ = until;
-    }
-
-    /// `:export <directory>` writes to a scratch directory, which a replay
-    /// never makes.
-    fn write(context: *anyopaque, directory: []const u8, name: []const u8, data: []const u8) bool {
-        _ = context;
-        _ = directory;
-        _ = name;
-        _ = data;
-        return true;
-    }
-};
-
-fn instant(shown: []const u8) ?session.Instant {
-    var v: ?*c.talk_value = null;
-    if (c.talk_parse_display(shown.ptr, shown.len, &v) != c.TALK_OK) return null;
-    defer c.talk_value_release(v);
-    var i: session.Instant = undefined;
-    if (!c.talk_value_as_instant(v, &i.seconds, &i.micros)) return null;
-    return i;
-}
+const Replay = session.replay.Replay;
+const instant = session.replay.instant;
 
 /// Replays the Transcript in `dir`, and compares its lines and its Trace.
 /// Returns the lines compared, or writes the first difference to `detail`
@@ -140,7 +52,7 @@ fn runText(gpa: std.mem.Allocator, text: []const u8, expected_trace: ?[]const u8
     const items = try transcript.parse(a, text);
     var live: Live = .{ .replay = .{ .gpa = a, .items = items, .written = .init(a) } };
     const replay = &live.replay;
-    var driver: session.Driver = .{ .context = replay, .reading = Replay.reading, .line = Replay.line, .answer = Replay.answer, .output = Replay.output, .trace = Replay.traceLine, .write = Replay.write, .crossing = Replay.crossing, .take = Replay.take, .sleep = Replay.sleep };
+    var driver = replay.driver();
     if (mode == .live) {
         driver.crossing = Live.crossing;
         driver.prop = Live.prop;
@@ -271,7 +183,7 @@ const Live = struct {
 
     /// The Transcript up to this crossing's end: identities its answer
     /// names, and Host actions; then the end's reply answers it.
-    fn prop(context: *anyopaque, need: []const u8) []const u8 {
+    fn prop(context: *anyopaque, need: []const u8) ?[]const u8 {
         _ = need;
         const l = of(context);
         const r = &l.replay;
@@ -296,7 +208,7 @@ const Live = struct {
     }
 
     /// The recorded `resolve` envelope's outcome for each identity asked.
-    fn resolve(context: *anyopaque, objects: []const u8) []const u8 {
+    fn resolve(context: *anyopaque, objects: []const u8) ?[]const u8 {
         const r = &of(context).replay;
         const item = r.peek() orelse return "[]";
         if (item != .crossing) return "[]";

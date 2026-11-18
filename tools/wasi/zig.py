@@ -402,6 +402,29 @@ def message_layer(engine, module):
     return {"hello": hello, "linearMemory": size}
 
 
+def session_v1(engine, module):
+    """`session-v1` (ADR 0180) in the shipped image: a session waits for a
+    deadline under a real Clock, wakes at session-pump, and stops at a
+    write need its result answers."""
+    h = MessageHost(engine, module)
+    assert "session-v1" in h.ok("hello", protocol=1, features=["session-v1"])["features"]
+    h.ok("session-open")
+    entry = ["  wait 2 s", '  say "rested"', "end nap"]
+    h.ok("session-input", input="on nap", more=entry, reading="2026-09-30T10:00:00Z")
+    waiting = h.send("session-input", input="nap and wait", reading="2026-09-30T10:00:00Z")
+    assert waiting["ok"] == {"waiting": "deadline", "clock": "real", "deadline": "2026-09-30T10:00:02Z"}, waiting
+    woke = h.send("session-pump", reading="2026-09-30T10:00:02Z")
+    assert woke["output"] == ["rested"] and woke["ok"]["waiting"] == "prompt", woke
+    assert woke["transcript"] == ["@ 2026-09-30T10:00:02Z", "rested"], woke
+    need = h.send("session-input", input=":export out", reading="2026-09-30T10:00:03Z")["need"]
+    assert need["m"] == "write" and need["name"] == "session.talk" and "on nap" in need["data"], need
+    wrote = h.send("write-result", is_result=True, written=True)
+    assert wrote["output"] == ["wrote session.talk"], wrote
+    assert h.send("new-group", group="g", name="g")["err"]["kind"] == "protocol error"
+    h.ok("session-close")
+    return {"linearMemory": h.memory.data_len(h.store)}
+
+
 def metered_operations(engine, module):
     """Zig-only metering transport acceptance while shared catalogues are staged."""
     h = MessageHost(engine, module)
@@ -554,6 +577,7 @@ def main():
     nesting = deep(engine, module)
     loads = large_loads(engine, module)
     messages = message_layer(engine, module)
+    sessions = session_v1(engine, module)
     metering = metered_operations(engine, module)
     profiles = supported_limits(engine, module)
     texts = text_containment(engine, module)
@@ -580,6 +604,7 @@ def main():
                 "nesting": nesting,
                 "largeLoads": loads,
                 "messageLayer": messages,
+                "sessionV1": sessions,
                 "metering": metering,
                 "supportedLimits": profiles,
                 "textContainment": texts,
