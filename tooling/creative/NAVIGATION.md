@@ -75,7 +75,17 @@ landed, and the Issue graph job ticks it as they close.
 - [play-view.ts](src/play-view.ts): Browse and Present in the browser,
   pointer and key input turned into `PlayMessage`s, the
   `requestAnimationFrame` loop that drives `frame`, and the worker
-  supervisor that ends an unresponsive Play worker (ADR 0107).
+  supervisor that ends an unresponsive Play worker (ADR 0107), wired as
+  `PlayClient`'s transport.
+- [play-client.ts](src/play-client.ts): `PlayClient`, the page's handle on
+  the worker's Play Session, behind a `PlayTransport`. It owns the session
+  id and drops word of an earlier session, the Project generation it
+  loaded, the only copy of the Scripts' and Libraries' text as loaded
+  (Breakpoint placement, Punch In, Revert), and `control` and
+  `setParameter`, which send to the audio before the worker records them
+  and coalesce a control's changes. Tests:
+  [play-client.test.ts](tests/play-client.test.ts), against a `PlayHost` in
+  process through [in-process-play.ts](tests/helpers/in-process-play.ts).
 - [play-host.ts](src/play-host.ts): the Play worker's side, which owns the
   session and its Pump clock and publishes views; [play.worker.ts](src/play.worker.ts)
   is its entry. [play-protocol.ts](src/play-protocol.ts) lists the messages,
@@ -138,10 +148,13 @@ landed, and the Issue graph job ticks it as they close.
 - The controls Add-on (#1902): [add-ons/controls/](src/add-ons/controls/index.ts)
   has the slider, knob, toggle, XY pad and level meter. A view's `change`
   prop ([views.tsx](src/elements/views.tsx)) reaches
-  [play-view.ts](src/play-view.ts)'s `control`, which merges a drag's
+  [play-view.ts](src/play-view.ts)'s `control` and on to
+  [play-client.ts](src/play-client.ts)'s, which merges a drag's
   changes into one `control` request at a time; the worker's
   `PlaySession.control` sets the fields and sends `change`. Tests:
-  [controls.test.ts](tests/controls.test.ts) and the `controls` browser suite.
+  [controls.test.ts](tests/controls.test.ts),
+  [play-client.test.ts](tests/play-client.test.ts) and the `controls`
+  browser suite.
 - Bindings (#1904): [bindings.ts](src/bindings.ts) reads, checks and applies
   an Element's `bindings`, which a kind allows through its definition's
   `bindings`. The page sends a bound parameter to the worklet itself
@@ -263,7 +276,7 @@ landed, and the Issue graph job ticks it as they close.
   the clock (`clockText`); `PlaySession.hush` in [play.ts](src/play.ts) is
   behind the `hush` request, and [play-host.ts](src/play-host.ts) sends the
   `TransportView` anchor. Revert uses `shell.code.replace` with
-  play-view.ts's loaded source.
+  `PlayClient`'s loaded source ([play-client.ts](src/play-client.ts)).
 - Tests: [transport-controls.test.ts](tests/transport-controls.test.ts),
   [play-setting.test.ts](tests/play-setting.test.ts) and the
   `browse-toolbar` browser suite.
@@ -434,8 +447,8 @@ cutoff of bass to 800`). Both send `InstrumentMessage`s, which
   [instruments/live.ts](src/instruments/live.ts) finds the parameters an
   authored change, undo or redo moved; [stack.ts](src/stack.ts) sends them,
   and a drag's moves, to `shell.instruments.onLive`, which
-  [play-view.ts](src/play-view.ts) sends to the audio and the worker
-  (`instrumentParameter`). Views carry the playing values (`instruments`),
+  [play-client.ts](src/play-client.ts)'s `setParameter` sends to the audio
+  and the worker (`instrumentParameter`). Views carry the playing values (`instruments`),
   which the window shows with a tick at the saved value.
   `boundControls` in [bindings.ts](src/bindings.ts) finds the 🔗 rows.
   Tests: [live.test.ts](tests/instruments/live.test.ts), and the
@@ -565,9 +578,11 @@ Loading an edited Script or Library into a browsing session (ADR 0157, #1897).
 - [play-host.ts](src/play-host.ts) answers the `punchIn` request
   ([play-protocol.ts](src/play-protocol.ts)); [scripts.ts](src/scripts.ts)
   binds ⌘↩ and shows the note, [edit-menu.tsx](src/edit-menu.tsx) has the
-  command, and [play-view.ts](src/play-view.ts) sends it.
+  command, and [play-client.ts](src/play-client.ts) sends it and keeps the
+  Punched In text as loaded.
 - Tests: [punch-in.test.ts](tests/punch-in.test.ts) covers the session and
-  Pause through the host; [punch-in.browser.ts](tests/punch-in.browser.ts).
+  Pause through the host; [play-client.test.ts](tests/play-client.test.ts)
+  the page's side; [punch-in.browser.ts](tests/punch-in.browser.ts).
 - First check: `bun test tooling/creative/tests/punch-in.test.ts`.
 - Browser: `punch-in` suite on `/punch-in-test.html`.
 
@@ -673,8 +688,8 @@ Loading an edited Script or Library into a browsing session (ADR 0157, #1897).
   [play.ts](src/play.ts) holds the controller and the debugger-aware Pump.
 - [scripts.ts](src/scripts.ts) adds the shared editor's breakpoint gutter
   (`@northtalk/editor/breakpoints`), fades Breakpoints in edited source and
-  shows the paused line; [play-view.ts](src/play-view.ts) sends them and
-  shows stops; [variables-window.tsx](src/variables-window.tsx) draws frames.
+  shows the paused line; [play-client.ts](src/play-client.ts) places and
+  sends them, and [play-view.ts](src/play-view.ts) shows stops; [variables-window.tsx](src/variables-window.tsx) draws frames.
 - Tests: [play-host.test.ts](tests/play-host.test.ts) and
   [breakpoints.browser.ts](tests/breakpoints.browser.ts).
 - First check: `bun test tooling/creative/tests/play-host.test.ts`.
