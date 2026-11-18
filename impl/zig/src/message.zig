@@ -728,7 +728,21 @@ var handling: ?*Session = null;
 /// a new instance, whose code table is numbered afresh.
 fn writeFunction(context: ?*anyopaque, w: *std.Io.Writer, v: *const Value) encoding.Error!void {
     const s: *Session = @ptrCast(@alignCast(context.?));
+    if (tokenless) return writeTokenless(w, v);
     return writeFunctionWith(s, w, v, s.function_metadata);
+}
+
+/// While a Group the guest holds itself is written: no message takes its
+/// Function Values back, so their tokens are empty.
+var tokenless = false;
+
+fn writeTokenless(w: *std.Io.Writer, v: *const Value) encoding.Error!void {
+    const f = v.data.function;
+    w.writeAll("{\"$function\":[") catch return error.WriteFailed;
+    std.json.Stringify.value(f.home, .{}, w) catch return error.WriteFailed;
+    w.writeAll(",") catch return error.WriteFailed;
+    std.json.Stringify.value(f.display, .{}, w) catch return error.WriteFailed;
+    w.writeAll(",\"\"]}") catch return error.WriteFailed;
 }
 
 // Tokens keep their original representation even when captured Functions
@@ -3629,6 +3643,22 @@ fn inspectReply(s: *Session, msg: Json, ref: i64) []u8 {
     beginOk(&o, ref) catch return oomReply();
     writeInspection(&o, s.gpa, inspection.?) catch |e| return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
     return finishOk(s, &o, entry);
+}
+
+/// `inspect`'s `ok` fields for a Group the guest holds itself, as
+/// `session-v1`'s `session-inspect` gives them, each Function Value's token
+/// empty. Inspecting adds the Group's snapshot to its Trace, as `inspect`
+/// does.
+pub fn inspectionFields(gpa: Allocator, group: *talk.Group) (Allocator.Error || error{ NotEncodable, Refused })![]u8 {
+    var inspection: ?*talk.Inspection = null;
+    if (Direct.inspect(group, &inspection) != .ok) return error.Refused;
+    defer Direct.inspectionRelease(inspection);
+    tokenless = true;
+    defer tokenless = false;
+    var o = Out.init(gpa);
+    defer o.deinit();
+    try writeInspection(&o, gpa, inspection.?);
+    return o.finish();
 }
 
 fn writeInspection(o: *Out, gpa: Allocator, i: *const talk.Inspection) (Allocator.Error || error{NotEncodable})!void {
