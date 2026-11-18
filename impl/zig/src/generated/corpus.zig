@@ -1521,6 +1521,12 @@ pub const corpus: CorpusTable = .{
                     .type = "pos",
                     .is = "its position",
                 },
+                .{
+                    .key = "end",
+                    .type = "pos",
+                    .is = "the end of its range, exclusive: the end of the token at its position, or the position itself where the range is empty (chapter 2)",
+                    .optional = true,
+                },
             },
         },
         .{

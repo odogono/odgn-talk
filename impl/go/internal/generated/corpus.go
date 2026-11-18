@@ -1522,6 +1522,12 @@ var Corpus = CorpusTable{
 					Type: "pos",
 					Is:   "its position",
 				},
+				CorpusTableRecordEntryKeyEntry{
+					Key:      "end",
+					Type:     "pos",
+					Is:       "the end of its range, exclusive: the end of the token at its position, or the position itself where the range is empty (chapter 2)",
+					Optional: true,
+				},
 			},
 		},
 		CorpusTableRecordEntry{

@@ -30,6 +30,8 @@ export interface Diagnostic {
   unit: string;    // the Script or Library the diagnostic is in
   line: number;
   col: number;
+  endLine: number; // the end of its range (chapter 2), exclusive
+  endCol: number;
 }
 
 /** Rejects source: a Script, an Entry for extend Script, or a Library. */

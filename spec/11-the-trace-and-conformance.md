@@ -364,7 +364,7 @@ Each `reason` is what dispatch already found, so nothing runs again to find it. 
 | `unhandled` | `delivery` (optional) | `message`, `args`?, `target`? | an `unhandled` report; the id is absent for a message a Script sent |
 | `call-failed` | `call` | `op` | a `call failed` report, whose detail is left out |
 | `decided` | `delivery` | `verdict`, `vetoes`?, `undecided`? | a `decided` report, by the Decision's delivery id or broadcast id |
-| `diag` | `unit` | `code`, `pos` | a load-time diagnostic, or the first syntax error |
+| `diag` | `unit` | `code`, `pos`, `end`? | a load-time diagnostic, or the first syntax error |
 | `counters` | `script` | `fuel`, `alloc`, `runs`, `faults`, `state`, `mailbox` | a snapshot of the Script's lifetime work and current state (chapter 9) |
 | `vars` | `script` |  | a Script's Script Variables, each as `<name>=<value>`, in declaration order |
 | `pumped` |  | `state`, `fuel`, `next`? | the end of a Pump |
@@ -467,6 +467,7 @@ Each `reason` is what dispatch already found, so nothing runs again to find it. 
 | `decided` | `undecided` | `value` | each undecided recipient, as a map `{script, run, outcome}`, in recipient order, with `run` left out for a Delivery that never started; `script` and `run` are text, and `outcome` is text in chapter 5's words: `"errored"`, `"limit fault"`, `"cancelled"`, `"dropped"` or `"stopped"` |
 | `diag` | `code` | `value` | its code, as text |
 | `diag` | `pos` | `pos` | its position |
+| `diag` | `end` | `pos` | the end of its range, exclusive: the end of the token at its position, or the position itself where the range is empty (chapter 2) |
 | `counters` | `fuel` | `count` | FuelTotal, including live Runs |
 | `counters` | `alloc` | `count` | AllocTotal, including live Runs |
 | `counters` | `runs` | `count` | Runs started since load |
