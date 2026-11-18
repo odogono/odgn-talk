@@ -159,3 +159,11 @@ pub fn difference(want: []const u8, got: []const u8) struct { lines: usize, firs
         if (x == null or y == null or !std.mem.eql(u8, x.?, y.?)) return .{ .lines = count, .first = .{ .line = count, .want = x, .got = y } };
     }
 }
+
+/// A recorded Host action as a live embedder hands it: the `input`
+/// envelope with its `request` alone, whose reply the session finds itself.
+pub fn requestOnly(a: std.mem.Allocator, recorded: []const u8) ![]const u8 {
+    const v = try std.json.parseFromSliceLeaky(std.json.Value, a, recorded, .{ .parse_numbers = false });
+    const request = try std.json.Stringify.valueAlloc(a, v.object.get("request") orelse return error.MalformedTranscript, .{});
+    return std.fmt.allocPrint(a, "{{\"request\":{s},\"type\":\"input\"}}", .{request});
+}

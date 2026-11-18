@@ -87,7 +87,7 @@ fn runText(gpa: std.mem.Allocator, text: []const u8, expected_trace: ?[]const u8
                     try detail.print("{s}: declaring {s}: {s}", .{ name, x, @errorName(err) });
                     return error.CaseFailed;
                 },
-                .action => s.act(try Live.requestOnly(a, x)) catch |err| {
+                .action => s.act(try session.replay.requestOnly(a, x)) catch |err| {
                     try detail.print("{s}: acting on {s}: {s}", .{ name, x, @errorName(err) });
                     return error.CaseFailed;
                 },
@@ -170,13 +170,6 @@ const Live = struct {
         return null;
     }
 
-    /// A recorded Host action as the embedder hands it: its request alone.
-    fn requestOnly(a: std.mem.Allocator, recorded: []const u8) ![]const u8 {
-        const v = try std.json.parseFromSliceLeaky(std.json.Value, a, recorded, .{ .parse_numbers = false });
-        const request = try std.json.Stringify.valueAlloc(a, v.object.get("request").?, .{});
-        return std.fmt.allocPrint(a, "{{\"request\":{s},\"type\":\"input\"}}", .{request});
-    }
-
     /// The session's envelope, written; the Transcript's line for one it
     /// makes is passed over.
     fn record(context: *anyopaque, envelope: []const u8) void {
@@ -203,7 +196,7 @@ const Live = struct {
             r.next += 1;
             switch (typeOf(r.gpa, item.crossing)) {
                 .declaration => l.session.declare(item.crossing) catch return broken,
-                .action => l.session.act(requestOnly(r.gpa, item.crossing) catch return broken) catch return broken,
+                .action => l.session.act(session.replay.requestOnly(r.gpa, item.crossing) catch return broken) catch return broken,
                 .made => return broken,
             }
         }

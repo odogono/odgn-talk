@@ -180,7 +180,7 @@ fn runCase(gpa: std.mem.Allocator, text: []const u8, expected_trace: []const u8,
             .answer => |x| try g.sendAs(null, "session-input", .{ .answer = .{ .shown = x.shown, .fail = x.fail }, .reading = reading }),
             .crossing => |x| switch (envelopeOf(a, x)) {
                 .declaration => try g.sendAs(null, "session-input", .{ .envelope = x, .reading = reading }),
-                .action => try g.sendAs(null, "session-input", .{ .envelope = try requestOnly(a, x), .reading = reading }),
+                .action => try g.sendAs(null, "session-input", .{ .envelope = try replay.requestOnly(a, x), .reading = reading }),
                 .made => break,
             },
             .output => unreachable,
@@ -212,7 +212,7 @@ fn runCase(gpa: std.mem.Allocator, text: []const u8, expected_trace: []const u8,
                     if (items[k] != .crossing) return error.CaseFailed;
                     const v = try std.json.parseFromSliceLeaky(Json, a, items[k].crossing, .{ .parse_numbers = false });
                     if (std.mem.eql(u8, v.object.get("type").?.string, "property-end")) break v.object.get("reply").?;
-                    try envelopes.append(a, if (envelopeOf(a, items[k].crossing) == .action) try requestOnly(a, items[k].crossing) else items[k].crossing);
+                    try envelopes.append(a, if (envelopeOf(a, items[k].crossing) == .action) try replay.requestOnly(a, items[k].crossing) else items[k].crossing);
                 } else return error.CaseFailed;
                 var frame: std.Io.Writer.Allocating = .init(a);
                 try frame.writer.print("{{\"m\":\"prop-result\",\"ref\":{d},\"envelopes\":", .{r});
@@ -260,14 +260,6 @@ fn runCase(gpa: std.mem.Allocator, text: []const u8, expected_trace: []const u8,
             return error.CaseFailed;
         }
     }
-}
-
-/// A recorded Host action as the embedder hands it: its request alone,
-/// whose reply the session finds itself.
-fn requestOnly(a: std.mem.Allocator, recorded: []const u8) ![]const u8 {
-    const v = try std.json.parseFromSliceLeaky(Json, a, recorded, .{ .parse_numbers = false });
-    const request = try std.json.Stringify.valueAlloc(a, v.object.get("request").?, .{});
-    return std.fmt.allocPrint(a, "{{\"request\":{s},\"type\":\"input\"}}", .{request});
 }
 
 /// As `session_case.zig` decides it.
@@ -561,4 +553,47 @@ test "a Host action refused for its fields is refused, and records nothing" {
     _ = try errDetail(try g.sendAs(null, "session-input", .{ .envelope = "{\"request\":{\"kind\":\"pump\"},\"type\":\"input\"}" }));
     _ = try errDetail(try g.sendAs(null, "session-input", .{ .envelope = "{\"reply\":{\"ok\":{}},\"request\":{\"kind\":\"stop\",\"reason\":\"x\",\"script\":\"session\"},\"type\":\"input\"}" }));
     try std.testing.expectEqual(before, g.lines.items.len);
+}
+
+test "a Host action takes Values in their own key order, its message's limits, and declared objects only" {
+    var g: Guest = undefined;
+    try g.init(std.testing.allocator);
+    defer g.deinit();
+    try openLamp(&g);
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .input = "on ping m", .more = &[_][]const u8{ "  say m", "end ping" } }));
+    // A map argument in insertion order, not sorted.
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .envelope = "{\"request\":{\"kind\":\"deliver\",\"message\":{\"args\":[{\"z\":1,\"a\":2}],\"name\":\"ping\"},\"to\":{\"script\":\"session\"}},\"type\":\"input\"}" }));
+    try std.testing.expect(std.mem.indexOf(u8, g.lines.items[g.lines.items.len - 1], "{\"z\":1,\"a\":2}") != null);
+    // A loosening override is refused synchronously.
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .envelope = "{\"request\":{\"kind\":\"deliver\",\"message\":{\"limits\":{\"fuelPerRun\":9007199254740991},\"name\":\"ping\"},\"to\":{\"script\":\"session\"}},\"type\":\"input\"}" }));
+    try std.testing.expect(std.mem.startsWith(u8, g.lines.items[g.lines.items.len - 1], "% {\"reply\":{\"error\":"));
+    // A Core refusal is recorded, not hidden.
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .envelope = "{\"request\":{\"delivery\":\"bogus\",\"kind\":\"cancel-delivery\"},\"type\":\"input\"}" }));
+    try std.testing.expect(std.mem.startsWith(u8, g.lines.items[g.lines.items.len - 1], "% {\"reply\":{\"error\":"));
+    // Undeclared identities and mistyped fields are refused, unrecorded.
+    const before = g.lines.items.len;
+    _ = try errDetail(try g.sendAs(null, "session-input", .{ .envelope = "{\"request\":{\"kind\":\"dispose\",\"object\":{\"id\":\"nobody\",\"kind\":\"Lamp\"}},\"type\":\"input\"}" }));
+    _ = try errDetail(try g.sendAs(null, "session-input", .{ .envelope = "{\"request\":{\"kind\":\"stop\",\"reason\":false,\"script\":\"session\"},\"type\":\"input\"}" }));
+    try std.testing.expectEqual(before, g.lines.items.len);
+}
+
+test "a prop-result whose envelopes include a malformed one applies none of them" {
+    var g: Guest = undefined;
+    try g.init(std.testing.allocator);
+    defer g.deinit();
+    try openLamp(&g);
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .input = "on ping", .more = &[_][]const u8{ "  say \"pong\"", "end ping" } }));
+    const r = Guest.refOf(try g.sendAs(null, "session-input", .{ .input = "the level of desk" }));
+    const deliver = "{\"request\":{\"kind\":\"deliver\",\"message\":{\"name\":\"ping\"},\"to\":{\"script\":\"session\"}},\"type\":\"input\"}";
+    const before = g.lines.items.len;
+    _ = try errDetail(try g.send(try std.fmt.allocPrint(g.arena.allocator(), "{{\"m\":\"prop-result\",\"ref\":{d},\"value\":3,\"envelopes\":[\"{f}\",\"{{\\\"request\\\":{{\\\"kind\\\":\\\"pump\\\"}},\\\"type\\\":\\\"input\\\"}}\"]}}", .{ r, std.zig.fmtString(deliver) })));
+    try std.testing.expectEqual(before, g.lines.items.len);
+    // Sent again without it, the delivery is made once.
+    _ = try okOf(try g.send(try std.fmt.allocPrint(g.arena.allocator(), "{{\"m\":\"prop-result\",\"ref\":{d},\"value\":3,\"envelopes\":[\"{f}\"]}}", .{ r, std.zig.fmtString(deliver) })));
+    var delivered: usize = 0;
+    for (g.lines.items) |l| if (std.mem.indexOf(u8, l, "\"kind\":\"deliver\"") != null) {
+        delivered += 1;
+    };
+    try std.testing.expectEqual(@as(usize, 1), delivered);
+    try std.testing.expect(std.mem.endsWith(u8, g.output.items[g.output.items.len - 1], "] pong"));
 }

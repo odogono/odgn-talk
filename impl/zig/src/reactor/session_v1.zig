@@ -321,7 +321,8 @@ pub const Server = struct {
 
     /// `session-input`: one Entry or Session Command (`input`, with any
     /// further lines in `more`), a console `line`, a prompt's `answer`, or
-    /// an object declaration `envelope`.
+    /// an `envelope` between Host calls: an object declaration, or a Host
+    /// action's `input` with its `request` alone.
     fn input(srv: *Server, gpa: Allocator, msg: Json, ref: i64) []u8 {
         const h = srv.host.?;
         const la = srv.life.allocator();
@@ -426,6 +427,9 @@ pub const Server = struct {
                 // names, and Host actions, recorded before the crossing's end.
                 if (msg.object.get("envelopes")) |d| {
                     const envelopes = texts(srv.life.allocator(), d) orelse return message.protocolError(gpa, ref, "envelopes must be envelope texts");
+                    // A malformed one refuses them all before any applies,
+                    // so the result can be sent again.
+                    h.checkReceived(envelopes) catch |err| return message.protocolError(gpa, ref, std.fmt.allocPrint(srv.reply.allocator(), "the object envelope is refused: {s}", .{@errorName(err)}) catch "the object envelope is refused");
                     for (envelopes) |e| h.receive(e) catch |err| return message.protocolError(gpa, ref, std.fmt.allocPrint(srv.reply.allocator(), "the object envelope is refused: {s}", .{@errorName(err)}) catch "the object envelope is refused");
                 }
                 // The one outcome it gives; the session checks it.
