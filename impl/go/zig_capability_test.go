@@ -24,6 +24,7 @@ import (
 // The sqlite query's Fuel was updated when perStep replaced perRow (#1795).
 // The reserved-word diagnostics were updated when they were named (#2089).
 // Each ScriptView gained ForbidSuspension, false throughout (#2240).
+// Each Diagnostic gained EndLine and EndCol, 0 until the reactor gives them (#2332).
 func TestZigBackendCapabilityParity(t *testing.T) {
 	dir := t.TempDir()
 	recorded, err := os.Open("testdata/native-bridge-observations.json.gz")
