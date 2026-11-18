@@ -21,24 +21,21 @@ import {
   type MirrorPalette,
 } from './play-mirror';
 import { PaletteWindows } from './palette-windows';
-import { boundChange, hasOutputMeters, outputMeters } from './bindings';
+import { hasOutputMeters, outputMeters } from './bindings';
 import { mountPlayPrompts } from './play-prompts';
-import { type CodeSelection } from './code-browser-panel';
 import {
-  type FrameView,
+  type ControlFields,
+  PlayClient,
+  type PlayTransport,
+} from './play-client';
+import {
   type PatternEventView,
   type PlayRequest,
   type PlayResponse,
   type ReaderMessage,
-  type SourcePlace,
 } from './play-protocol';
 import { ReaderTextHistory } from './play-text';
-import {
-  ownerById,
-  knownOwnerId,
-  scriptOwners,
-  scriptPage,
-} from './script-manifest';
+import { ownerById, scriptPage } from './script-manifest';
 import { browserSoundBackend } from './sounds';
 import {
   startInstrumentAudio,
@@ -72,13 +69,33 @@ const NOT_LOADED =
 const VARIABLES_REFRESH = 100;
 
 /** Shown when the worker was ended because Stop got no answer in time. */
-/** A control's fields as the reader set them (#1902). */
-type ControlFields = Record<string, number | boolean>;
-
 export const UNRESPONSIVE = 'Play was stopped: a Script did not respond';
 
 /** The shortest a Pattern Event stays lit, so a fast one still shows (#2176). */
 const MIN_LIT_MS = 80;
+
+/**
+ * The Play worker under its supervisor (ADR 0107), as `PlayClient`'s
+ * transport. `onTerminated` follows a worker ended for not answering Stop.
+ */
+const workerTransport = (onTerminated: () => void): PlayTransport => {
+  const listeners: ((response: PlayResponse) => void)[] = [];
+  const supervisor = new WorkerSupervisor<PlayRequest, PlayResponse>({
+    ended: { kind: 'ended' },
+    spawn: () => new Worker('./play.worker.js', { type: 'module' }),
+    onMessage: response => {
+      for (const listener of listeners) {
+        listener(response);
+      }
+    },
+    onTerminated,
+  });
+  return {
+    request: (request, transfer) => supervisor.call(request, transfer),
+    onEvent: listener => void listeners.push(listener),
+    end: request => supervisor.supervise(request),
+  };
+};
 
 export const mountPlay = (shell: StackShell): void => {
   // Play browses the Project in place (ADR 0174); Pause and Step act on
@@ -120,7 +137,7 @@ export const mountPlay = (shell: StackShell): void => {
     );
     button.addEventListener('click', () => {
       if (allowed().atStoppedRun) {
-        post({ kind: 'statementStep', session: sessionId, step });
+        client.send({ kind: 'statementStep', step });
       }
     });
     return button;
@@ -174,11 +191,11 @@ export const mountPlay = (shell: StackShell): void => {
     epoch => {
       if (allowed().live && captureEpoch !== epoch) {
         captureEpoch = epoch;
-        post({ kind: 'performance', session: sessionId, epoch });
+        client.send({ kind: 'performance', epoch });
       }
     },
     id => {
-      if (generation === shell.editor.generation) {
+      if (client.projectCurrent()) {
         const current = ownerById(shell.editor.project, id);
         if (current) {
           shell.openScript(current);
@@ -187,31 +204,31 @@ export const mountPlay = (shell: StackShell): void => {
     },
   );
   // Clicking an authored Element in the Variables window selects it, by its
-  // `ownerId`, unless the Project it was named in (`of`) has gone.
-  const selectOwner = (of: number, id: number): void => {
-    if (of !== shell.editor.generation) {
+  // `ownerId`, unless the Project it was named in has gone (`current`).
+  const selectOwner = (current: () => boolean, id: number): void => {
+    if (!current()) {
       return;
     }
     const project = shell.editor.project;
-    const current = ownerById(project, id);
-    const page = current && scriptPage(project, current);
-    if (!current || !page || 'elements' in current) {
+    const owner = ownerById(project, id);
+    const page = owner && scriptPage(project, owner);
+    if (!owner || !page || 'elements' in owner) {
       return;
     }
     const pageIndex = project.pages.indexOf(page);
     if (pageIndex !== shell.editor.pageIndex) {
       shell.editor.goToPage(pageIndex);
     }
-    shell.editor.click(current.name);
+    shell.editor.click(owner.name);
   };
   const variables = new VariablesWindow(
-    id => selectOwner(generation, id),
+    id => selectOwner(() => client.projectCurrent(), id),
     () => sendWatches(),
     (frame, index) => {
       if (allowed().atStoppedRun) {
-        post({ kind: 'selectFrame', session: sessionId, frame: index });
+        client.send({ kind: 'selectFrame', frame: index });
       }
-      const at = stoppedAt(frame);
+      const at = client.stoppedAt(frame);
       if (at) {
         shell.breakpoints.showStopped(at);
       }
@@ -219,45 +236,17 @@ export const mountPlay = (shell: StackShell): void => {
   );
   // Breakpoints (ADR 0147) go to a browsing session, placed in the Project
   // as it was loaded; those in source edited since then stay behind.
-  const loadedOf = (kind: SourcePlace['kind']) =>
-    kind === 'library' ? loadedLibraries : loadedScripts;
-  // Test Scripts never load in Play, so they have no place.
-  const placeOf = ({ kind, id }: CodeSelection): SourcePlace | undefined =>
-    kind !== 'test' && loadedOf(kind).has(id) ? { kind, id } : undefined;
-  const loadedSource = (source: CodeSelection): string | undefined => {
-    const place = placeOf(source);
-    return place && loadedOf(place.kind).get(place.id);
-  };
-  let sentBreakpoints = '';
-  const sendBreakpoints = () => {
-    if (!allowed().browsing) {
-      return;
-    }
-    const breakpoints = shell.breakpoints
-      .all()
-      .flatMap(({ lines, source, text }) => {
-        const place = placeOf(source);
-        return place && loadedSource(source) === text
-          ? lines.map(line => ({ line, place }))
-          : [];
-      });
-    const json = JSON.stringify(breakpoints);
-    if (json !== sentBreakpoints) {
-      sentBreakpoints = json;
-      post({ kind: 'breakpoints', session: sessionId, breakpoints });
-    }
-  };
-  shell.breakpoints.onChange(sendBreakpoints);
+  shell.breakpoints.onChange(() => client.sendBreakpoints());
   // Hush silences and keeps playing; Revert puts the shown Script back as
   // Play last loaded it (#2002, ADR 0174).
   const hush = () => {
     if (mode === 'browse' && allowed().live) {
       unlight();
-      post({ kind: 'hush', session: sessionId });
+      client.send({ kind: 'hush' });
     }
   };
   const revert = () => {
-    const text = loadedSource(shell.code.selected);
+    const text = client.loadedSource(shell.code.selected);
     if (mode === 'browse' && text !== undefined) {
       shell.code.replace(text);
       shell.punchIn.show('Reverted to the Script Play loaded.');
@@ -277,24 +266,8 @@ export const mountPlay = (shell: StackShell): void => {
     if (!allowed().punching) {
       return false;
     }
-    const place = placeOf(source);
-    if (!place) {
-      shell.punchIn.show(NOT_LOADED);
-      return true;
-    }
-    const asked = sessionId;
-    void supervisor
-      .call({ kind: 'punchIn', session: asked, place, source: text })
-      .then(response => {
-        if (asked !== sessionId || response.kind !== 'punchIn') {
-          return;
-        }
-        const { reply } = response;
-        if (reply.kind === 'now' || reply.kind === 'bar') {
-          loadedOf(place.kind).set(place.id, text);
-          shell.breakpoints.setLoaded(loadedSource);
-          sendBreakpoints();
-        }
+    void client.punchIn(source, text).then(reply => {
+      if (reply.kind !== 'stale') {
         shell.punchIn.show(
           reply.kind === 'now'
             ? 'Punched In.'
@@ -304,33 +277,22 @@ export const mountPlay = (shell: StackShell): void => {
                 ? 'Resume first: Punching In would discard the stopped Run.'
                 : NOT_LOADED,
         );
-      });
+      }
+    });
     return true;
   });
   // Like Breakpoints, an uncaught error stops a Run only while browsing.
   const sendPauseOnErrors = () => {
     if (allowed().browsing) {
-      post({
-        kind: 'pauseOnErrors',
-        session: sessionId,
-        on: errors.pauseOnErrors.value,
-      });
+      client.send({ kind: 'pauseOnErrors', on: errors.pauseOnErrors.value });
     }
-  };
-  // Where a frame's line is in the authored Project, if it is still there.
-  const stoppedAt = (frame: FrameView | undefined) => {
-    const place = frame?.place;
-    return place && loadedOf(place.kind).has(place.id)
-      ? { line: frame.line, source: { kind: place.kind, id: place.id } }
-      : undefined;
   };
   // Watches go to a browsing session; the worker runs them while paused.
   const sendWatches = () => {
     if (allowed().browsing) {
-      post({
+      client.send({
         kind: 'watches',
-        session: sessionId,
-        watches: variables.watchesFor(sessionId),
+        watches: variables.watchesFor(client.session),
       });
     }
   };
@@ -342,11 +304,10 @@ export const mountPlay = (shell: StackShell): void => {
     if (variablesAsked || !variables.visible || !allowed().browsing) {
       return;
     }
-    const asked = sessionId;
     variablesAsked = true;
-    void supervisor.call({ kind: 'variables', session: asked }).then(reply => {
+    void client.ask({ kind: 'variables' }).then(reply => {
       variablesAsked = false;
-      if (reply.kind === 'variables' && reply.scripts && asked === sessionId) {
+      if (reply?.kind === 'variables' && reply.scripts) {
         variables.update(reply.scripts);
       }
     });
@@ -397,7 +358,7 @@ export const mountPlay = (shell: StackShell): void => {
   // `user` prompts cover the Page, unscaled, and answering resumes Play.
   const prompts = mountPlayPrompts(scaler, (prompt, value) => {
     recorder?.unrecorded('a prompt answer');
-    post({ kind: 'answer', session: sessionId, prompt: prompt.id, value });
+    client.send({ kind: 'answer', prompt: prompt.id, value });
   });
   const toolbar = byId('text-toolbar').cloneNode(true) as HTMLElement;
   toolbar.id = 'play-text-toolbar';
@@ -406,14 +367,8 @@ export const mountPlay = (shell: StackShell): void => {
   toolbar.setAttribute('aria-label', 'Reader text formatting');
   document.body.append(toolbar, reader);
   let session: PlayMirror | undefined;
-  // Each session's id; the worker's word about an earlier one is dropped.
-  let sessionId = 0;
   // The Project as it was when Play started, for assets and problem owners.
   let playing: Project | undefined;
-  // Each owner's Script and each Library's source as the session loaded
-  // them, by `ownerId` and Library id; the places the worker names.
-  let loadedScripts = new Map<number, string>();
-  let loadedLibraries = new Map<number, string>();
   let mode: PlayMode | undefined;
   /** What the session allows now (play-controls.ts). */
   const allowed = () => controls(session, mode);
@@ -421,7 +376,6 @@ export const mountPlay = (shell: StackShell): void => {
   let recorder: Recorder | undefined;
   // requestAnimationFrame pauses with a hidden tab, so frames do too.
   let frameRequest: number | undefined;
-  let generation = 0;
   let drawnPage: MirrorPage | undefined;
   let activeText: InPlaceTextEditor | undefined;
   // Physical key codes keep releases paired if modifiers change event.key.
@@ -462,7 +416,7 @@ export const mountPlay = (shell: StackShell): void => {
     const now = audio.reading().audio;
     for (const event of events) {
       const id = event.owner;
-      if (!loadedScripts.has(id)) {
+      if (!client.loadedScript(id)) {
         continue;
       }
       const ms = Math.max(MIN_LIT_MS, (event.end - event.at) * 1000);
@@ -486,50 +440,23 @@ export const mountPlay = (shell: StackShell): void => {
     instrumentAudio?.close();
     instrumentAudio = undefined;
   };
-  const supervisor = new WorkerSupervisor<PlayRequest, PlayResponse>({
-    ended: { kind: 'ended' },
-    spawn: () => new Worker('./play.worker.js', { type: 'module' }),
-    onMessage: response => receive(response),
-    // Only Stop is supervised. The ended worker's session is gone with it,
-    // so a session started since then ends too; the replacement waits idle.
-    onTerminated: () => {
+  // Only Stop is supervised. The ended worker's session is gone with it,
+  // so a session started since then ends too; the replacement waits idle.
+  const client = new PlayClient(
+    workerTransport(() => {
       profiler.interrupted();
       silence();
       leave();
       errors.add([{ owner: shell.editor.project, message: UNRESPONSIVE }]);
+    }),
+    {
+      audio: () => instrumentAudio,
+      breakpoints: shell.breakpoints,
+      browsing: () => allowed().browsing,
+      generation: () => shell.editor.generation,
     },
-  });
-  const post = (request: PlayRequest) => void supervisor.call(request);
-  // A control's changes (#1902): one at a time per control, the latest
-  // replacing any still waiting, so a drag never queues a Run per frame.
-  const pendingControls = new Map<
-    string,
-    { applied: boolean; waiting?: ControlFields }
-  >();
-  /** `pageIndex` names a Palette the control is on (#1903). */
-  /**
-   * Sends each bound parameter in `fields` to the audio; true when every
-   * one went, or none was bound.
-   */
-  const applyBindings = (element: Element, fields: ControlFields): boolean => {
-    let all = true;
-    for (const [field, value] of Object.entries(fields)) {
-      const bound = playing && boundChange(playing, element, field, value);
-      if (bound?.kind !== 'parameter') {
-        continue;
-      }
-      all =
-        (instrumentAudio?.send({
-          instrument: bound.instrument,
-          commands: [
-            { kind: 'set', parameter: bound.parameter, value: bound.value },
-          ],
-        }) ??
-          false) &&
-        all;
-    }
-    return all;
-  };
+  );
+  client.onEvent(response => receive(response));
   /**
    * Meters bound to an Instrument's output show its level as the audio
    * reports it, on the showing Page and open Palettes, with no worker.
@@ -562,50 +489,15 @@ export const mountPlay = (shell: StackShell): void => {
       draw();
     }
   };
+  /** `pageIndex` names a Palette the control is on (#1903). */
   const control = (
     element: Element,
     fields: ControlFields,
     index = session?.page.index,
   ) => {
-    if (!allowed().takesInput || index === undefined) {
-      return;
+    if (allowed().takesInput && index !== undefined) {
+      client.control(element, fields, index);
     }
-    // Bound parameters go straight to the audio, ahead of the worker, which
-    // then only records them (#1904).
-    const applied = applyBindings(element, fields);
-    const key = `${index}/${element.name}`;
-    const busy = pendingControls.get(key);
-    if (busy) {
-      busy.waiting = { ...busy.waiting, ...fields };
-      busy.applied = busy.applied && applied;
-      return;
-    }
-    const state: { applied: boolean; waiting?: ControlFields } = {
-      applied: true,
-    };
-    pendingControls.set(key, state);
-    const deliver = (next: ControlFields, nextApplied: boolean) =>
-      void supervisor
-        .call({
-          kind: 'control',
-          session: sessionId,
-          pageIndex: index,
-          target: element.name,
-          fields: next,
-          ...(nextApplied ? { applied: true } : {}),
-        })
-        .finally(() => {
-          const waiting = state.waiting;
-          const waitingApplied = state.applied;
-          state.waiting = undefined;
-          state.applied = true;
-          if (waiting) {
-            deliver(waiting, waitingApplied);
-          } else {
-            pendingControls.delete(key);
-          }
-        });
-    deliver(fields, applied);
   };
   // The Instruments window's authored changes while browsing (#2081): sent
   // straight to the audio as a bound control's are, then recorded by the
@@ -614,23 +506,11 @@ export const mountPlay = (shell: StackShell): void => {
     if (!session || session.ended || mode !== 'browse') {
       return;
     }
-    const applied =
-      instrumentAudio?.send({
-        instrument: change.instrument,
-        commands: [
-          { kind: 'set', parameter: change.parameter, value: change.value },
-        ],
-      }) ?? false;
     const shown = shell.instruments.playing.peek();
     if (shown) {
       shell.instruments.playing.value = withPlaying(shown, change);
     }
-    post({
-      kind: 'instrumentParameter',
-      session: sessionId,
-      ...change,
-      ...(applied ? { applied: true } : {}),
-    });
+    client.setParameter(change);
   });
   /** `pageIndex` names the Page `target` is on, if it isn't the showing one. */
   const sendTo = (
@@ -659,9 +539,8 @@ export const mountPlay = (shell: StackShell): void => {
         recorder.unrecorded('typing');
       }
     }
-    post({
+    client.send({
       kind: 'send',
-      session: sessionId,
       pageIndex: pageIndex!,
       message,
       ...('index' in target ? {} : { target: target.name }),
@@ -669,10 +548,9 @@ export const mountPlay = (shell: StackShell): void => {
     });
   };
   const receive = (response: PlayResponse) => {
+    // The client drops what the worker says of an earlier session.
     if (response.kind === 'watches') {
-      if (response.session === sessionId) {
-        variables.watchResults(response.results, response.pageChanged);
-      }
+      variables.watchResults(response.results, response.pageChanged);
       return;
     }
     if (response.kind === 'performance') {
@@ -682,11 +560,7 @@ export const mountPlay = (shell: StackShell): void => {
     if (response.kind === 'play') {
       const done = (error?: string) => {
         if (voices.delete(response.voice)) {
-          post({
-            kind: 'soundEnded',
-            voice: response.voice,
-            ...(error === undefined ? {} : { error }),
-          });
+          client.soundEnded(response.voice, error);
         }
       };
       try {
@@ -711,16 +585,10 @@ export const mountPlay = (shell: StackShell): void => {
       return;
     }
     if (response.kind === 'patternEvents') {
-      if (response.session === sessionId) {
-        lightEvents(response.events);
-      }
+      lightEvents(response.events);
       return;
     }
-    if (
-      response.kind !== 'view' ||
-      !session ||
-      response.session !== sessionId
-    ) {
+    if (response.kind !== 'view' || !session) {
       return;
     }
     const wasPaused = session.paused;
@@ -736,10 +604,12 @@ export const mountPlay = (shell: StackShell): void => {
       unlight();
     }
     if (mode === 'browse') {
-      variables.context(sessionId, session.messageTargets, session.paused);
+      variables.context(client.session, session.messageTargets, session.paused);
       variables.stoppedRun(session.stoppedRun);
       if (JSON.stringify(session.stoppedRun) !== wasStopped) {
-        shell.breakpoints.showStopped(stoppedAt(session.stoppedRun?.frames[0]));
+        shell.breakpoints.showStopped(
+          client.stoppedAt(session.stoppedRun?.frames[0]),
+        );
         drawModes();
       }
     }
@@ -863,7 +733,7 @@ export const mountPlay = (shell: StackShell): void => {
   const paletteWindows = new PaletteWindows({
     setOpen: (name, open) => {
       if (session && !session.ended) {
-        post({ kind: 'palette', session: sessionId, name, open });
+        client.send({ kind: 'palette', name, open });
       }
     },
     render: (palette, node) =>
@@ -1122,7 +992,7 @@ export const mountPlay = (shell: StackShell): void => {
       if (!session || !allowed().running) {
         return;
       }
-      post({ kind: 'frame', session: sessionId });
+      client.send({ kind: 'frame' });
       requestFrame();
     });
   };
@@ -1146,10 +1016,9 @@ export const mountPlay = (shell: StackShell): void => {
     clearInterval(variablesTimer);
     variablesTimer = undefined;
     variables.end();
-    shell.breakpoints.setLoaded(undefined);
     shell.breakpoints.showStopped(undefined);
     shell.punchIn.show(undefined);
-    void supervisor.supervise({ kind: 'stop', session: sessionId });
+    void client.end();
   };
   const drawModes = () => {
     const now = allowed();
@@ -1212,7 +1081,7 @@ export const mountPlay = (shell: StackShell): void => {
       shell.editor.goToPage(index);
     }
     shell.setPlaying(undefined);
-    if (commit && generation === shell.editor.generation) {
+    if (commit && client.projectCurrent()) {
       commitDrawings(shell.editor, ended);
     }
   };
@@ -1233,7 +1102,6 @@ export const mountPlay = (shell: StackShell): void => {
       record || shell.editor.page.palette ? 0 : shell.editor.pageIndex;
     recorder = record ? new Recorder(() => performance.now()) : undefined;
     shell.setPlaying(mode);
-    generation = shell.editor.generation;
     playing = shell.editor.project as Project;
     if (needsInstrumentAudio(playing)) {
       const project = playing;
@@ -1249,66 +1117,50 @@ export const mountPlay = (shell: StackShell): void => {
         {
           onError: message => errors.add([{ owner: project, message }]),
           ...(hasOutputMeters(project) ? { onLevels: showLevels } : {}),
-          onReading: reading =>
-            post({ kind: 'audioClock', session: sessionId, reading }),
+          onReading: reading => client.send({ kind: 'audioClock', reading }),
         },
       );
     }
-    // The editor gives every owner and Library an id (ProjectTree).
-    loadedScripts = new Map(
-      scriptOwners(playing).flatMap(owner => {
-        const id = knownOwnerId(owner);
-        return id === undefined ? [] : [[id, owner.script ?? '']];
-      }),
-    );
-    loadedLibraries = new Map(
-      playing.libraries.flatMap(library =>
-        library.id === undefined ? [] : [[library.id, library.source]],
-      ),
-    );
     // Each session's Instrument commands come over a fresh channel, from the
     // worker to the worklet and never through this thread (ADR 0156).
     const channel = instrumentAudio ? new MessageChannel() : undefined;
     if (instrumentAudio && channel) {
       instrumentAudio.listen(channel.port1);
     }
-    sessionId++;
-    profiler.reset(sessionId);
-    captureEpoch = profiler.visible ? profiler.results.epoch : undefined;
+    const audio = instrumentAudio;
+    const project = playing;
+    const sessionId = client.open(
+      project,
+      id => {
+        profiler.reset(id);
+        captureEpoch = profiler.visible ? profiler.results.epoch : undefined;
+        return {
+          ...(captureEpoch === undefined
+            ? {}
+            : { performanceEpoch: captureEpoch }),
+          ...(audio && channel
+            ? { audioClock: audio.reading(), instrumentPort: channel.port2 }
+            : {}),
+          trustedAddOns: (project.addOns ?? []).flatMap(ref =>
+            ref.hash && pageTrust.has(ref.hash) ? [ref.hash] : [],
+          ),
+          pageIndex,
+          // A different game each time (ADR 0096), unless recording a test.
+          seed: record ? 0n : BigInt(Date.now()),
+        };
+      },
+      channel ? [channel.port2] : [],
+    );
     session = new PlayMirror((element, richText, pageIndex, edit) => {
       recorder?.unrecorded('typing');
-      post({
+      client.send({
         kind: 'text',
-        session: sessionId,
         pageIndex,
         name: element.name,
         richText,
         edit,
       });
     });
-    void supervisor.call(
-      {
-        kind: 'open',
-        ...(captureEpoch === undefined
-          ? {}
-          : { performanceEpoch: captureEpoch }),
-        ...(instrumentAudio && channel
-          ? {
-              audioClock: instrumentAudio.reading(),
-              instrumentPort: channel.port2,
-            }
-          : {}),
-        session: sessionId,
-        project: playing,
-        trustedAddOns: (playing.addOns ?? []).flatMap(ref =>
-          ref.hash && pageTrust.has(ref.hash) ? [ref.hash] : [],
-        ),
-        pageIndex,
-        // A different game each time (ADR 0096), unless recording a test.
-        seed: record ? 0n : BigInt(Date.now()),
-      },
-      channel ? [channel.port2] : [],
-    );
     // Draw the authored Page at once, as the worker starts its session.
     session.apply(firstView(playing, pageIndex, sessionId));
     syncMessage();
@@ -1317,9 +1169,7 @@ export const mountPlay = (shell: StackShell): void => {
     if (mode === 'browse') {
       variablesTimer = setInterval(refreshVariables, VARIABLES_REFRESH);
       sendWatches();
-      sentBreakpoints = '';
-      shell.breakpoints.setLoaded(loadedSource);
-      sendBreakpoints();
+      client.loadBreakpoints();
       sendPauseOnErrors();
       byId('desk').append(toolbar, reader);
     } else {
@@ -1410,11 +1260,11 @@ export const mountPlay = (shell: StackShell): void => {
     } else {
       recorder?.pause();
     }
-    post({ kind: session.paused ? 'resume' : 'pause', session: sessionId });
+    client.send({ kind: session.paused ? 'resume' : 'pause' });
   };
   const step = () => {
     if (allowed().frameStepEnabled) {
-      post({ kind: 'step', session: sessionId });
+      client.send({ kind: 'step' });
     }
   };
   pauseButton.addEventListener('click', togglePause);
@@ -1587,7 +1437,7 @@ export const mountPlay = (shell: StackShell): void => {
     if (errorsGeneration !== shell.editor.generation) {
       errorsGeneration = shell.editor.generation;
       errors.clear();
-      profiler.reset(sessionId);
+      profiler.reset(client.session);
       captureEpoch = undefined;
       variables.clearWatches();
     }
@@ -1596,36 +1446,42 @@ export const mountPlay = (shell: StackShell): void => {
     if (!session) {
       return;
     }
-    if (generation !== shell.editor.generation) {
+    if (!client.projectCurrent()) {
       leave(false);
     } else {
       draw();
       // An edit leaves its source's Breakpoints behind until the next Play.
-      sendBreakpoints();
+      client.sendBreakpoints();
     }
   });
   const syncMessage = mountMessageWindow(shell, {
     inspected: (text, value, context, inspectedIn) => {
-      const of =
-        inspectedIn === undefined ? shell.editor.generation : generation;
-      const select = (id: number) => selectOwner(of, id);
+      // Inspected in a session, it names that session's Project; else the
+      // Project as it is now.
+      const of = shell.editor.generation;
+      const select = (id: number) =>
+        selectOwner(
+          inspectedIn === undefined
+            ? () => of === shell.editor.generation
+            : () => client.projectCurrent(),
+          id,
+        );
       variables.inspect(text, value, context, select);
       return select;
     },
     pageName: () => session?.page.name,
-    session: () => (allowed().live ? sessionId : undefined),
+    session: () => (allowed().live ? client.session : undefined),
     scripts: () => (allowed().live ? session!.messageTargets : []),
     run: async (text, expectedSession, target) => {
-      if (!session || !allowed().live || sessionId !== expectedSession) {
+      if (!session || !allowed().live || client.session !== expectedSession) {
         return { error: 'Play has stopped.' };
       }
-      const reply = await supervisor.call({
+      const reply = await client.ask({
         kind: 'message',
-        session: expectedSession,
         text,
         ...(target === undefined ? {} : { target }),
       });
-      return reply.kind === 'message'
+      return reply?.kind === 'message'
         ? {
             ...(reply.error === undefined ? {} : { error: reply.error }),
             ...(reply.text === undefined ? {} : { text: reply.text }),
