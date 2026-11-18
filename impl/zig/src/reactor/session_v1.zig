@@ -231,6 +231,7 @@ pub const Server = struct {
         if (std.mem.eql(u8, m, "session-input")) return srv.input(gpa, msg, ref);
         if (std.mem.eql(u8, m, "session-pump")) return srv.pump(gpa, msg, ref);
         if (std.mem.eql(u8, m, "session-describe-prompt")) return srv.describePrompt(gpa, ref);
+        if (std.mem.eql(u8, m, "session-inspect")) return srv.inspect(gpa, ref);
         if (std.mem.eql(u8, m, "session-close")) return srv.close(gpa, ref);
         if (std.mem.eql(u8, m, "session-open")) return message.protocolError(gpa, ref, "a session is open");
         return message.protocolError(gpa, ref, "this guest serves a session");
@@ -399,6 +400,32 @@ pub const Server = struct {
         var out: std.Io.Writer.Allocating = .init(gpa);
         defer out.deinit();
         std.json.Stringify.value(.{ .ref = ref, .ok = .{ .call = p.call, .kind = p.kind, .message = p.message, .prompt = p.prompt, .default = p.fallback, .items = p.items, .multiple = p.multiple } }, .{}, &out.writer) catch return oom(gpa, ref);
+        return out.toOwnedSlice() catch oom(gpa, ref);
+    }
+
+    /// `session-inspect`: `inspect`'s reply for the session's Group, as a
+    /// Trace Case ends, with the snapshot in its Trace. It is no input:
+    /// `:vars` is the Session Command a Transcript holds.
+    fn inspect(srv: *Server, gpa: Allocator, ref: i64) []u8 {
+        const ra = srv.reply.allocator();
+        const fields: []const u8 = if (srv.host.?.group) |g|
+            message.inspectionFields(ra, @ptrCast(@alignCast(g))) catch |err| return switch (err) {
+                error.OutOfMemory => oom(gpa, ref),
+                else => message.protocolError(gpa, ref, "the session's Group can't be inspected"),
+            }
+        else
+            // No Group until the session's first input needs one.
+            "\"scripts\":[]";
+        var out: std.Io.Writer.Allocating = .init(gpa);
+        defer out.deinit();
+        var jw: std.json.Stringify = .{ .writer = &out.writer };
+        jw.beginObject() catch return oom(gpa, ref);
+        jw.objectField("ref") catch return oom(gpa, ref);
+        jw.write(ref) catch return oom(gpa, ref);
+        jw.objectField("ok") catch return oom(gpa, ref);
+        jw.print("{{{s}}}", .{fields}) catch return oom(gpa, ref);
+        srv.records(&jw) catch return oom(gpa, ref);
+        jw.endObject() catch return oom(gpa, ref);
         return out.toOwnedSlice() catch oom(gpa, ref);
     }
 

@@ -235,9 +235,9 @@ fn runCase(gpa: std.mem.Allocator, text: []const u8, expected_trace: []const u8,
     }
 
     // The end, as for a Trace Case: Inspect, unless the last input was it.
-    if (g.server.host.?.group) |group| if (!lastInputIsVars(g.trace.items)) {
-        _ = c.talk_inspect(group, null);
-        try g.trace.appendSlice(g.arena.allocator(), g.server.trace.items);
+    if (!lastInputIsVars(g.trace.items)) _ = okOf(try g.sendAs(null, "session-inspect", .{})) catch |e| {
+        std.debug.print("{s}: session-inspect\n", .{name});
+        return e;
     };
 
     var got: std.Io.Writer.Allocating = .init(a);
@@ -353,6 +353,31 @@ fn openLamp(g: *Guest) !void {
     _ = try okOf(try g.sendAs(null, "session-open", .{ .clock = "2026-11-18T09:00:00Z", .objects = &[_][]const u8{ kind_envelope, object_envelope, setup_envelope } }));
 }
 
+test "session-inspect gives the Group's Inspection and its snapshot, and records nothing" {
+    var g: Guest = undefined;
+    try g.init(std.testing.allocator);
+    defer g.deinit();
+    _ = try okOf(try g.sendAs(null, "session-open", .{ .clock = "2026-11-18T09:00:00Z" }));
+    // Before any input, the session has no Group yet.
+    try std.testing.expectEqual(@as(usize, 0), (try okOf(try g.sendAs(null, "session-inspect", .{}))).object.get("scripts").?.array.items.len);
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .input = "put 3 into held" }));
+    const lines = g.lines.items.len;
+    const traced = g.trace.items.len;
+    const ok = try okOf(try g.sendAs(null, "session-inspect", .{}));
+    const scripts = ok.object.get("scripts").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), scripts.len);
+    try std.testing.expectEqualStrings("session", scripts[0].object.get("name").?.string);
+    try std.testing.expectEqual(lines, g.lines.items.len);
+    try std.testing.expectEqualStrings("> vars", g.trace.items[traced]);
+    var held = false;
+    for (g.trace.items[traced..]) |l| held = held or std.mem.indexOf(u8, l, "held") != null;
+    try std.testing.expect(held);
+    // A Function Value's token is empty: no message takes it back.
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .input = "put given n: n * 2 into double" }));
+    const shown = try std.json.Stringify.valueAlloc(g.arena.allocator(), try okOf(try g.sendAs(null, "session-inspect", .{})), .{});
+    try std.testing.expect(std.mem.indexOf(u8, shown, "{\"$function\":[\"session\",\"<function session+2:3:5>\",\"\"]}") != null);
+}
+
 test "a live crossing stays open across frames until its prop-result" {
     var g: Guest = undefined;
     try g.init(std.testing.allocator);
@@ -368,6 +393,7 @@ test "a live crossing stays open across frames until its prop-result" {
     // Other frames meanwhile are refused, and the crossing stays open.
     try std.testing.expectEqualStrings("a session is waiting for its result", try errDetail(try g.sendAs(null, "session-pump", .{})));
     try std.testing.expectEqualStrings("a session is waiting for its result", try errDetail(try g.sendAs(null, "session-describe-prompt", .{})));
+    try std.testing.expectEqualStrings("a session is waiting for its result", try errDetail(try g.sendAs(null, "session-inspect", .{})));
     try std.testing.expectEqualStrings("the result does not match the need", try errDetail(try g.sendAs(r, "write-result", .{ .written = true })));
     const answered = try g.send(try std.fmt.allocPrint(g.arena.allocator(), "{{\"m\":\"prop-result\",\"ref\":{d},\"value\":3}}", .{r}));
     try std.testing.expectEqual(r, Guest.refOf(answered));
