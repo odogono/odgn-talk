@@ -70,9 +70,9 @@ chapter 2 already requires; it is implemented separately as the Spec fix in PR #
   and the map-key rule at [Go L13/L87](../../impl/go/internal/value/display.go#L13)
   and [TS L739/L768](../../impl/ts/src/values.ts#L739).
 - **Every tool uses that printer.** These include the Session Host echo
-  ([TS](../../impl/ts/src/session/host.ts#L1570), [Go](../../impl/go/session/trace.go#L160)),
+  ([TS](../../impl/ts/src/session/host.ts#L1570), [Go](https://github.com/odogono/odgn-talk/blob/e777baefe918a586d27a6096765cd305c3d0933a/impl/go/session/trace.go#L160)),
   `:vars` ([TS](../../impl/ts/src/session/host.ts#L1294),
-  [Go](../../impl/go/session/commands.go#L398)), the debugger's variables
+  [Go](https://github.com/odogono/odgn-talk/blob/e777baefe918a586d27a6096765cd305c3d0933a/impl/go/session/commands.go#L398)), the debugger's variables
   ([stack](../../tooling/stack/src/debug.ts#L492),
   [Playground](https://github.com/odogono/odgn-talk/blob/623c7bc3052a21f49e4d05db97bdb096c1c7f9e2/tooling/playground/src/session.ts#L80)) and `northtalk test`
   failures ([test runner](../../tooling/cli/src/test.ts#L422)). The echo is

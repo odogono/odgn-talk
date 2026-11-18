@@ -335,7 +335,7 @@ func TestZigBackendInspectionViewVector(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := New().NewGroup(GroupOptions{}).backend.(*zigGroup)
-	got, err := b.inspection(view)
+	got, err := zigInspection(view, b)
 	if err != nil {
 		t.Fatal(err)
 	}

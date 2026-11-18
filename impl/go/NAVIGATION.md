@@ -121,10 +121,10 @@ The Go module runs the embedded Zig Core, with no Go parser, checker, compiler o
 
 ## Sessions, REPL and Transcripts
 
-- Implementation: [Host](session/host.go), [analysis bridge](internal/analysis/) (negotiated Zig `analysis-v1`, via [the guest](zig_analysis.go)), [Session Commands](session/commands.go), [observation](session/observe.go), [`:describe`](session/describe.go), [inspection](session/inspect.go), [drivers](driver/), [Transcript replay](driver/transcript.go), [CLI](internal/cmd/northtalk/)
-- Rules: [Entries](../../spec/02-grammar.md#entries), [sessions](../../spec/12-sessions-and-tooling.md), [Session observation](../../spec/session-observation.md)
+- Implementation: [Host](session/host.go), an adapter over the reactor's `session-v1` ([its guest](session_guest.go), [ADR 0180](../../docs/adr/0180-go-sessions-run-the-zig-session-host-through-the-reactor.md)); the Session Commands are the [Zig Session Host](../zig/src/session/session.zig)'s. [Live Host Objects](session/objects.go), [needs answered from a recorded Transcript](session/replayed.go), [drivers](driver/), [Transcript replay](driver/transcript.go), [CLI](internal/cmd/northtalk/)
+- Rules: [Entries](../../spec/02-grammar.md#entries), [sessions](../../spec/12-sessions-and-tooling.md), [Session observation](../../spec/session-observation.md), [`session-v1`](../../spec/09-embedding.md#sessions)
 - Tests and cases: [Host tests](session/host_test.go), [REPL tests](driver/repl_test.go), [Session parity](internal/corpus/session_test.go), [Transcripts](../../corpus/sessions/)
-- First check: `go -C impl/go test ./session ./driver`
+- First check: `go -C impl/go test ./session ./driver`. A Session Command change is Zig's: see [the Zig task map](../zig/NAVIGATION.md), then rebuild the embedded reactor.
 
 ## Script Runner
 

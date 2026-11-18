@@ -62,8 +62,6 @@ func TestREPLSharedFencedTranscript(t *testing.T) {
 	if out.String() != expected.String() {
 		t.Fatalf("got %q, want %q", out.String(), expected.String())
 	}
-	// New recordings carry setup; the committed legacy Transcript remains readable.
-	wanted = append([]session.Item{{Kind: "envelope", Text: `{"objects":{},"type":"setup"}`}}, wanted...)
 	if WriteTranscript(recorded) != WriteTranscript(wanted) {
 		t.Fatal(WriteTranscript(recorded))
 	}

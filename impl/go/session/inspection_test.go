@@ -15,7 +15,6 @@ func TestInspectionExpressionDiagnostics(t *testing.T) {
 	h := New(Environment{Now: func() time.Time { return time.Unix(0, 0) }, Trace: func(l string) { trace = append(trace, l) }})
 	h.Input("script variable calls = 0")
 	h.Input("function once\nadd 1 to calls\nreturn 1\nend once")
-	source := h.Source()
 	before := append([]string(nil), trace...)
 	for _, test := range []struct {
 		input, diagnostic string
@@ -36,8 +35,8 @@ func TestInspectionExpressionDiagnostics(t *testing.T) {
 			t.Errorf("%q: got %v, want %s", test.input, out, test.diagnostic)
 		}
 	}
-	if h.Source() != source || !reflect.DeepEqual(trace, before) {
-		t.Fatal("refused inspection changed source or executed", h.Source(), trace)
+	if !reflect.DeepEqual(trace, before) {
+		t.Fatal("refused inspection executed", trace)
 	}
 	if out := h.Input("calls"); !reflect.DeepEqual(out, []string{"0"}) {
 		t.Fatal(out)
@@ -71,11 +70,7 @@ func TestPassiveInspectionAndReaderHygiene(t *testing.T) {
 	}})
 	h.Input("constant entry2Object = 99")
 	h.Input("on entry3Row\nend entry3Row")
-	before := h.Source()
 	h.Input(":inspect object")
-	if h.Source() != before {
-		t.Fatal("reader entered Session Source", h.Source())
-	}
 	found := false
 	for _, l := range trace {
 		if strings.HasPrefix(l, "> request ") && strings.Contains(l, "message=entry4:to:") {

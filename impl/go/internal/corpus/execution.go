@@ -14,7 +14,6 @@ import (
 	talk "northtalk.org/go"
 	"northtalk.org/go/internal/generated"
 	"northtalk.org/go/internal/replay"
-	"northtalk.org/go/session"
 )
 
 type traceLines []string
@@ -227,35 +226,30 @@ func runExecutionWithHost(c Case, records []Record, roundTrip bool, prepare func
 			}
 		}
 	}
-	if x.sessionObjects != nil {
-		x.sessionObjects.Finish()
-	}
 	return x.lines, nil
 }
 
 // executionReplay replays Host Inputs on one Group through the public
 // embedding API. Its records may grow as a driver appends inputs.
 type executionReplay struct {
-	sessionObjects  *session.Objects
-	sessionBindings map[string]*talk.Object
-	records         []Record
-	roundTrip       bool
-	readSource      func(Setup) (string, error)
-	inside          map[int]bool
-	lines           traceLines
-	crossings       *crossingReplay
-	core            *talk.Core
-	operations      *operationReplay
-	libraries       map[string]*talk.Library
-	ready           chan struct{}
-	g               *talk.Group
-	deliveries      map[string]*replayDelivery
-	objects         objectReplay
-	saves           map[string][]byte
-	saveIDs         []string
-	values          *replayValues
-	setups          map[string]Setup
-	cancels         []context.CancelFunc
+	records    []Record
+	roundTrip  bool
+	readSource func(Setup) (string, error)
+	inside     map[int]bool
+	lines      traceLines
+	crossings  *crossingReplay
+	core       *talk.Core
+	operations *operationReplay
+	libraries  map[string]*talk.Library
+	ready      chan struct{}
+	g          *talk.Group
+	deliveries map[string]*replayDelivery
+	objects    objectReplay
+	saves      map[string][]byte
+	saveIDs    []string
+	values     *replayValues
+	setups     map[string]Setup
+	cancels    []context.CancelFunc
 }
 
 func newExecutionReplay(setup Setup, records []Record, roundTrip bool, readSource func(Setup) (string, error)) (*executionReplay, error) {
@@ -273,9 +267,6 @@ func newExecutionReplay(setup Setup, records []Record, roundTrip bool, readSourc
 		if inPump && !r.Input && (r.Name == "call" || r.Name == "prop") && len(r.IDs) > 0 {
 			crossing = crossingKey(r)
 			crossings.inputs[crossing] = append(crossings.inputs[crossing], nil)
-		}
-		if items, ok := setup["sessionObjects"].([]session.Item); ok && len(items) > 0 {
-			continue
 		}
 		if inPump && r.Input && i+1 < len(records) && records[i+1].Name == "refused" {
 			if crossing == "" {
@@ -331,18 +322,7 @@ func newExecutionReplay(setup Setup, records []Record, roundTrip bool, readSourc
 	}}, operations.groupOptions()...)
 	crossings.applyInput = x.apply
 	operations.crossing = crossings.crossing
-	var objects objectReplay
-	if items, ok := setup["sessionObjects"].([]session.Item); ok && len(items) > 0 {
-		x.sessionObjects = session.NewObjectReplay(core, g, items)
-		x.sessionBindings = x.sessionObjects.Preload()
-		objects = objectReplay{}
-		for r, obj := range x.sessionObjects.Handles() {
-			objects[objectRef{r[0], r[1]}] = obj
-		}
-		operations.values.objects = objects
-	} else {
-		objects, e = setupObjects(core, g, setup, operations.values, crossings.crossing, records)
-	}
+	objects, e := setupObjects(core, g, setup, operations.values, crossings.crossing, records)
 	if e != nil {
 		return nil, e
 	}
@@ -390,14 +370,6 @@ func (x *executionReplay) control(r Record) error {
 
 func (x *executionReplay) apply(i int) error {
 	records, roundTrip, r := x.records, x.roundTrip, x.records[i]
-	if x.sessionObjects != nil {
-		if x.sessionObjects.TraceInput(r.Name, r.IDs) {
-			return nil
-		}
-		for r, obj := range x.sessionObjects.Handles() {
-			x.objects[objectRef{r[0], r[1]}] = obj
-		}
-	}
 	core, operations, libraries, values := x.core, x.operations, x.libraries, x.values
 	setups, deliveries, crossings, ready := x.setups, x.deliveries, x.crossings, x.ready
 	fields := map[string]Field{}
@@ -544,9 +516,6 @@ func (x *executionReplay) apply(i int) error {
 		}
 		s.Revoke(fields["grant"].Raw)
 	case "save":
-		if x.sessionObjects != nil {
-			x.sessionObjects.Saved(r.IDs[0])
-		}
 		saved, err := x.g.Save()
 		if err != nil {
 			if host, ok := err.(*talk.HostError); !ok || host.Code != talk.EffectsPending {
@@ -598,16 +567,13 @@ func (x *executionReplay) apply(i int) error {
 		case "reload-changed":
 			policy = talk.ReloadChanged
 		}
-		next, restoredResult, err := core.Restore(x.saves[fields["from"].Raw], talk.RestoreOptions{Trace: crossings, OnReady: gReady(ready), Libraries: selected, Mismatch: policy, KeepMailbox: fields["mailbox"].Raw == "keep", Grants: func(script, name string) *talk.Grant {
+		next, _, err := core.Restore(x.saves[fields["from"].Raw], talk.RestoreOptions{Trace: crossings, OnReady: gReady(ready), Libraries: selected, Mismatch: policy, KeepMailbox: fields["mailbox"].Raw == "keep", Grants: func(script, name string) *talk.Grant {
 			if unbound[script+"."+name] {
 				return nil
 			}
 			grants, _ := operations.grants(setups[script])
 			return grants[name]
 		}, Resolve: func(kind, id string) (any, bool) {
-			if x.sessionObjects != nil && !crossings.hidden {
-				return x.sessionObjects.Resolve(kind, id)
-			}
 			key := objectRef{kind, id}
 			if unresolved[key] {
 				return nil, false
@@ -624,11 +590,6 @@ func (x *executionReplay) apply(i int) error {
 			return nil
 		}
 		x.g = next
-		if x.sessionObjects != nil {
-			x.sessionObjects.Restored(fields["from"].Raw)
-			x.sessionObjects.Reports(restoredResult.Reports)
-			x.sessionObjects.Attach(next)
-		}
 		for name := range withheld {
 			delete(libraries, name)
 		}
@@ -742,10 +703,6 @@ func (x *executionReplay) apply(i int) error {
 		asUsed, _ := setup["grantsAsUsed"].(bool)
 		forbid, _ := setup["forbidSuspension"].(bool)
 		bindings, err := x.objects.bindings(setup)
-		if x.sessionObjects != nil {
-			bindings = x.sessionBindings
-			err = nil
-		}
 		if err != nil {
 			return err
 		}
@@ -838,9 +795,6 @@ func (x *executionReplay) apply(i int) error {
 		if crossings.err != nil {
 			return crossings.err
 		}
-		if x.sessionObjects != nil {
-			x.sessionObjects.Reports(result.Reports)
-		}
 		for _, report := range result.Reports {
 			switch report := report.(type) {
 			case *talk.RunEnd:
@@ -896,7 +850,7 @@ func (x *executionReplay) apply(i int) error {
 					}
 
 				}
-				if crossesOldHandle || x.sessionObjects != nil && x.sessionObjects.CrossesHandles() {
+				if crossesOldHandle {
 					return nil
 				}
 				// Save must still be attempted at a live-effect boundary.
@@ -936,9 +890,6 @@ func (x *executionReplay) apply(i int) error {
 					grants, _ := operations.grants(setups[script])
 					return grants[name]
 				}, Resolve: func(kind, id string) (any, bool) {
-					if x.sessionObjects != nil && !crossings.hidden {
-						return x.sessionObjects.Resolve(kind, id)
-					}
 					o := x.objects[objectRef{kind, id}]
 					if o == nil {
 						return nil, false
@@ -951,9 +902,6 @@ func (x *executionReplay) apply(i int) error {
 				}
 
 				x.g = next
-				if x.sessionObjects != nil {
-					x.sessionObjects.Attach(next)
-				}
 				x.objects = restoredObjects(x.g, x.objects)
 				values.objects = x.objects
 				for _, p := range result.Pending {
@@ -968,9 +916,6 @@ func (x *executionReplay) apply(i int) error {
 		}
 	case "vars":
 		view := x.g.Inspect()
-		if x.sessionObjects != nil {
-			x.sessionObjects.Snapshot(view)
-		}
 		for _, script := range view.Scripts {
 			for _, entry := range script.Vars {
 				values.receive(entry.Val)
