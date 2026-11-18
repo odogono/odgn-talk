@@ -405,7 +405,7 @@ def message_layer(engine, module):
 def session_v1(engine, module):
     """`session-v1` (ADR 0180) in the shipped image: a session waits for a
     deadline under a real Clock, wakes at session-pump, stops at a write
-    need its result answers, and is inspected."""
+    need its result answers, reads collected lines, and is inspected."""
     h = MessageHost(engine, module)
     assert "session-v1" in h.ok("hello", protocol=1, features=["session-v1"])["features"]
     h.ok("session-open")
@@ -421,6 +421,7 @@ def session_v1(engine, module):
     wrote = h.send("write-result", is_result=True, written=True)
     assert wrote["output"] == ["wrote session.talk"], wrote
     assert h.send("new-group", group="g", name="g")["err"]["kind"] == "protocol error"
+    assert h.ok("session-complete", text="on nap") == {"complete": False}
     inspected = h.send("session-inspect")
     assert inspected["ok"]["scripts"][0]["name"] == "session" and inspected["trace"][0] == "> vars", inspected
     assert inspected["transcript"] == [], inspected

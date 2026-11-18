@@ -232,6 +232,7 @@ pub const Server = struct {
         if (std.mem.eql(u8, m, "session-pump")) return srv.pump(gpa, msg, ref);
         if (std.mem.eql(u8, m, "session-describe-prompt")) return srv.describePrompt(gpa, ref);
         if (std.mem.eql(u8, m, "session-inspect")) return srv.inspect(gpa, ref);
+        if (std.mem.eql(u8, m, "session-complete")) return srv.complete(gpa, msg, ref);
         if (std.mem.eql(u8, m, "session-close")) return srv.close(gpa, ref);
         if (std.mem.eql(u8, m, "session-open")) return message.protocolError(gpa, ref, "a session is open");
         return message.protocolError(gpa, ref, "this guest serves a session");
@@ -400,6 +401,18 @@ pub const Server = struct {
         var out: std.Io.Writer.Allocating = .init(gpa);
         defer out.deinit();
         std.json.Stringify.value(.{ .ref = ref, .ok = .{ .call = p.call, .kind = p.kind, .message = p.message, .prompt = p.prompt, .default = p.fallback, .items = p.items, .multiple = p.multiple } }, .{}, &out.writer) catch return oom(gpa, ref);
+        return out.toOwnedSlice() catch oom(gpa, ref);
+    }
+
+    /// `session-complete`: whether `text` is a whole Entry or Session
+    /// Command, as the session's own names read it, or a Driver collecting
+    /// lines should wait for more.
+    fn complete(srv: *Server, gpa: Allocator, msg: Json, ref: i64) []u8 {
+        const text = textOf(msg.object.get("text") orelse return message.protocolError(gpa, ref, "session-complete needs text")) orelse return message.protocolError(gpa, ref, "text is text");
+        const done = srv.host.?.complete(text) catch return oom(gpa, ref);
+        var out: std.Io.Writer.Allocating = .init(gpa);
+        defer out.deinit();
+        out.writer.print("{{\"ref\":{d},\"ok\":{{\"complete\":{}}}}}", .{ ref, done }) catch return oom(gpa, ref);
         return out.toOwnedSlice() catch oom(gpa, ref);
     }
 

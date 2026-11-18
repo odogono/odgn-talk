@@ -378,6 +378,30 @@ test "session-inspect gives the Group's Inspection and its snapshot, and records
     try std.testing.expect(std.mem.indexOf(u8, shown, "{\"$function\":[\"session\",\"<function session+2:3:5>\",\"\"]}") != null);
 }
 
+test "session-complete reads an Entry with the session's own names" {
+    var g: Guest = undefined;
+    try g.init(std.testing.allocator);
+    defer g.deinit();
+    _ = try okOf(try g.sendAs(null, "session-open", .{ .clock = "2026-11-18T09:00:00Z" }));
+    const cases = [_]struct { []const u8, bool }{
+        .{ "on greet", false },
+        .{ "on greet\n  say \"hi\"\nend greet", true },
+        .{ ":fuel on greet", false },
+        .{ ":inspect [1,", false },
+        .{ ":vars", true },
+        .{ "1 +", false },
+    };
+    for (cases) |x| {
+        const ok = try okOf(try g.sendAs(null, "session-complete", .{ .text = x[0] }));
+        std.testing.expectEqual(x[1], ok.object.get("complete").?.bool) catch |e| {
+            std.debug.print("session-complete {s}\n", .{x[0]});
+            return e;
+        };
+    }
+    // Nothing is recorded.
+    try std.testing.expectEqual(@as(usize, 0), g.lines.items.len);
+}
+
 test "a live crossing stays open across frames until its prop-result" {
     var g: Guest = undefined;
     try g.init(std.testing.allocator);
@@ -394,6 +418,7 @@ test "a live crossing stays open across frames until its prop-result" {
     try std.testing.expectEqualStrings("a session is waiting for its result", try errDetail(try g.sendAs(null, "session-pump", .{})));
     try std.testing.expectEqualStrings("a session is waiting for its result", try errDetail(try g.sendAs(null, "session-describe-prompt", .{})));
     try std.testing.expectEqualStrings("a session is waiting for its result", try errDetail(try g.sendAs(null, "session-inspect", .{})));
+    try std.testing.expectEqualStrings("a session is waiting for its result", try errDetail(try g.sendAs(null, "session-complete", .{ .text = "1" })));
     try std.testing.expectEqualStrings("the result does not match the need", try errDetail(try g.sendAs(r, "write-result", .{ .written = true })));
     const answered = try g.send(try std.fmt.allocPrint(g.arena.allocator(), "{{\"m\":\"prop-result\",\"ref\":{d},\"value\":3}}", .{r}));
     try std.testing.expectEqual(r, Guest.refOf(answered));
