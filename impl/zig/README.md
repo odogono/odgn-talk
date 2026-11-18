@@ -636,7 +636,11 @@ Trace go.
   A replay defines each recorded Object Kind and registers each object with a
   dummy native identity. Its getters and setters answer from the recorded
   `property-begin`/`property-end` pairs, making the Host actions recorded
-  between them. Each Function Value leaf a report or a setter exposes binds
+  between them, and each replayed action's reply must be the recorded one.
+  A live embedder hands an action's request alone (`Session.act`); the
+  session performs it and records it with its reply. `answer` and `fail`
+  reach the calls the session's Group issued to it, waiting or not; any
+  other call id is `unknown call`. Each Function Value leaf a report or a setter exposes binds
   the next `function` handle, and a Restore's resolver answers from the
   `resolve` envelope. Crossing Values go directly from parsed JSON to the
   Core's iterative Value decoder, which resolves `$sessionFunction` handles

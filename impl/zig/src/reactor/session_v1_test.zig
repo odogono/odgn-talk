@@ -131,20 +131,18 @@ fn envelopeOf(a: std.mem.Allocator, text: []const u8) Envelope {
 /// Runs a case as an embedder drives `session-v1`: each input, line,
 /// answer, deadline and declaration the Transcript holds is a frame, and
 /// each need is answered from the Transcript, as `runLive` answers them.
-/// Returns false for a case with Host actions, which aren't live yet (#2284).
-fn runCase(gpa: std.mem.Allocator, text: []const u8, expected_trace: []const u8, name: []const u8) !bool {
+fn runCase(gpa: std.mem.Allocator, text: []const u8, expected_trace: []const u8, name: []const u8) !void {
     var arena: std.heap.ArenaAllocator = .init(gpa);
     defer arena.deinit();
     const a = arena.allocator();
     const items = try transcript.parse(a, text);
-    for (items) |item| if (item == .crossing and envelopeOf(a, item.crossing) == .action) return false;
 
     var g: Guest = undefined;
     try g.init(gpa);
     defer g.deinit();
     // Live Host Objects when the embedder declares any.
     var declares = false;
-    for (items) |item| declares = declares or (item == .crossing and envelopeOf(a, item.crossing) == .declaration);
+    for (items) |item| declares = declares or (item == .crossing and envelopeOf(a, item.crossing) != .made);
     _ = try okOf(try g.sendAs(null, "session-open", .{ .objects = if (declares) @as(?[]const []const u8, &.{}) else null }));
     var clock_real = true;
     var last_reading: []const u8 = "1970-01-01T00:00:00Z";
@@ -182,7 +180,8 @@ fn runCase(gpa: std.mem.Allocator, text: []const u8, expected_trace: []const u8,
             .answer => |x| try g.sendAs(null, "session-input", .{ .answer = .{ .shown = x.shown, .fail = x.fail }, .reading = reading }),
             .crossing => |x| switch (envelopeOf(a, x)) {
                 .declaration => try g.sendAs(null, "session-input", .{ .envelope = x, .reading = reading }),
-                else => break,
+                .action => try g.sendAs(null, "session-input", .{ .envelope = try replay.requestOnly(a, x), .reading = reading }),
+                .made => break,
             },
             .output => unreachable,
         };
@@ -206,17 +205,18 @@ fn runCase(gpa: std.mem.Allocator, text: []const u8, expected_trace: []const u8,
                 }
                 reply = try g.sendAs(r, "resolve-result", .{ .objects = outcomes.items });
             } else {
-                // The identities the answer names, then the end's reply.
-                var declare: std.ArrayList([]const u8) = .empty;
+                // The identities the answer names and the Host's actions,
+                // then the end's reply.
+                var envelopes: std.ArrayList([]const u8) = .empty;
                 const end = while (k < items.len) : (k += 1) {
                     if (items[k] != .crossing) return error.CaseFailed;
                     const v = try std.json.parseFromSliceLeaky(Json, a, items[k].crossing, .{ .parse_numbers = false });
                     if (std.mem.eql(u8, v.object.get("type").?.string, "property-end")) break v.object.get("reply").?;
-                    try declare.append(a, items[k].crossing);
+                    try envelopes.append(a, if (envelopeOf(a, items[k].crossing) == .action) try replay.requestOnly(a, items[k].crossing) else items[k].crossing);
                 } else return error.CaseFailed;
                 var frame: std.Io.Writer.Allocating = .init(a);
-                try frame.writer.print("{{\"m\":\"prop-result\",\"ref\":{d},\"declare\":", .{r});
-                try std.json.Stringify.value(declare.items, .{}, &frame.writer);
+                try frame.writer.print("{{\"m\":\"prop-result\",\"ref\":{d},\"envelopes\":", .{r});
+                try std.json.Stringify.value(envelopes.items, .{}, &frame.writer);
                 var outcome = end.object.iterator();
                 const e = outcome.next().?;
                 try frame.writer.writeAll(",");
@@ -260,7 +260,6 @@ fn runCase(gpa: std.mem.Allocator, text: []const u8, expected_trace: []const u8,
             return error.CaseFailed;
         }
     }
-    return true;
 }
 
 /// As `session_case.zig` decides it.
@@ -294,7 +293,6 @@ test "every corpus/sessions case runs live through session-v1's frames" {
         for (names.items) |n| gpa.free(n);
         names.deinit(gpa);
     }
-    var ran: usize = 0;
     for (names.items) |name| {
         var dir = try root.openDir(io, name, .{});
         defer dir.close(io);
@@ -302,10 +300,8 @@ test "every corpus/sessions case runs live through session-v1's frames" {
         defer gpa.free(text);
         const trace = try dir.readFileAlloc(io, "case.trace", gpa, .limited(64 * 1024 * 1024));
         defer gpa.free(trace);
-        if (try runCase(gpa, text, trace, name)) ran += 1;
+        try runCase(gpa, text, trace, name);
     }
-    // Only object-inspection has Host actions (#2284).
-    try std.testing.expectEqual(names.items.len - 1, ran);
 }
 
 test "every corpus/sessions case replays through session-open" {
@@ -489,4 +485,115 @@ test "a session guest serves only its session" {
     try std.testing.expectEqualStrings("this guest serves a session", try errDetail(try g.sendAs(null, "new-group", .{ .name = "g" })));
     try std.testing.expectEqualStrings("a session is open", try errDetail(try g.sendAs(null, "session-open", .{})));
     try std.testing.expectEqualStrings("a virtual Clock takes no reading", try errDetail(try g.sendAs(null, "session-pump", .{ .reading = "2026-11-18T09:00:00Z" })));
+}
+
+test "Host actions are performed live, recorded with their replies, and replay" {
+    const gpa = std.testing.allocator;
+    var g: Guest = undefined;
+    try g.init(gpa);
+    defer g.deinit();
+    _ = try okOf(try g.sendAs(null, "session-open", .{ .clock = "2026-11-18T09:00:00Z", .objects = &[_][]const u8{} }));
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .input = "on ping", .more = &[_][]const u8{ "  say \"pong\"", "end ping" } }));
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .input = "function plus x", .more = &[_][]const u8{ "  return x + 1", "end plus" } }));
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .input = ":inspect plus" }));
+    const actions = [_][]const u8{
+        "{\"request\":{\"kind\":\"deliver\",\"message\":{\"name\":\"ping\"},\"to\":{\"script\":\"session\"}},\"type\":\"input\"}",
+        "{\"request\":{\"kind\":\"request\",\"message\":{\"name\":\"ping\"},\"to\":{\"script\":\"session\"}},\"type\":\"input\"}",
+        "{\"request\":{\"kind\":\"broadcast\",\"message\":{\"name\":\"ping\"}},\"type\":\"input\"}",
+        "{\"request\":{\"kind\":\"decide\",\"message\":{\"name\":\"ping\"},\"to\":{\"script\":\"session\"}},\"type\":\"input\"}",
+        "{\"request\":{\"broadcast\":true,\"kind\":\"decide\",\"message\":{\"name\":\"ping\"}},\"type\":\"input\"}",
+        "{\"request\":{\"delivery\":\"d99\",\"kind\":\"cancel-delivery\"},\"type\":\"input\"}",
+        "{\"request\":{\"args\":[1],\"fn\":{\"$sessionFunction\":\"f1\"},\"kind\":\"call\"},\"type\":\"input\"}",
+        "{\"request\":{\"kind\":\"cancel-run\",\"run\":\"session/r99\",\"script\":\"session\"},\"type\":\"input\"}",
+        "{\"request\":{\"call\":\"session/r99.c1\",\"kind\":\"answer\",\"value\":1},\"type\":\"input\"}",
+        "{\"request\":{\"call\":\"session/r99.c1\",\"error\":{\"code\":\"x\",\"data\":null,\"message\":\"y\"},\"kind\":\"fail\"},\"type\":\"input\"}",
+        "{\"request\":{\"call\":\"session/r99.c1\",\"kind\":\"settle\",\"settlement\":{\"adopt\":true}},\"type\":\"input\"}",
+        "{\"request\":{\"grant\":\"console\",\"kind\":\"revoke\",\"script\":\"session\"},\"type\":\"input\"}",
+    };
+    for (actions) |x| _ = try okOf(try g.sendAs(null, "session-input", .{ .envelope = x }));
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .input = "1 + 1" }));
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .envelope = "{\"request\":{\"kind\":\"stop\",\"reason\":\"done\",\"script\":\"session\"},\"type\":\"input\"}" }));
+    // Each recorded with its reply: ids for the actions that make them,
+    // and a refusal for a call the session doesn't hold.
+    var replies: std.ArrayList([]const u8) = .empty;
+    for (g.lines.items) |l| if (std.mem.indexOf(u8, l, "\"type\":\"input\"") != null) {
+        const v = try std.json.parseFromSliceLeaky(Json, g.arena.allocator(), l[2..], .{});
+        try replies.append(g.arena.allocator(), try std.json.Stringify.valueAlloc(g.arena.allocator(), v.object.get("reply").?, .{}));
+    };
+    try std.testing.expectEqual(@as(usize, 13), replies.items.len);
+    for (replies.items[0..2]) |r| try std.testing.expect(std.mem.startsWith(u8, r, "{\"ok\":{\"delivery\":\"d"));
+    try std.testing.expect(std.mem.startsWith(u8, replies.items[2], "{\"ok\":{\"broadcast\":\"b"));
+    try std.testing.expect(std.mem.startsWith(u8, replies.items[6], "{\"ok\":{\"delivery\":"));
+    for (replies.items[8..11]) |r| try std.testing.expectEqualStrings("{\"error\":\"unknown call\"}", r);
+    try std.testing.expectEqualStrings("{\"ok\":{}}", replies.items[12]);
+
+    // The Transcript replays, each reply compared.
+    var recorded: std.Io.Writer.Allocating = .init(gpa);
+    defer recorded.deinit();
+    for (g.lines.items) |l| try recorded.writer.print("{s}\n", .{l});
+    var again: Guest = undefined;
+    try again.init(gpa);
+    defer again.deinit();
+    _ = try okOf(try again.sendAs(null, "session-open", .{ .clock = "2026-11-18T09:00:00Z", .transcript = recorded.written() }));
+    // One whose recorded reply differs doesn't.
+    const tampered = try std.mem.replaceOwned(u8, gpa, recorded.written(), "{\"reply\":{\"error\":\"unknown call\"}", "{\"reply\":{\"ok\":{}}");
+    defer gpa.free(tampered);
+    var refused: Guest = undefined;
+    try refused.init(gpa);
+    defer refused.deinit();
+    _ = try errDetail(try refused.sendAs(null, "session-open", .{ .clock = "2026-11-18T09:00:00Z", .transcript = tampered }));
+}
+
+test "a Host action refused for its fields is refused, and records nothing" {
+    var g: Guest = undefined;
+    try g.init(std.testing.allocator);
+    defer g.deinit();
+    _ = try okOf(try g.sendAs(null, "session-open", .{ .clock = "2026-11-18T09:00:00Z", .objects = &[_][]const u8{} }));
+    const before = g.lines.items.len;
+    _ = try errDetail(try g.sendAs(null, "session-input", .{ .envelope = "{\"request\":{\"kind\":\"pump\"},\"type\":\"input\"}" }));
+    _ = try errDetail(try g.sendAs(null, "session-input", .{ .envelope = "{\"reply\":{\"ok\":{}},\"request\":{\"kind\":\"stop\",\"reason\":\"x\",\"script\":\"session\"},\"type\":\"input\"}" }));
+    try std.testing.expectEqual(before, g.lines.items.len);
+}
+
+test "a Host action takes Values in their own key order, its message's limits, and declared objects only" {
+    var g: Guest = undefined;
+    try g.init(std.testing.allocator);
+    defer g.deinit();
+    try openLamp(&g);
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .input = "on ping m", .more = &[_][]const u8{ "  say m", "end ping" } }));
+    // A map argument in insertion order, not sorted.
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .envelope = "{\"request\":{\"kind\":\"deliver\",\"message\":{\"args\":[{\"z\":1,\"a\":2}],\"name\":\"ping\"},\"to\":{\"script\":\"session\"}},\"type\":\"input\"}" }));
+    try std.testing.expect(std.mem.indexOf(u8, g.lines.items[g.lines.items.len - 1], "{\"z\":1,\"a\":2}") != null);
+    // A loosening override is refused synchronously.
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .envelope = "{\"request\":{\"kind\":\"deliver\",\"message\":{\"limits\":{\"fuelPerRun\":9007199254740991},\"name\":\"ping\"},\"to\":{\"script\":\"session\"}},\"type\":\"input\"}" }));
+    try std.testing.expect(std.mem.startsWith(u8, g.lines.items[g.lines.items.len - 1], "% {\"reply\":{\"error\":"));
+    // A Core refusal is recorded, not hidden.
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .envelope = "{\"request\":{\"delivery\":\"bogus\",\"kind\":\"cancel-delivery\"},\"type\":\"input\"}" }));
+    try std.testing.expect(std.mem.startsWith(u8, g.lines.items[g.lines.items.len - 1], "% {\"reply\":{\"error\":"));
+    // Undeclared identities and mistyped fields are refused, unrecorded.
+    const before = g.lines.items.len;
+    _ = try errDetail(try g.sendAs(null, "session-input", .{ .envelope = "{\"request\":{\"kind\":\"dispose\",\"object\":{\"id\":\"nobody\",\"kind\":\"Lamp\"}},\"type\":\"input\"}" }));
+    _ = try errDetail(try g.sendAs(null, "session-input", .{ .envelope = "{\"request\":{\"kind\":\"stop\",\"reason\":false,\"script\":\"session\"},\"type\":\"input\"}" }));
+    try std.testing.expectEqual(before, g.lines.items.len);
+}
+
+test "a prop-result whose envelopes include a malformed one applies none of them" {
+    var g: Guest = undefined;
+    try g.init(std.testing.allocator);
+    defer g.deinit();
+    try openLamp(&g);
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .input = "on ping", .more = &[_][]const u8{ "  say \"pong\"", "end ping" } }));
+    const r = Guest.refOf(try g.sendAs(null, "session-input", .{ .input = "the level of desk" }));
+    const deliver = "{\"request\":{\"kind\":\"deliver\",\"message\":{\"name\":\"ping\"},\"to\":{\"script\":\"session\"}},\"type\":\"input\"}";
+    const before = g.lines.items.len;
+    _ = try errDetail(try g.send(try std.fmt.allocPrint(g.arena.allocator(), "{{\"m\":\"prop-result\",\"ref\":{d},\"value\":3,\"envelopes\":[\"{f}\",\"{{\\\"request\\\":{{\\\"kind\\\":\\\"pump\\\"}},\\\"type\\\":\\\"input\\\"}}\"]}}", .{ r, std.zig.fmtString(deliver) })));
+    try std.testing.expectEqual(before, g.lines.items.len);
+    // Sent again without it, the delivery is made once.
+    _ = try okOf(try g.send(try std.fmt.allocPrint(g.arena.allocator(), "{{\"m\":\"prop-result\",\"ref\":{d},\"value\":3,\"envelopes\":[\"{f}\"]}}", .{ r, std.zig.fmtString(deliver) })));
+    var delivered: usize = 0;
+    for (g.lines.items) |l| if (std.mem.indexOf(u8, l, "\"kind\":\"deliver\"") != null) {
+        delivered += 1;
+    };
+    try std.testing.expectEqual(@as(usize, 1), delivered);
+    try std.testing.expect(std.mem.endsWith(u8, g.output.items[g.output.items.len - 1], "] pong"));
 }
