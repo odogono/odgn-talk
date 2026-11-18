@@ -62,6 +62,10 @@ properties are checked at runtime ([ADR 0085](../../docs/adr/0085-property-write
   what the Core implements.
 - `src/root.zig`: the package root. [`src/talk.zig`](src/talk.zig) holds
   `talk.h`'s exports.
+- `src/reactor/`: the WASI reactor's image root, the Core beside the Session
+  Host it serves as `session-v1` ([ADR 0180](../../docs/adr/0180-go-sessions-run-the-zig-session-host-through-the-reactor.md)).
+  The Session Host is an ordinary Host over `talk.h`, so the Core can't import
+  it; `message.zig` finds the image's `message_extension` by name instead.
 - `src/unicode/`: UTF-8, NFC, Characters (extended grapheme clusters), simple
   case folding, and the `word` and `word break` rules, built only on the
   generated tables.

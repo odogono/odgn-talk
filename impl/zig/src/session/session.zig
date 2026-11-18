@@ -11,6 +11,12 @@
 //! bindings as envelopes, and answers each crossing through `Driver.prop`
 //! while the Pump waits at a Crossing Pause. The session records every
 //! envelope a replay reads through `Driver.record`.
+//!
+//! A driver that `suspends` (the reactor's `session-v1`, ADR 0180) never
+//! blocks: a Host call that would wait for a line, a prompt's answer, a
+//! deadline or a crossing's answer stays open, and `resumeCall` goes on
+//! with it. A `write` or `resolve` it can't answer yet abandons the command,
+//! which runs again from its start once it can.
 const std = @import("std");
 const c = @import("talk-c");
 const northtalk = @import("northtalk");
@@ -62,27 +68,77 @@ pub const Driver = struct {
     output: *const fn (context: *anyopaque, line: []const u8) void,
     /// A line of the Group's Trace.
     trace: *const fn (context: *anyopaque, line: []const u8) void,
-    /// A file `:export <directory>` writes; false if it can't.
-    write: *const fn (context: *anyopaque, directory: []const u8, name: []const u8, data: []const u8) bool,
+    /// A file `:export <directory>` or `:store save` writes; false if it
+    /// can't. A driver that `suspends` may answer null: the command is
+    /// abandoned, and runs again from its start once the driver has the
+    /// answer.
+    write: *const fn (context: *anyopaque, directory: []const u8, name: []const u8, data: []const u8) ?bool,
     /// The next recorded object crossing envelope here, or null.
     crossing: *const fn (context: *anyopaque) ?[]const u8,
     /// Consumes the crossing `crossing` gave.
     take: *const fn (context: *anyopaque) void,
     /// Under a real Clock, waits until the foreground's next deadline, before
-    /// the Pump for it; a replay's readings come from the Transcript.
+    /// the Pump for it; a replay's readings come from the Transcript. A
+    /// driver that `suspends` is never asked.
     sleep: *const fn (context: *anyopaque, until: Instant) void,
     /// Live Host Objects (#2276), all null in a replay. The answer to a
     /// crossing: chapter 9's `prop` need as JSON in, its `prop-result`
     /// (`{"value": V}`, `{"ok": true}`, `{"fail": {…}}` or
     /// `{"hostError": true}`) out. Before answering, the driver may
-    /// `declare` an identity the answer names.
-    prop: ?*const fn (context: *anyopaque, need: []const u8) []const u8 = null,
+    /// `declare` an identity the answer names. A driver that `suspends` may
+    /// answer null: the Host call stops, the Pump waiting at its Crossing
+    /// Pause, until `resumeCall`.
+    prop: ?*const fn (context: *anyopaque, need: []const u8) ?[]const u8 = null,
     /// A live Restore's resolver: the identities it asks for, as JSON
     /// `[[kind, id], …]` sorted by kind then id, in; a JSON array with a
-    /// boolean for each, whether it still resolves, out.
-    resolve: ?*const fn (context: *anyopaque, objects: []const u8) []const u8 = null,
+    /// boolean for each, whether it still resolves, out. Null, from a driver
+    /// that `suspends`, abandons `:restore` as `write` does.
+    resolve: ?*const fn (context: *anyopaque, objects: []const u8) ?[]const u8 = null,
     /// An object envelope the live session recorded, for the Transcript.
     record: ?*const fn (context: *anyopaque, envelope: []const u8) void = null,
+    /// Whether the driver answers later rather than block (`session-v1`,
+    /// ADR 0180): a Host call that would wait for a line, a prompt's
+    /// answer, a deadline, or a `null` answer stays open instead, and
+    /// `submit`, `deadline` and `resumeCall` fail with `error.Suspended`
+    /// until the driver can go on.
+    suspends: bool = false,
+};
+
+/// What an open Host call waits for (`Driver.suspends`).
+pub const Waiting = enum {
+    /// Nothing: the session takes an Entry or Session Command.
+    prompt,
+    /// A line for the foreground's `console` `read`.
+    read,
+    /// An answer to the foreground's `user` prompt.
+    user,
+    /// The foreground's next deadline, under a real Clock.
+    deadline,
+    /// The driver's answer to a crossing, or to a `write` or `resolve`.
+    need,
+};
+
+/// How an open Host call goes on.
+pub const Resume = enum {
+    /// The driver has its line, its prompt answer or its need's answer.
+    answered,
+    /// A deadline came: Pump, as a sleeping REPL would on waking.
+    wake,
+    /// The person typed something else: the foreground's wait ends, as a
+    /// replay ends it when the Transcript reads on.
+    abandon,
+};
+
+/// A `user` prompt as the person sees it (chapter 12, Prompts): `confirm`,
+/// `choose` or `enter`, with an omitted message, prompt or default empty.
+pub const Prompt = struct {
+    call: []const u8,
+    kind: []const u8,
+    message: []const u8 = "",
+    prompt: []const u8 = "",
+    fallback: []const u8 = "",
+    items: []const []const u8 = &.{},
+    multiple: bool = false,
 };
 
 const Mode = enum { immediate, suspending, fire_and_forget };
@@ -127,7 +183,19 @@ const Decl = struct {
 const EntryUnit = struct { unit: []const u8, handler: []const u8, lines: u32, expression: bool };
 
 const PendingKind = enum { mock, read, prompt };
-const PendingCall = struct { id: []const u8, run: []const u8, kind: PendingKind, call: ?*c.talk_call, mock: ?*Mock = null };
+const PendingCall = struct { id: []const u8, run: []const u8, kind: PendingKind, call: ?*c.talk_call, mock: ?*Mock = null, prompt: ?Prompt = null };
+
+/// What an open Host call stopped for (`Driver.suspends`).
+const Open = enum { read, user, deadline, crossing, rerun };
+
+/// A Pump stopped at a Crossing Pause: its reading, its result so far,
+/// whether it is one of the Pumps for admitted Notifications, and the
+/// state the Host call's own Pump left.
+const OpenPump = struct { at: Instant, result: c.talk_pump_result, notifying: bool, state: c.talk_group_state };
+
+/// A `:fix` whose rewind Pump stopped at a crossing: the Run and the
+/// declarations its Reload puts in place.
+const Fixing = struct { run: []const u8, decls: []const Decl };
 
 /// A Run the Session Host knows has not ended.
 const RunInfo = struct { id: []const u8, entry: ?u64 = null };
@@ -283,6 +351,22 @@ pub const Session = struct {
     /// The handle each exposed Function Value was last given, by its
     /// address, for writing it in a crossing.
     supplied: std.AutoHashMapUnmanaged(usize, []const u8) = .empty,
+    /// A suspending driver's open Host call (`session-v1`, ADR 0180): what
+    /// it waits for, and the input it is for, which runs again from its
+    /// start after a `write` or `resolve` answer. The caller keeps the
+    /// input alive until the call ends.
+    open: ?Open = null,
+    current: ?transcript.Input = null,
+    /// The Pump an open crossing stopped, and that crossing's `prop` need,
+    /// once its `property-begin` is recorded.
+    open_pump: ?OpenPump = null,
+    crossing_need: ?[]const u8 = null,
+    fixing: ?Fixing = null,
+    /// Whether `endCall`'s own Pump is the one going on.
+    ending: bool = false,
+    /// How the open call resumes: Pump at the deadline, or end the wait.
+    wake: bool = false,
+    abandon: bool = false,
 
     const ObjectRef = struct { kind: []const u8, id: []const u8 };
     const Resolution = struct { kind: []const u8, id: []const u8, resolved: bool = false };
@@ -498,7 +582,7 @@ pub const Session = struct {
             try check_(c.talk_clock_capability(s.core, &.{ .entries = &costs, .len = 1 }, &def));
         } else if (std.mem.eql(u8, capability, "user")) {
             const costs = [_]c.talk_named_cost{ .{ .name = "confirm", .name_len = 7, .cost = .{ .fuel = 0, .alloc = 0 } }, .{ .name = "choose", .name_len = 6, .cost = .{ .fuel = 0, .alloc = 0 } }, .{ .name = "enter", .name_len = 5, .cost = .{ .fuel = 0, .alloc = 0 } }, .{ .name = "notify", .name_len = 6, .cost = .{ .fuel = 0, .alloc = 0 } } };
-            const impl: c.talk_user_impl = .{ .context = s, .confirm = userPrompt, .choose = userPrompt, .enter = userPrompt, .notify = userNotify };
+            const impl: c.talk_user_impl = .{ .context = s, .confirm = userConfirm, .choose = userChoose, .enter = userEnter, .notify = userNotify };
             try check_(c.talk_user_capability(s.core, &impl, &.{ .entries = &costs, .len = 4 }, &def));
         } else {
             // A mock Capability: its Operations, each with eight Optional
@@ -578,9 +662,19 @@ pub const Session = struct {
     /// A user prompt: one at a time, so another while one waits is `user
     /// busy`; otherwise answered now if the driver has the answer, or it
     /// waits for the person.
-    fn userPrompt(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_value, len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
-        _ = args;
-        _ = len;
+    fn userConfirm(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_value, len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+        return userPrompt("confirm", context, call, args, len, result, err);
+    }
+
+    fn userChoose(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_value, len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+        return userPrompt("choose", context, call, args, len, result, err);
+    }
+
+    fn userEnter(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_value, len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+        return userPrompt("enter", context, call, args, len, result, err);
+    }
+
+    fn userPrompt(kind: []const u8, context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_value, len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) c.talk_call_end {
         const s: *Session = @ptrCast(@alignCast(context.?));
         const id = callId(call);
         // One at a time: the next while one waits is `user busy`, which is
@@ -592,8 +686,34 @@ pub const Session = struct {
             const ans = s.driver.answer(s.driver.context, id, true) orelse user_busy;
             return s.answerNow(ans, result, err);
         }
-        s.pending.append(s.alloc(), .{ .id = s.dupe(id), .run = s.dupe(callRun(call)), .kind = .prompt, .call = call }) catch return c.TALK_CALL_BROKEN;
+        const described = s.promptOf(id, kind, args[0..len]) catch return c.TALK_CALL_BROKEN;
+        s.pending.append(s.alloc(), .{ .id = s.dupe(id), .run = s.dupe(callRun(call)), .kind = .prompt, .call = call, .prompt = described }) catch return c.TALK_CALL_BROKEN;
         return c.TALK_CALL_STARTED;
+    }
+
+    /// A prompt as the person sees it, from its Operation's arguments
+    /// (talk.h's `talk_user_impl`): `confirm`'s message; `choose`'s items,
+    /// prompt and multiple; `enter`'s message and default.
+    fn promptOf(s: *Session, id: []const u8, kind: []const u8, args: []const ?*c.talk_value) !Prompt {
+        var p: Prompt = .{ .call = s.dupe(id), .kind = kind };
+        if (args.len == 0) return p;
+        if (std.mem.eql(u8, kind, "choose")) {
+            var items: std.ArrayList([]const u8) = .empty;
+            for (1..c.talk_value_len(args[0]) + 1) |i| {
+                var item: ?*c.talk_value = null;
+                try check_(c.talk_value_index(args[0], i, &item));
+                defer c.talk_value_release(item);
+                try items.append(s.alloc(), s.textForm(item));
+            }
+            p.items = items.items;
+            if (args.len >= 2) p.prompt = s.textForm(args[1]);
+            var yes = false;
+            if (args.len >= 3 and c.talk_value_as_bool(args[2], &yes)) p.multiple = yes;
+            return p;
+        }
+        p.message = s.textForm(args[0]);
+        if (std.mem.eql(u8, kind, "enter") and args.len >= 2) p.fallback = s.textForm(args[1]);
+        return p;
     }
 
     fn answerNow(s: *Session, ans: Answer, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) c.talk_call_end {
@@ -791,14 +911,42 @@ pub const Session = struct {
         s.queued = false;
         var result: c.talk_pump_result = std.mem.zeroes(c.talk_pump_result);
         const code = c.talk_pump(s.group, at.seconds, at.micros, null, &result);
-        defer c.talk_reports_release(result.reports);
         s.last = at;
-        if (code != c.TALK_OK) return error.HostError;
-        try s.answerCrossings(&result);
+        if (code != c.TALK_OK) {
+            c.talk_reports_release(result.reports);
+            return error.HostError;
+        }
+        const state = try s.settle(at, result, false, undefined);
+        try s.notifications(at, state);
+        return state;
+    }
+
+    /// A Pump's crossings, then its deadline and its Runs. A crossing a
+    /// suspending driver answers later leaves the Pump open, its reports
+    /// kept, until `finishPump`.
+    fn settle(s: *Session, at: Instant, pumped: c.talk_pump_result, notifying: bool, state: c.talk_group_state) !c.talk_group_state {
+        var result = pumped;
+        s.answerCrossings(&result) catch |err| {
+            if (err == error.Suspended) {
+                s.open_pump = .{ .at = at, .result = result, .notifying = notifying, .state = if (notifying) state else result.state };
+            } else c.talk_reports_release(result.reports);
+            return err;
+        };
+        defer c.talk_reports_release(result.reports);
         s.deadlineOf(result);
         s.follow(result.reports);
-        try s.notifications(at);
         return result.state;
+    }
+
+    /// The rest of a Pump an open crossing stopped, once the driver has its
+    /// answer; the state the Host call's own Pump left.
+    fn finishPump(s: *Session) !c.talk_group_state {
+        const p = s.open_pump.?;
+        s.open_pump = null;
+        const state = try s.settle(p.at, p.result, p.notifying, p.state);
+        const own = if (p.notifying) p.state else state;
+        try s.notifications(p.at, own);
+        return own;
     }
 
     fn deadlineOf(s: *Session, result: c.talk_pump_result) void {
@@ -815,7 +963,7 @@ pub const Session = struct {
     /// After each Pump: the router's retry, then, while the router admitted
     /// a Notification and Host Inputs are queued, Pumps at the same reading
     /// (chapter 12, Session Store Notifications).
-    fn notifications(s: *Session, at: Instant) !void {
+    fn notifications(s: *Session, at: Instant, state: c.talk_group_state) !void {
         while (true) {
             const pending = c.talk_router_pumped(s.router, s.group);
             _ = pending;
@@ -824,11 +972,11 @@ pub const Session = struct {
             s.trace_lines.clearRetainingCapacity();
             var result: c.talk_pump_result = std.mem.zeroes(c.talk_pump_result);
             const code = c.talk_pump(s.group, at.seconds, at.micros, null, &result);
-            defer c.talk_reports_release(result.reports);
-            if (code != c.TALK_OK) return error.HostError;
-            try s.answerCrossings(&result);
-            s.deadlineOf(result);
-            s.follow(result.reports);
+            if (code != c.TALK_OK) {
+                c.talk_reports_release(result.reports);
+                return error.HostError;
+            }
+            _ = try s.settle(at, result, true, state);
         }
     }
 
@@ -975,7 +1123,8 @@ pub const Session = struct {
             const f = s.foreground orelse return;
             if (f.ended) return;
             const run = f.run orelse return;
-            if (s.pendingOf(run)) |i| {
+            const asked = s.pendingOf(run);
+            if (asked) |i| {
                 const p = s.pending.items[i];
                 switch (p.kind) {
                     .read => if (s.driver.line(s.driver.context)) |l| {
@@ -996,12 +1145,27 @@ pub const Session = struct {
                     .mock => return,
                 }
             }
+            const deadline_wait = s.clock == .real and if (s.waits.get(run)) |w| w.until or asked != null else false;
+            // A suspending driver doesn't block: the call stays open for
+            // its line, its answer or its deadline, and is woken to Pump,
+            // or abandoned when something else is typed.
+            if (s.driver.suspends) {
+                const open: Open = if (asked) |i| (if (s.pending.items[i].kind == .read) .read else .user) else if (deadline_wait) .deadline else return;
+                if (s.abandon) return;
+                if (s.wake and deadline_wait) {
+                    s.wake = false;
+                    if (!try s.pump()) return;
+                    continue;
+                }
+                s.wake = false;
+                return s.suspendCall(open);
+            }
             // A deadline under a real Clock: sleep to it, and pump.
-            if (s.clock == .real) if (s.waits.get(run)) |w| if (w.until or s.pendingOf(run) != null) {
+            if (deadline_wait) {
                 if (s.next_deadline) |until| s.driver.sleep(s.driver.context, until);
                 if (!try s.pump()) return;
                 continue;
-            };
+            }
             return;
         }
     }
@@ -1030,20 +1194,102 @@ pub const Session = struct {
     /// Host function queued a Host Input, one more Pump, as its own Host
     /// call.
     fn endCall(s: *Session) !void {
+        if (s.ending) {
+            // Its own Pump stopped at a crossing, and has now gone on.
+            s.ending = false;
+            s.flush();
+            return;
+        }
         s.foreground = null;
         s.flush();
         if (s.queued) {
             s.queued = false;
-            if (try s.pump()) s.flush();
+            s.ending = true;
+            const pumped = try s.pump();
+            s.ending = false;
+            if (pumped) s.flush();
         }
     }
 
     /// A Pump the Session Host makes at a deadline, as a Transcript's `@`
     /// line outside any other Host call records.
     pub fn deadline(s: *Session, at: Instant) !void {
+        if (s.open != null) return error.CallOpen;
         try s.start();
         try s.pumpAt(at);
         try s.endCall();
+    }
+
+    // ------------------------------------------------------------ open Host calls
+
+    /// Leaves the Host call open for a suspending driver.
+    fn suspendCall(s: *Session, open: Open) error{Suspended} {
+        s.open = open;
+        if (open == .rerun) {
+            // The command runs again from its start: what it said so far
+            // goes, and so does a live Restore's first pass.
+            s.out.clearRetainingCapacity();
+            s.trace_out.clearRetainingCapacity();
+            s.resolving.clearRetainingCapacity();
+        }
+        return error.Suspended;
+    }
+
+    /// What the session waits for.
+    pub fn waiting(s: *const Session) Waiting {
+        const open = s.open orelse return .prompt;
+        return switch (open) {
+            .read => .read,
+            .user => .user,
+            .deadline => .deadline,
+            .crossing, .rerun => .need,
+        };
+    }
+
+    /// The foreground's waiting `user` prompt, while the call waits for it.
+    pub fn prompt(s: *const Session) ?Prompt {
+        if (s.open != .user) return null;
+        const f = s.foreground orelse return null;
+        const run = f.run orelse return null;
+        for (s.pending.items) |p| if (p.kind == .prompt and std.mem.eql(u8, p.run, run)) return p.prompt orelse .{ .call = p.id, .kind = "" };
+        return null;
+    }
+
+    /// Goes on with the open Host call. Fails with `error.Suspended` if it
+    /// stops again.
+    pub fn resumeCall(s: *Session, how: Resume) !void {
+        const open = s.open orelse return error.NoCallOpen;
+        switch (how) {
+            .answered => if (open == .deadline) return error.NoCallOpen,
+            .wake, .abandon => if (open == .crossing or open == .rerun) return error.NoCallOpen,
+        }
+        s.open = null;
+        if (open == .rerun) return s.submit(s.current.?);
+        s.wake = how == .wake;
+        s.abandon = how == .abandon;
+        defer {
+            s.wake = false;
+            s.abandon = false;
+        }
+        try s.continueCall();
+    }
+
+    /// The rest of a Host call after the Pump or wait it stopped at: each
+    /// Host call's Pumps are in tail position, or are followed by the
+    /// foreground's loop, an `:inspect` reader's rows, or a `:fix` Reload,
+    /// so this is the rest of any of them.
+    fn continueCall(s: *Session) !void {
+        if (s.open_pump != null) {
+            const state = try s.finishPump();
+            if (s.fixing) |f| {
+                s.fixing = null;
+                try s.fixAfterRewind(state, f);
+            }
+        }
+        try s.foregroundLoop();
+        try s.readerRows();
+        try s.endCall();
+        s.current = null;
     }
 
     // ------------------------------------------------------------ input
@@ -1087,6 +1333,17 @@ pub const Session = struct {
     /// Gives the session one Entry or Session Command, with the `|` lines a
     /// Transcript records after it.
     pub fn submit(s: *Session, input: transcript.Input) !void {
+        if (s.open) |open| switch (open) {
+            // What was typed instead of the line, the answer or the wait.
+            .read, .user, .deadline => {
+                s.open = null;
+                s.abandon = true;
+                defer s.abandon = false;
+                try s.continueCall();
+            },
+            .crossing, .rerun => return error.CallOpen,
+        };
+        s.current = input;
         if (input.first.len > 0 and input.first[0] == ':') {
             try s.command(input);
         } else {
@@ -1094,6 +1351,7 @@ pub const Session = struct {
             try s.entry(input);
         }
         try s.endCall();
+        s.current = null;
     }
 
     // ------------------------------------------------------------ Entries
@@ -1209,12 +1467,17 @@ pub const Session = struct {
         if (s.measuring) try s.observing.measurements.append(s.alloc(), .{ .entry = name, .root = delivery, .started = true });
         if (!try s.pump()) return .ran;
         try s.foregroundLoop();
+        try s.readerRows();
+        return .ran;
+    }
+
+    /// An `:inspect` object's rows, by its reader Run, once its own Run has ended.
+    fn readerRows(s: *Session) !void {
         if (s.reader) |v| {
             s.reader = null;
             defer c.talk_value_release(v);
             try s.readProperties(v);
         }
-        return .ran;
     }
 
     /// The `:limits` override an Entry's Delivery carries.
@@ -1929,7 +2192,7 @@ pub const Session = struct {
         try json.append(s.alloc(), '}');
         const dir = std.fs.path.dirname(args[1]) orelse ".";
         const file = std.fs.path.basename(args[1]);
-        if (!s.driver.write(s.driver.context, dir, file, json.items)) return s.say("! bad arguments");
+        if (!(s.driver.write(s.driver.context, dir, file, json.items) orelse return s.suspendCall(.rerun))) return s.say("! bad arguments");
         s.sayf("wrote {s}", .{args[1]});
     }
 
@@ -2035,11 +2298,11 @@ pub const Session = struct {
             if (source.len > 0) while (lines.next()) |l| s.say(l);
             return;
         }
-        if (!s.driver.write(s.driver.context, args[0], "session.talk", source)) return s.say("! bad arguments");
+        if (!(s.driver.write(s.driver.context, args[0], "session.talk", source) orelse return s.suspendCall(.rerun))) return s.say("! bad arguments");
         s.say("wrote session.talk");
         for (s.libraries.keys(), s.libraries.values()) |name, l| {
             const file = s.print("{s}.talk", .{name});
-            if (!s.driver.write(s.driver.context, args[0], file, l.source)) return s.say("! bad arguments");
+            if (!(s.driver.write(s.driver.context, args[0], file, l.source) orelse return s.suspendCall(.rerun))) return s.say("! bad arguments");
             s.sayf("wrote {s}", .{file});
         }
     }
@@ -2076,12 +2339,25 @@ pub const Session = struct {
         // The Rewind.
         try check_(c.talk_script_rewind_run(s.script, run.ptr, run.len));
         const at = s.readingFor() orelse return;
-        if (try s.pumpState(at) != c.TALK_REWOUND) return s.say("! not rewindable");
+        const fixing: Fixing = .{ .run = s.dupe(run), .decls = try s.alloc().dupe(Decl, decls.items) };
+        const state = s.pumpState(at) catch |err| {
+            if (err == error.Suspended) s.fixing = fixing;
+            return err;
+        };
+        try s.fixAfterRewind(state, fixing);
+    }
+
+    /// `:fix` after its rewind Pump: the Reload, and the Pump that runs the
+    /// message again.
+    fn fixAfterRewind(s: *Session, state: c.talk_group_state, fixing: Fixing) !void {
+        const run = fixing.run;
+        const decls = fixing.decls;
+        if (state != c.TALK_REWOUND) return s.say("! not rewindable");
         s.sayf("! rewound {s}", .{run});
         // The Reload, with each declaration in the session source as a
         // redefinition or a new name would put it.
         const saved = try s.alloc().dupe(Decl, s.decls.items);
-        for (decls.items) |d| {
+        for (decls) |d| {
             if (d.kind == .variable) if (s.declIndex(.variable, d.names[0])) |k| {
                 s.decls.items[k] = d;
                 continue;
@@ -2965,7 +3241,7 @@ pub const Session = struct {
             try out.writer.writeAll("]");
         }
         try out.writer.writeAll("]");
-        const answer = s.parseJson(s.driver.resolve.?(s.driver.context, out.written()));
+        const answer = s.parseJson(s.driver.resolve.?(s.driver.context, out.written()) orelse return s.suspendCall(.rerun));
         const answers: []const std.json.Value = if (answer) |a| (if (a == .array) a.array.items else &.{}) else &.{};
         for (s.resolving.items, 0..) |*r, i| r.resolved = i < answers.len and answers.len == s.resolving.items.len and answers[i] == .bool and answers[i].bool;
     }
@@ -3343,17 +3619,22 @@ pub const Session = struct {
             };
             var x = crossingOf(pause.object, pause.prop[0..pause.prop_len], operation);
             switch (pause.op) {
-                c.TALK_CROSSING_SET => {
-                    x.value = pause.value;
-                    s.expose(&.{pause.value});
-                },
+                c.TALK_CROSSING_SET => x.value = pause.value,
                 c.TALK_CROSSING_AT => x.selector = .{ .index = pause.index },
                 c.TALK_CROSSING_FIND => x.selector = .{ .name = pause.name[0..pause.name_len] },
                 else => {},
             }
-            s.crossed += 1;
-            s.recordEnvelope(try s.beginText(s.crossed, x));
-            const answered = s.driver.prop.?(s.driver.context, try s.needText(x));
+            // Begun once, though a suspending driver may be asked again.
+            const need = s.crossing_need orelse begin: {
+                if (x.value) |v| s.expose(&.{v});
+                s.crossed += 1;
+                s.recordEnvelope(try s.beginText(s.crossed, x));
+                const text = try s.needText(x);
+                s.crossing_need = text;
+                break :begin text;
+            };
+            const answered = s.driver.prop.?(s.driver.context, need) orelse return s.suspendCall(.crossing);
+            s.crossing_need = null;
             const reply = s.parseJson(answered) orelse std.json.Value{ .null = {} };
             const valid = validReply(reply, pause.op == c.TALK_CROSSING_SET);
             var end: std.Io.Writer.Allocating = .init(s.alloc());

@@ -26,19 +26,11 @@ pub fn build(b: *std.Build) void {
     // Host and the Message Layer's `analysis-v1` share.
     core.addAnonymousImport("inspect-reader", .{ .root_source_file = b.path("../../spec/session/inspect-reader.talk") });
 
-    if (target.result.os.tag == .wasi) {
-        // A WASI reactor: no `_start`, and the `talk_*` exports kept. It
-        // ships without debug sections, as the Go reactor's `-s -w` does.
+    const wasi = target.result.os.tag == .wasi;
+    if (wasi) {
+        // A WASI reactor ships without debug sections, as the Go reactor's
+        // `-s -w` does. Its image is made below, beside the Session Host.
         core.strip = b.option(bool, "strip", "Omit WASI debug sections (default: true)") orelse true;
-        const module = b.addExecutable(.{ .name = "talk", .root_module = core });
-        // The stack lives in linear memory, where Zig's default 16 MiB would
-        // be most of an instance. Source recursion stops at its 128-level
-        // guards; Value traversal uses heap work stacks. The WASI check in
-        // tools/wasi/zig.py exercises both at this size.
-        module.stack_size = 1 << 20;
-        module.entry = .disabled;
-        module.rdynamic = true;
-        b.installArtifact(module);
     } else {
         const library = b.addLibrary(.{
             .name = "talk",
@@ -69,8 +61,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     corpus_module.addImport("northtalk", core);
-    const c_api = b.addTranslateC(.{ .root_source_file = b.path("include/talk.h"), .target = target, .optimize = optimize, .link_libc = false });
+    // The WASI image's Session Host reads talk.h too; its <time.h> comes
+    // from wasi-libc's headers there, but the image links no libc, whose
+    // `_start` would make it a command rather than a reactor.
+    const c_api = b.addTranslateC(.{ .root_source_file = b.path("include/talk.h"), .target = target, .optimize = optimize, .link_libc = wasi });
     const c_module = c_api.createModule();
+    c_module.link_libc = false;
     corpus_module.addImport("talk-c", c_module);
     corpus_module.addIncludePath(b.path("include"));
     // The Session Host, an ordinary Host over talk.h (chapter 12).
@@ -82,6 +78,30 @@ pub fn build(b: *std.Build) void {
     session_module.addImport("northtalk", core);
     session_module.addImport("talk-c", c_module);
     corpus_module.addImport("session", session_module);
+    // The reactor's image: the Core's Message Layer and the Session Host
+    // it serves as `session-v1` (ADR 0180).
+    const reactor_module = b.createModule(.{
+        .root_source_file = b.path("src/reactor/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .strip = core.strip,
+    });
+    reactor_module.addImport("northtalk", core);
+    reactor_module.addImport("session", session_module);
+    reactor_module.addImport("talk-c", c_module);
+    if (wasi) {
+        // A WASI reactor: no `_start`, and the `talk_*` exports kept.
+        session_module.strip = core.strip;
+        const module = b.addExecutable(.{ .name = "talk", .root_module = reactor_module });
+        // The stack lives in linear memory, where Zig's default 16 MiB would
+        // be most of an instance. Source recursion stops at its 128-level
+        // guards; Value traversal uses heap work stacks. The WASI check in
+        // tools/wasi/zig.py exercises both at this size.
+        module.stack_size = 1 << 20;
+        module.entry = .disabled;
+        module.rdynamic = true;
+        b.installArtifact(module);
+    }
     const corpus = b.addExecutable(.{ .name = "talk-corpus", .root_module = corpus_module });
     const run_corpus = b.addRunArtifact(corpus);
     run_corpus.setCwd(b.path("."));
@@ -179,6 +199,11 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_corpus_tests.step);
     const session_tests = b.addTest(.{ .root_module = session_module });
     test_step.dependOn(&b.addRunArtifact(session_tests).step);
+    const reactor_tests = b.addTest(.{ .root_module = reactor_module });
+    const run_reactor_tests = b.addRunArtifact(reactor_tests);
+    // Its corpus test reads corpus/sessions/ from impl/zig.
+    run_reactor_tests.setCwd(b.path("."));
+    test_step.dependOn(&run_reactor_tests.step);
     if (target.result.os.tag != .wasi) {
         const runner_tests = b.addTest(.{ .root_module = runner_module });
         const run_runner_tests = b.addRunArtifact(runner_tests);
