@@ -48,7 +48,8 @@ pub const Server = struct {
     resolved: ?[]const u8 = null,
     /// A crossing's answer, taken once.
     answered: ?[]const u8 = null,
-    /// The frame's reading, line and prompt answer.
+    /// The frame's line and prompt answer, and the reading of the frame
+    /// that started the Host call, which its needs' results go on with.
     given_reading: ?session.Instant = null,
     given_line: ?[]const u8 = null,
     given_answer: ?session.Answer = null,
@@ -203,8 +204,8 @@ pub const Server = struct {
             srv.said = .empty;
             srv.trace = .empty;
             srv.lines = .empty;
-            srv.given_reading = null;
             srv.given_line = null;
+            if (srv.need == null) srv.given_reading = null;
             srv.given_answer = null;
         }
         const gpa = s.gpa;
@@ -310,7 +311,10 @@ pub const Server = struct {
                 const shown = textOf(given orelse return message.protocolError(gpa, ref, "a real Clock needs a reading")) orelse return message.protocolError(gpa, ref, "a reading is an Instant");
                 srv.given_reading = session.replay.instant(shown) orelse return message.protocolError(gpa, ref, "a reading is an Instant");
             },
-            .virtual => if (given != null) return message.protocolError(gpa, ref, "a virtual Clock takes no reading"),
+            .virtual => {
+                if (given != null) return message.protocolError(gpa, ref, "a virtual Clock takes no reading");
+                srv.given_reading = null;
+            },
         }
         return null;
     }
@@ -330,7 +334,7 @@ pub const Server = struct {
         if (msg.object.get("envelope")) |x| {
             const e = textOf(x) orelse return message.protocolError(gpa, ref, "an envelope is text");
             if (h.waiting() != .prompt) return message.protocolError(gpa, ref, "a Host call is open");
-            h.declare(e) catch |err| return message.protocolError(gpa, ref, std.fmt.allocPrint(srv.reply.allocator(), "the object envelope is refused: {s}", .{@errorName(err)}) catch "the object envelope is refused");
+            h.receive(e) catch |err| return message.protocolError(gpa, ref, std.fmt.allocPrint(srv.reply.allocator(), "the object envelope is refused: {s}", .{@errorName(err)}) catch "the object envelope is refused");
             return srv.ok(gpa, ref);
         }
         if (msg.object.get("line")) |x| {
@@ -418,9 +422,11 @@ pub const Server = struct {
         const ca = srv.call.allocator();
         switch (kind) {
             .prop => {
-                if (msg.object.get("declare")) |d| {
-                    const envelopes = texts(srv.life.allocator(), d) orelse return message.protocolError(gpa, ref, "declare must be envelope texts");
-                    for (envelopes) |e| h.declare(e) catch |err| return message.protocolError(gpa, ref, std.fmt.allocPrint(srv.reply.allocator(), "the object envelope is refused: {s}", .{@errorName(err)}) catch "the object envelope is refused");
+                // What the Host did before answering: identities its answer
+                // names, and Host actions, recorded before the crossing's end.
+                if (msg.object.get("envelopes")) |d| {
+                    const envelopes = texts(srv.life.allocator(), d) orelse return message.protocolError(gpa, ref, "envelopes must be envelope texts");
+                    for (envelopes) |e| h.receive(e) catch |err| return message.protocolError(gpa, ref, std.fmt.allocPrint(srv.reply.allocator(), "the object envelope is refused: {s}", .{@errorName(err)}) catch "the object envelope is refused");
                 }
                 // The one outcome it gives; the session checks it.
                 var outcome: std.Io.Writer.Allocating = .init(ca);

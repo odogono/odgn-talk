@@ -2932,7 +2932,7 @@ pub const Session = struct {
         }
         if (std.mem.eql(u8, kind, "input")) {
             try s.start();
-            try s.hostInput(v.object.get("request").?);
+            try s.hostInput(v);
             return;
         }
         return error.MalformedTranscript;
@@ -3389,38 +3389,233 @@ pub const Session = struct {
 
     /// A Host action an external Host made, or one a property callback made
     /// while it ran, which its Pump drains.
-    fn hostInput(s: *Session, request: std.json.Value) !void {
+    /// A recorded Host action, replayed: performed at its place, its
+    /// reply the same as the recording's (session-observation.md).
+    fn hostInput(s: *Session, envelope: std.json.Value) !void {
+        const reply = try s.perform(envelope.object.get("request") orelse return error.MalformedTranscript);
+        const recorded = std.json.Stringify.valueAlloc(s.alloc(), envelope.object.get("reply") orelse return error.MalformedTranscript, .{}) catch return error.OutOfMemory;
+        if (!std.mem.eql(u8, reply, recorded)) return error.MalformedTranscript;
+    }
+
+    /// A live embedder's Host action (#2284): an `input` envelope with its
+    /// `request` alone. The session performs it, at once, and records it
+    /// with its reply; during a crossing it lands before the crossing's
+    /// end, and the Host call Pumps once more for it.
+    pub fn act(s: *Session, text: []const u8) !void {
+        if (!s.liveObjects()) return error.NotLive;
+        const v = s.parseJson(text) orelse return error.MalformedEnvelope;
+        if (!s.canonical(v, text) or !fieldsAre(v, &.{ "request", "type" }, &.{}) or !std.mem.eql(u8, jsonText(v, "type"), "input")) return error.MalformedEnvelope;
+        try s.start();
+        const request = v.object.get("request").?;
+        const reply = s.perform(request) catch |err| return if (err == error.MalformedTranscript) error.MalformedEnvelope else err;
+        const request_text = try std.json.Stringify.valueAlloc(s.alloc(), request, .{});
+        s.recordEnvelope(s.print("{{\"reply\":{s},\"request\":{s},\"type\":\"input\"}}", .{ reply, request_text }));
+        if (s.crossing_need != null) s.queued = true;
+    }
+
+    /// An envelope a live embedder hands the session: a declaration, or a
+    /// Host action's `input` with its `request` alone.
+    pub fn receive(s: *Session, text: []const u8) !void {
+        const v = s.parseJson(text) orelse return error.MalformedEnvelope;
+        return if (std.mem.eql(u8, jsonText(v, "type"), "input")) s.act(text) else s.declare(text);
+    }
+
+    /// The fields each Host action has: required, then optional.
+    const action_fields = [_]struct { kind: []const u8, required: []const []const u8, optional: []const []const u8 = &.{} }{
+        .{ .kind = "set-parent", .required = &.{ "kind", "object", "parent" } },
+        .{ .kind = "dispose", .required = &.{ "kind", "object" } },
+        .{ .kind = "deliver", .required = &.{ "kind", "message", "to" } },
+        .{ .kind = "request", .required = &.{ "kind", "message", "to" } },
+        .{ .kind = "cancel-delivery", .required = &.{ "delivery", "kind" } },
+        .{ .kind = "broadcast", .required = &.{ "kind", "message" } },
+        .{ .kind = "call", .required = &.{ "args", "fn", "kind" }, .optional = &.{"limits"} },
+        .{ .kind = "decide", .required = &.{ "kind", "message" }, .optional = &.{ "broadcast", "to" } },
+        .{ .kind = "answer", .required = &.{ "call", "kind", "value" }, .optional = &.{"fuel"} },
+        .{ .kind = "fail", .required = &.{ "call", "error", "kind" } },
+        .{ .kind = "settle", .required = &.{ "call", "kind", "settlement" } },
+        .{ .kind = "stop", .required = &.{ "kind", "reason", "script" } },
+        .{ .kind = "cancel-run", .required = &.{ "kind", "run", "script" } },
+        .{ .kind = "revoke", .required = &.{ "grant", "kind", "script" } },
+    };
+
+    /// Performs a Host action's normalized worker request on the session's
+    /// Group, as chapter 9's worker messages do, and gives its reply's
+    /// text: `{"ok":{…}}` with the delivery or broadcast id it made, or
+    /// `{"error":<Host error code>}`. A request that isn't one is a
+    /// malformed Transcript.
+    fn perform(s: *Session, request: std.json.Value) ![]const u8 {
+        const bad = error.MalformedTranscript;
         const kind = jsonText(request, "kind");
-        const g = s.group orelse return;
-        if (std.mem.eql(u8, kind, "set-parent")) {
-            const o = try s.objectRef(request.object.get("object").?) orelse return;
-            const parent = if (request.object.get("parent")) |p| try s.objectRef(p) else null;
-            _ = c.talk_set_parent(g, o, parent);
-        } else if (std.mem.eql(u8, kind, "dispose")) {
-            const o = try s.objectRef(request.object.get("object").?) orelse return;
-            _ = c.talk_dispose(g, o);
-        } else if (std.mem.eql(u8, kind, "deliver")) {
-            const message = request.object.get("message").?;
-            const name = jsonText(message, "name");
-            const args = try s.argsOf(message.object.get("args"));
-            const m: c.talk_message = .{ .name = name.ptr, .name_len = name.len, .args = @ptrCast(args.ptr), .args_len = args.len, .limits = null };
-            const to = request.object.get("to").?;
-            if (to.object.get("script")) |script| {
-                const target = c.talk_group_script(g, script.string.ptr, script.string.len) orelse return;
-                _ = c.talk_script_deliver(target, &m, null);
-            } else if (try s.objectRef(to.object.get("object") orelse return)) |o| {
-                _ = c.talk_deliver(g, o, &m, null);
+        const fields = for (action_fields) |f| {
+            if (std.mem.eql(u8, f.kind, kind)) break f;
+        } else return bad;
+        if (!fieldsAre(request, fields.required, fields.optional)) return bad;
+        try s.start();
+        const g = s.group.?;
+        var id: c.talk_owned_bytes = .{ .data = null, .len = 0 };
+        defer c.talk_owned_bytes_release(&id);
+        // The payload's id field, if the action made one.
+        var made: ?[]const u8 = null;
+        const code: c.talk_host_error_code = code: {
+            if (std.mem.eql(u8, kind, "set-parent") or std.mem.eql(u8, kind, "dispose")) {
+                const o = try s.objectRef(request.object.get("object").?) orelse return bad;
+                if (std.mem.eql(u8, kind, "dispose")) break :code c.talk_dispose(g, o);
+                const p = request.object.get("parent").?;
+                const parent = if (p == .null) null else try s.objectRef(p) orelse return bad;
+                break :code c.talk_set_parent(g, o, parent);
             }
-            for (args) |a| c.talk_value_release(a);
-        } else if (std.mem.eql(u8, kind, "call")) {
-            const fn_value = try s.valueOf(request.object.get("fn").?) orelse return;
-            defer c.talk_value_release(fn_value);
-            const args = try s.argsOf(request.object.get("args"));
-            defer for (args) |a| c.talk_value_release(a);
-            var pending: ?*c.talk_pending = null;
-            _ = c.talk_group_call(g, fn_value, @ptrCast(args.ptr), args.len, null, null, &pending);
-            if (pending) |p| c.talk_pending_release(p);
+            if (std.mem.eql(u8, kind, "deliver") or std.mem.eql(u8, kind, "request") or std.mem.eql(u8, kind, "decide") or std.mem.eql(u8, kind, "broadcast")) {
+                var m = try s.messageOf(request.object.get("message").?);
+                defer m.release();
+                if (std.mem.eql(u8, kind, "broadcast") or (std.mem.eql(u8, kind, "decide") and request.object.get("broadcast") != null)) {
+                    if (request.object.get("broadcast")) |b| if (b != .bool or !b.bool or request.object.get("to") != null) return bad;
+                    made = "broadcast";
+                    var deciding: ?*c.talk_deciding = null;
+                    break :code if (std.mem.eql(u8, kind, "broadcast")) c.talk_broadcast(g, &m.message, &id) else c.talk_decide_broadcast(g, &m.message, &id, &deciding);
+                }
+                made = "delivery";
+                const to = request.object.get("to") orelse return bad;
+                if (to != .object or to.object.count() != 1) return bad;
+                var pending: ?*c.talk_pending = null;
+                defer if (pending) |p| c.talk_pending_release(p);
+                var deciding: ?*c.talk_deciding = null;
+                if (to.object.get("script")) |name| {
+                    if (name != .string) return bad;
+                    const script = c.talk_group_script(g, name.string.ptr, name.string.len) orelse return bad;
+                    break :code if (std.mem.eql(u8, kind, "deliver")) c.talk_script_deliver(script, &m.message, &id) else if (std.mem.eql(u8, kind, "request")) c.talk_script_request(script, &m.message, &id, &pending) else c.talk_script_decide(script, &m.message, &id, &deciding);
+                }
+                const o = try s.objectRef(to.object.get("object") orelse return bad) orelse return bad;
+                break :code if (std.mem.eql(u8, kind, "deliver")) c.talk_deliver(g, o, &m.message, &id) else if (std.mem.eql(u8, kind, "request")) c.talk_request(g, o, &m.message, &id, &pending) else c.talk_decide(g, o, &m.message, &id, &deciding);
+            }
+            if (std.mem.eql(u8, kind, "call")) {
+                const fn_value = try s.valueOf(request.object.get("fn").?) orelse return bad;
+                defer c.talk_value_release(fn_value);
+                if (request.object.get("args").? != .array) return bad;
+                const args = try s.argsOf(request.object.get("args"));
+                defer for (args) |x| c.talk_value_release(x);
+                var limits = try limitsOf(request.object.get("limits"));
+                var pending: ?*c.talk_pending = null;
+                defer if (pending) |p| c.talk_pending_release(p);
+                made = "delivery";
+                break :code c.talk_group_call(g, fn_value, @ptrCast(args.ptr), args.len, if (limits.set != 0) &limits else null, &id, &pending);
+            }
+            if (std.mem.eql(u8, kind, "cancel-delivery")) {
+                const delivery = jsonText(request, "delivery");
+                _ = c.talk_cancel_delivery(g, delivery.ptr, delivery.len);
+                break :code c.TALK_OK;
+            }
+            if (std.mem.eql(u8, kind, "stop") or std.mem.eql(u8, kind, "cancel-run") or std.mem.eql(u8, kind, "revoke")) {
+                const name = jsonText(request, "script");
+                const script = c.talk_group_script(g, name.ptr, name.len) orelse return bad;
+                const arg = jsonText(request, if (std.mem.eql(u8, kind, "stop")) "reason" else if (std.mem.eql(u8, kind, "revoke")) "grant" else "run");
+                _ = if (std.mem.eql(u8, kind, "stop")) c.talk_script_stop(script, arg.ptr, arg.len) else if (std.mem.eql(u8, kind, "revoke")) c.talk_script_revoke(script, arg.ptr, arg.len) else c.talk_script_cancel_run(script, arg.ptr, arg.len);
+                break :code c.TALK_OK;
+            }
+            if (std.mem.eql(u8, kind, "answer") or std.mem.eql(u8, kind, "fail")) {
+                // Only a call the session holds: its Operations' and the
+                // console's and user's.
+                const call = jsonText(request, "call");
+                const i = for (s.pending.items, 0..) |p, k| {
+                    if (std.mem.eql(u8, p.id, call)) break k;
+                } else break :code c.TALK_UNKNOWN_CALL;
+                const p = s.pending.items[i];
+                if (std.mem.eql(u8, kind, "answer")) {
+                    const value = try s.valueOf(request.object.get("value").?) orelse return bad;
+                    defer c.talk_value_release(value);
+                    const fuel = if (request.object.get("fuel")) |_| jsonInt(request, "fuel") else 0;
+                    if (fuel < 0) return bad;
+                    _ = if (fuel > 0) c.talk_call_answer_with_cost(p.call, value, fuel) else c.talk_call_answer(p.call, value);
+                } else {
+                    var e = try s.failureOf(request.object.get("error").?);
+                    defer c.talk_value_release(e.data);
+                    _ = c.talk_call_fail(p.call, &e);
+                }
+                _ = s.pending.orderedRemove(i);
+                break :code c.TALK_OK;
+            }
+            // settle
+            const settlement = request.object.get("settlement").?;
+            if (settlement != .object or settlement.object.count() != 1) return bad;
+            var answer: ?*c.talk_value = null;
+            defer if (answer) |x| c.talk_value_release(x);
+            var failure: ?c.talk_script_error = null;
+            defer if (failure) |f| c.talk_value_release(f.data);
+            var how: c.talk_settlement = .{ .answer = null, .fail = null, .reissue = false, .adopt = false };
+            if (settlement.object.get("answer")) |x| {
+                answer = try s.valueOf(x) orelse return bad;
+                how.answer = answer;
+            } else if (settlement.object.get("fail")) |x| {
+                failure = try s.failureOf(x);
+                how.fail = &failure.?;
+            } else if (settlement.object.get("reissue")) |x| {
+                if (x != .bool or !x.bool) return bad;
+                how.reissue = true;
+            } else if (settlement.object.get("adopt")) |x| {
+                if (x != .bool or !x.bool) return bad;
+                how.adopt = true;
+            } else return bad;
+            const call = jsonText(request, "call");
+            var adopted: ?*c.talk_call = null;
+            break :code c.talk_settle(g, call.ptr, call.len, &how, &adopted);
+        };
+        if (code != c.TALK_OK) return s.print("{{\"error\":\"{s}\"}}", .{hostErrorName(code)});
+        const field_name = made orelse return "{\"ok\":{}}";
+        return s.print("{{\"ok\":{{\"{s}\":\"{s}\"}}}}", .{ field_name, id.data[0..id.len] });
+    }
+
+    /// A Host action's message: its name, its arguments and its limits.
+    const ActionMessage = struct {
+        message: c.talk_message,
+        args: []?*c.talk_value,
+        limits: c.talk_limit_override,
+
+        fn release(m: *ActionMessage) void {
+            for (m.args) |x| c.talk_value_release(x);
         }
+    };
+
+    fn messageOf(s: *Session, v: std.json.Value) !ActionMessage {
+        if (!fieldsAre(v, &.{"name"}, &.{ "args", "limits" })) return error.MalformedTranscript;
+        const name = v.object.get("name").?;
+        if (name != .string) return error.MalformedTranscript;
+        if (v.object.get("args")) |a| if (a != .array) return error.MalformedTranscript;
+        var m: ActionMessage = .{ .message = undefined, .args = try s.argsOf(v.object.get("args")), .limits = try limitsOf(v.object.get("limits")) };
+        m.message = .{ .name = name.string.ptr, .name_len = name.string.len, .args = @ptrCast(m.args.ptr), .args_len = m.args.len, .limits = null };
+        return m;
+    }
+
+    fn limitsOf(v: ?std.json.Value) !c.talk_limit_override {
+        var out = std.mem.zeroes(c.talk_limit_override);
+        const x = v orelse return out;
+        if (!fieldsAre(x, &.{}, &.{ "allocPerRun", "fuelPerRun", "maxJoin", "maxWaitMs" })) return error.MalformedTranscript;
+        if (x.object.get("fuelPerRun") != null) {
+            out.set |= 1;
+            out.fuel_per_run = jsonInt(x, "fuelPerRun");
+        }
+        if (x.object.get("allocPerRun") != null) {
+            out.set |= 2;
+            out.alloc_per_run = jsonInt(x, "allocPerRun");
+        }
+        if (x.object.get("maxWaitMs") != null) {
+            out.set |= 4;
+            out.max_wait_ms = jsonInt(x, "maxWaitMs");
+        }
+        if (x.object.get("maxJoin") != null) {
+            out.set |= 8;
+            out.max_join = jsonInt(x, "maxJoin");
+        }
+        return out;
+    }
+
+    /// A Script error from `{code, message, data (V)}`; the caller
+    /// releases its data.
+    fn failureOf(s: *Session, v: std.json.Value) !c.talk_script_error {
+        if (!fieldsAre(v, &.{ "code", "data", "message" }, &.{})) return error.MalformedTranscript;
+        const code = v.object.get("code").?;
+        const message = v.object.get("message").?;
+        if (code != .string or message != .string) return error.MalformedTranscript;
+        const data = try s.valueOf(v.object.get("data").?) orelse return error.MalformedTranscript;
+        return .{ .code = code.string.ptr, .code_len = code.string.len, .message = message.string.ptr, .message_len = message.string.len, .data = data };
     }
 
     fn argsOf(s: *Session, list: ?std.json.Value) ![]?*c.talk_value {
@@ -3453,7 +3648,7 @@ pub const Session = struct {
             if (std.mem.eql(u8, t, "object")) s.registerObject(x.object.get("object").?) catch {};
             if (std.mem.eql(u8, t, "kind")) s.defineKind(x) catch {};
             if (std.mem.eql(u8, t, "input")) {
-                s.hostInput(x.object.get("request").?) catch {};
+                s.hostInput(x) catch return null;
                 s.queued = true;
             }
         }
