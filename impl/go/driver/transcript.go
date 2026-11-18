@@ -4,6 +4,7 @@
 package driver
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -135,17 +136,14 @@ func formatInstant(t time.Time) string {
 	return v.Display()
 }
 
-// ReplayTranscript never writes files. A real Clock reading is offered to the
-// input before it; an unused reading causes an independent deadline Pump.
-// The returned Items include the actual outputs and recorder behavior.
+// ReplayTranscript replays a Transcript through a new session, as a Driver
+// drives it: each input, typed line, answer, deadline and declaration it
+// holds is one Host call, each crossing and Restore is answered from it, and
+// it never writes files. Under a real Clock, each Host call reads the `@`
+// line the session takes next, or else the last one. The returned Items are
+// what the session recorded, with the Transcript's comments in place, for the
+// caller to compare.
 func ReplayTranscript(recorded []session.Item, trace func(string)) (host *session.Host, items []session.Item, err error) {
-	consumed := map[int]bool{}
-	type reading struct {
-		index int
-		at    time.Time
-	}
-	var readings []reading
-	clockStart := 0
 	// Invalid replay input is a driver error, not a language diagnostic.
 	defer func() {
 		if p := recover(); p != nil {
@@ -156,75 +154,106 @@ func ReplayTranscript(recorded []session.Item, trace func(string)) (host *sessio
 			}
 		}
 	}()
+	reading := time.Unix(0, 0).UTC()
 	host = session.New(session.Environment{
 		ObjectTranscript: recorded,
-		Now: func() time.Time {
-			if len(readings) == 0 {
-				panic(replayError("Transcript has no @ reading for a Pump"))
-			}
-			next := readings[0]
-			readings = readings[1:]
-			for n := clockStart; n < next.index; n++ {
-				if recorded[n].Kind == "envelope" {
-					host.ReplayObjectItem(n)
-				}
-			}
-			clockStart = next.index + 1
-			consumed[next.index] = true
-			return next.at
-		},
-		Record: func(i session.Item) { items = append(items, i) }, Trace: trace,
-		WriteFile:      func(string, string, string) error { return nil },
-		WriteStoreFile: func(string, string) error { return nil },
+		Now:              func() time.Time { return reading },
+		Record:           func(i session.Item) { items = append(items, i) },
+		Trace:            trace,
+		WriteFile:        func(string, string, string) error { return nil },
+		WriteStoreFile:   func(string, string) error { return nil },
 	})
-
-	prepare := func(n int) {
-		clockStart = n + 1
-		readings = nil
-		for i := n + 1; i < len(recorded); i++ {
-			item := recorded[i]
-			if item.Kind == "input" || item.Kind == "read" {
-				break
-			}
-			if item.Kind == "clock" {
-				readings = append(readings, reading{i, item.At})
-			}
-		}
-	}
+	// Each item's first line; a comment is no line the session writes.
+	starts := make([]int, len(recorded))
+	at := 0
 	for n, item := range recorded {
-		if consumed[n] {
-			continue
+		starts[n] = at
+		at += lineCount(item)
+	}
+	written := func() int {
+		count := 0
+		for _, item := range items {
+			count += lineCount(item)
+		}
+		return count
+	}
+	n := 0
+	for {
+		// Past what the session has written so far.
+		w := written()
+		for n < len(recorded) && (starts[n] < w || recorded[n].Kind == "comment") {
+			if recorded[n].Kind == "comment" && starts[n] >= w {
+				items = append(items, recorded[n])
+			}
+			n++
+		}
+		// Output is the session's to write; a mismatch shows when compared.
+		if n >= len(recorded) || starts[n] != w || recorded[n].Kind == "output" {
+			break
+		}
+		item := recorded[n]
+		// The reading the Host call takes: the `@` the session takes next.
+		next := n + 1
+		for next < len(recorded) && recorded[next].Kind == "output" {
+			next++
+		}
+		if item.Kind == "clock" {
+			reading = item.At
+		} else if next < len(recorded) && recorded[next].Kind == "clock" {
+			reading = recorded[next].At
 		}
 		switch item.Kind {
 		case "input":
-			prepare(n)
 			host.Input(item.Text)
 		case "read":
-			prepare(n)
 			host.Read(item.Text)
 		case "clock":
-			// A deadline's Pump, and any Pump for the Host Inputs it leaves queued.
-			prepare(n - 1)
 			host.Tick()
-		case "envelope":
-			host.ReplayObjectItem(n)
-		case "comment":
-			items = append(items, item)
 		case "answer":
-			// A prompt's answer is a Host Input of its own, which causes a Pump.
-			if w := host.Waiting(); w.Kind == "user" && w.Call == item.Call {
-				prepare(n)
-			}
 			if ok, _ := host.ReplayAnswer(item); !ok {
-				return host, items, fmt.Errorf("built-in answers are not offered by this Go Session Host")
+				return host, items, fmt.Errorf("Transcript line %d: an answer no prompt waits for", starts[n]+1)
 			}
+		case "envelope":
+			e, err := session.ParseEnvelope(item.Text)
+			if err != nil {
+				return host, items, err
+			}
+			var typ string
+			json.Unmarshal(e["type"], &typ)
+			switch typ {
+			case "kind", "object", "setup", "input":
+				host.ReplayObjectItem(n)
+			default:
+				// Only the session makes the others.
+				return host, items, nil
+			}
+		}
+		if written() == w {
+			return host, items, fmt.Errorf("Transcript line %d: the session didn't take it", starts[n]+1)
 		}
 	}
 	host.FinishObjectReplay()
-
+	// A replay that answers from the Transcript must make the same
+	// envelopes; other lines are the caller's to compare.
+	want, got := strings.Split(WriteTranscript(recorded), "\n"), strings.Split(WriteTranscript(items), "\n")
+	for n := range min(len(want), len(got)) {
+		if want[n] != got[n] {
+			if strings.HasPrefix(want[n], "% ") || strings.HasPrefix(got[n], "% ") {
+				return host, items, fmt.Errorf("Transcript line %d: expected %s, got %s", n+1, want[n], got[n])
+			}
+			break
+		}
+	}
 	return
 }
 
-type replayError string
-
-func (e replayError) Error() string { return string(e) }
+// lineCount is how many Transcript lines an item takes.
+func lineCount(item session.Item) int {
+	switch item.Kind {
+	case "comment":
+		return 0
+	case "input":
+		return 1 + strings.Count(item.Text, "\n")
+	}
+	return 1
+}

@@ -33,6 +33,7 @@ type inputLine struct {
 // while typed lines queue. Background deadlines continue at the prompt.
 func RunREPL(ctx context.Context, input io.Reader, output io.Writer, options REPLOptions) error {
 	host := session.New(options.Environment)
+	defer host.Close()
 	lines := make(chan inputLine, 1)
 	scanCtx, cancel := context.WithCancel(ctx)
 	defer cancel()

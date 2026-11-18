@@ -205,10 +205,16 @@ func (b *zigGroup) decodeValue(raw []byte) (Value, error) { return zigDecodeValu
 // Code is the guest's token, so equal tokens are equal values, and its
 // display is the guest's.
 func (b *zigGroup) zigFunction(parts []corevalue.Value) (corevalue.Value, error) {
+	return zigWireFunction(parts, b.group)
+}
+
+// zigWireFunction is a guest Function payload's opaque Value, of group when
+// a Group holds it.
+func zigWireFunction(parts []corevalue.Value, group any) (corevalue.Value, error) {
 	if (len(parts) != 3 && len(parts) != 6 && len(parts) != 7) || parts[0].Kind != corevalue.Text || parts[1].Kind != corevalue.Text || parts[2].Kind != corevalue.Text {
 		return corevalue.Value{}, fmt.Errorf("invalid $function tag")
 	}
-	fn := &corevalue.FunctionData{Home: parts[0].Text(), CodeState: corevalue.WireFunction{Display: parts[1].Text()}, Code: parts[2].Text(), Group: b.group}
+	fn := &corevalue.FunctionData{Home: parts[0].Text(), CodeState: corevalue.WireFunction{Display: parts[1].Text()}, Code: parts[2].Text(), Group: group}
 	if len(parts) >= 6 {
 		if (parts[3].Kind != corevalue.Nothing && parts[3].Kind != corevalue.Text) || parts[4].Kind != corevalue.Number || parts[5].Kind != corevalue.Number {
 			return corevalue.Value{}, fmt.Errorf("invalid $function metadata")

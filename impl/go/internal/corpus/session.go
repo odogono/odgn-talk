@@ -5,11 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	talk "northtalk.org/go"
 	"northtalk.org/go/driver"
-	"northtalk.org/go/session"
 )
 
+// sessionBackend replays a Session Transcript through the Go session, whose
+// Session Host is the Zig one the reactor serves (ADR 0180), and checks its
+// Trace. The Zig Core's own corpus covers what the Trace replays.
 type sessionBackend struct{}
 
 func (sessionBackend) Support(c Case) string { return "" }
@@ -27,6 +28,8 @@ func (sessionBackend) Run(c Case, _ []Record) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer host.Close()
+	// The end, as for a Trace Case: Inspect, unless the last input was it.
 	lastInput := ""
 	for _, line := range trace {
 		if strings.HasPrefix(line, "> ") {
@@ -51,23 +54,6 @@ func (sessionBackend) Run(c Case, _ []Record) ([]string, error) {
 	if err := Compare(c.Name+" case.trace", expected, trace); err != nil {
 		return nil, err
 	}
-	// Replay the Trace independently through the ordinary and snapshot backends.
-	dir, err := os.MkdirTemp("", "northtalk-session-case-")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(dir)
-	setup, err := sessionSetup(host, dir)
-	if err != nil {
-		return nil, err
-	}
-	replayed, err := runReplayPair(Case{Name: c.Name, Dir: dir, Kind: "trace", Setup: setup}, records, sessionStoreReplies(host, records))
-	if err != nil {
-		return nil, err
-	}
-	if err := Compare(c.Name+" Trace replay", expected, replayed); err != nil {
-		return nil, err
-	}
 	var out []string
 	for _, line := range strings.Split(strings.TrimSuffix(driver.WriteTranscript(items), "\n"), "\n") {
 		if line != "" && !strings.HasPrefix(line, "#") {
@@ -75,124 +61,4 @@ func (sessionBackend) Run(c Case, _ []Record) ([]string, error) {
 		}
 	}
 	return out, nil
-}
-func sessionSetup(h *session.Host, dir string) (Setup, error) {
-	grants := Setup{"console": Setup{"ops": "all"}}
-	for name, cap := range h.Grants() {
-		grants[name] = Setup{"capability": cap, "ops": "all"}
-		if cap == "store" {
-			grants[name].(Setup)["binding"] = h.GrantBinding(name)
-		}
-	}
-	var operations []any
-	for _, m := range h.MockOperations() {
-		args := []any{}
-		for range 8 {
-			args = append(args, Setup{"optional": "any"})
-		}
-		mode := []string{"immediate", "suspending", "fire-and-forget"}[m.Mode]
-		op := Setup{"capability": m.Capability, "name": m.Operation, "mode": mode, "args": args, "cost": Setup{"fuel": int64(0)}}
-		if m.Mode != talk.FireAndForget {
-			op["result"] = "any"
-		}
-		if m.Metered {
-			op["metering"] = "read-only"
-		}
-		operations = append(operations, op)
-	}
-	standard := []any{Setup{"capability": "console", "costs": Setup{"write": Setup{"fuel": int64(0)}, "read": Setup{"fuel": int64(0)}}}}
-	seen := map[string]bool{}
-	for _, cap := range h.Grants() {
-		if seen[cap] {
-			continue
-		}
-		seen[cap] = true
-		if cap == "clock" {
-			standard = append(standard, Setup{"capability": "clock", "costs": Setup{"now": Setup{"fuel": int64(0)}}})
-		}
-		if cap == "user" {
-			costs := Setup{}
-			for _, name := range []string{"confirm", "choose", "enter", "notify"} {
-				costs[name] = Setup{"fuel": int64(0)}
-			}
-			standard = append(standard, Setup{"capability": "user", "costs": costs})
-		}
-		if cap == "store" {
-			costs := Setup{}
-			for _, name := range []string{"get", "keys", "set", "delete", "increment", "swap", "watch", "unwatch"} {
-				fuel := int64(4)
-				if name == "get" || name == "keys" || name == "unwatch" {
-					fuel = 2
-				}
-				costs[name] = Setup{"fuel": fuel}
-			}
-			standard = append(standard, Setup{"capability": "store", "costs": costs})
-		}
-	}
-
-	var libraries []any
-	for _, l := range h.UserLibraries() {
-		file := l.Name + ".talk"
-		if err := os.WriteFile(filepath.Join(dir, file), []byte(l.Source), 0600); err != nil {
-			return nil, err
-		}
-		libraries = append(libraries, Setup{"name": l.Name, "version": l.Version, "source": file})
-	}
-	if err := os.WriteFile(filepath.Join(dir, "session.talk"), nil, 0600); err != nil {
-		return nil, err
-	}
-	scripts := []any{Setup{"name": "session", "source": "session.talk", "grants": grants}}
-	// Scripts `:script add` gave share the Session Script's Grants (ADR 0170).
-	for _, s := range h.AddedScripts() {
-		file := "script-" + s.Name + ".talk"
-		if err := os.WriteFile(filepath.Join(dir, file), []byte(s.Source), 0600); err != nil {
-			return nil, err
-		}
-		scripts = append(scripts, Setup{"name": s.Name, "source": file, "grants": grants, "grantsAsUsed": true})
-	}
-	return Setup{"sessionObjects": h.ObjectTranscript(), "operations": operations, "standard": standard, "libraries": libraries, "scripts": scripts}, nil
-}
-
-// Session Store results belong to the Host, outside the Trace's Host Inputs.
-// Seed them as invisible Stubs for independent ordinary/save-restore replay;
-// loaded files and committed contents are never copied into the replay Core.
-func sessionStoreReplies(h *session.Host, records []Record) func(*operationReplay) {
-	grants := h.Grants()
-	return func(o *operationReplay) {
-		for _, r := range records {
-			if r.Input || len(r.IDs) == 0 {
-				continue
-			}
-			fields := map[string]Field{}
-			for _, f := range r.Fields {
-				fields[f.Key] = f
-			}
-			if r.Name == "call" {
-				grant, op, ok := strings.Cut(fields["op"].Raw, ".")
-				if failure, failed := fields["error"]; ok && failed && grants[grant] == "user" {
-					o.startFailures[r.IDs[0]] = failure
-					continue
-				}
-				if !ok || grants[grant] != "store" {
-					continue
-				}
-				stub := map[string]Field{}
-				if result, ok := fields["result"]; ok {
-					stub["value"] = result
-				}
-				if failure, ok := fields["error"]; ok {
-					stub["error"] = failure
-				}
-				if charged, ok := fields["charged"]; ok {
-					stub["charge"] = charged
-				}
-				o.stubs["store."+op] = append(o.stubs["store."+op], stub)
-			}
-			if r.Name == "effect" && grants[fields["grant"].Raw] == "store" {
-				script, _, _ := strings.Cut(r.IDs[0], "/")
-				key := script + "." + fields["grant"].Raw + "." + fields["phase"].Raw
-				o.effectStubs[key] = append(o.effectStubs[key], map[string]Field{"status": fields["status"]})
-			}
-		}
-	}
 }

@@ -745,7 +745,7 @@ func (b *zigGroup) inspect() Inspection {
 	if err = zigInspectionRecord.decode(reply, reflect.ValueOf(&view).Elem()); err != nil {
 		panic(err)
 	}
-	inspection, err := b.inspection(view)
+	inspection, err := zigInspection(view, b)
 	if err != nil {
 		panic(err)
 	}

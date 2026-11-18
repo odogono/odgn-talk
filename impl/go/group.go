@@ -15,11 +15,10 @@ import (
 var ErrMailboxFull error = errors.New("mailbox full")
 
 type Group struct {
-	backend       groupBackend
-	sessionExpose func(any)
-	traceMu       sync.Mutex
-	traceQueue    []string
-	recording     bool
+	backend    groupBackend
+	traceMu    sync.Mutex
+	traceQueue []string
+	recording  bool
 
 	mu             sync.Mutex
 	core           *Core

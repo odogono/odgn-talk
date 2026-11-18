@@ -173,10 +173,11 @@ func zigHeaded(rec *generated.EnvelopeLoad, fields map[string]any) *generated.En
 	return &load
 }
 
-// inspection maps the Inspect reply view onto the public Inspection, one
-// line per field. Values and Messages are decoded against this Group.
-func (b *zigGroup) inspection(view generated.EnvelopeInspection) (Inspection, error) {
-	d := zigViewDecoder{b: b}
+// zigInspection maps the Inspect reply view onto the public Inspection, one
+// line per field. Values and Messages are decoded against r: a Group, or a
+// session's guest.
+func zigInspection(view generated.EnvelopeInspection, r zigValueResolver) (Inspection, error) {
+	d := zigViewDecoder{b: r}
 	var scripts []ScriptView
 	if view.Scripts != nil {
 		scripts = make([]ScriptView, len(view.Scripts))
@@ -229,7 +230,7 @@ func (d *zigViewDecoder) mailbox(messages []generated.EnvelopeInspectedMessage) 
 
 // zigViewDecoder keeps the first error while a reply view is mapped.
 type zigViewDecoder struct {
-	b   *zigGroup
+	b   zigValueResolver
 	err error
 }
 
@@ -289,7 +290,7 @@ func (d *zigViewDecoder) pairs(pairs [][2]any) []Pair {
 func (d *zigViewDecoder) message(raw any) Message {
 	var m Message
 	if raw != nil {
-		d.fail(d.b.decode(raw.(zigReply), reflect.ValueOf(&m).Elem()))
+		d.fail(zigDecodeResolving(raw.(zigReply), reflect.ValueOf(&m).Elem(), d.b))
 	}
 	return m
 }

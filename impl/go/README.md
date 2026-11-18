@@ -147,12 +147,6 @@ token: `HomeScript`, `String` and `Equal` behave natively, another Group's is
 refused as `wrong group` before encoding, and the storage encoding still
 refuses it. They travel in message arguments, results, Reports, Inspect
 variables and Capability arguments and results, including Function Shapes.
-The Session's passive inspection and descriptions read the declared name
-(Nothing for Lambdas) and required/total parameter counts, including defaults,
-stale Function Values and repeated Save/Restore. The Session archives Declaration
-Documentation by defining-unit identity, using the read-only `script-units`
-query after accepted code changes. Old functions keep their original docs
-through redefinition, Library replacement and Restore; Lambdas have no docs.
 `Group.Call` goes through the guest's `call` with the native admission checks
 and records, its context cancelling the call, and the adapter negotiates
 `function-gone-v1`, so a call found stale at the drain rejects with `send
@@ -284,8 +278,8 @@ are deliberate limits, retained by the maintainer's decision on
 [#1050](https://github.com/odogono/odgn-talk/issues/1050).
 Pool, Store and sqlite are Go Host facilities and run through the
 adapter, including the unchanged tenants example and the Store and sqlite test
-kits. The Session Host, REPL and every Session Transcript run on the adapter
-([#1053](https://github.com/odogono/odgn-talk/issues/1053)); CI runs them on
+kits. The Session Host, REPL and every Session Transcript run on the
+reactor's `session-v1`; CI runs them on
 Linux amd64/arm64 and macOS arm64 and cross-builds each target without cgo.
 Group initialization forwards `GroupOptions.Seed` across its full `uint64`
 range, with 0 as the default; Save/Restore preserves the generator's current
@@ -342,28 +336,22 @@ committed Core/spec sources and records its provenance, including the version
 builds that release instead, whose bytes match the tag's published `talk.wasm`.
 It refuses any Zig but the `minimum_zig_version` in `impl/zig/build.zig.zon`,
 which the release workflow uses; set `ZIG` to that Zig's path if `zig` is newer.
-The Go Session Host and REPL use the embedded
-Core's negotiated `analysis-v1` exchanges for Entry classification and
-continuation, positioned syntax diagnostics, implicit Script Variables,
-declaration descriptions and documentation, Fix/Continue, Built-in and Standard
-Library catalogues, the inspection reader and computed message names. A single
-serialized analysis guest shares the adapter's compiled engine and works before
-a Group starts; analysis exchanges load nothing and produce no Trace. Value
-formatting and pinned Unicode name matching stay with the Host. `session`,
-`driver` and `internal/cmd/northtalk` import no Go parser, checker, compiler or
-generated catalogue packages. Cancelling an unfinished
-inspection expression prevents its property reader from starting.
-
-Every Session test and Session Transcript passes, including the `describe`,
-`named-functions`, `object-inspection` and `observation` Transcripts unchanged, including defining documentation, disposed
-Object inspection after Restore and Core-raised error messages left out of the
-Trace. The Session’s private pending-input hook uses the
-negotiated `queued-inputs-v1` query, so callback Deliveries receive one extra
-Pump per Host call, Store Notifications drain at the same Clock reading, and
-restored settlements are pumped before the next Entry. The query observes the
-guest queue without execution or Trace. Decomposed source keeps the source
-text as written in the Trace
-([#1053](https://github.com/odogono/odgn-talk/issues/1053)).
+Go sessions run the Zig Session Host, which the embedded reactor serves as
+`session-v1`
+([ADR 0180](../../docs/adr/0180-go-sessions-run-the-zig-session-host-through-the-reactor.md)).
+Each `session.Host` holds one guest, which owns the session's Group, so
+Session Commands, observation, `:describe`, inspection, Session Stores and
+Transcript replay are the same code the Zig REPL runs. Go keeps the Session
+Driver: it collects lines (asking the guest with `session-complete` whether an
+Entry is whole), queues input while a foreground Run waits, pumps at each
+deadline the reply names, turns an interrupt into `:cancel`, and reads the file
+that `:library`, `:script`, `:fix` or `:store load` names, sending its lines
+in place of the path. The Environment answers the guest's three needs: a live
+Host Object's crossing through the kind's Go callbacks, a live Restore through
+`ResolveObject`, and a `:export` or `:store save` through `WriteFile` or
+`WriteStoreFile`. `driver.ReplayTranscript` drives each recorded input, line,
+answer, deadline and declaration as one Host call and answers the needs from
+the Transcript, and `Host.Inspect` (`session-inspect`) ends a Trace Case.
 `adapter-check.sh` runs `./session`, `./driver` and every
 `TestSessionTranscriptParity` case.
 

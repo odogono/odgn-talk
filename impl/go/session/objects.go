@@ -3,14 +3,13 @@ package session
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	"math/big"
-	talk "northtalk.org/go"
-	"northtalk.org/go/internal/sessionio"
-	v "northtalk.org/go/internal/value"
 	"reflect"
 	"slices"
 	"strings"
+
+	talk "northtalk.org/go"
+	"northtalk.org/go/internal/sessionio"
+	v "northtalk.org/go/internal/value"
 )
 
 type objectReference struct{ kind, id string }
@@ -19,88 +18,64 @@ func (r objectReference) raw() json.RawMessage {
 	return rawJSON(map[string]string{"kind": r.kind, "id": r.id})
 }
 
-type replayEnvelope struct {
-	index    int
-	item     Item
-	envelope Envelope
-	consumed bool
-}
-
-// Objects is the recording context supplied to Environment.Objects. Host
-// adapters register actual definitions here and use Action for external inputs.
-type traceAction struct{ kind, id string }
+// Objects is the context Environment.Objects declares live Host Objects in.
+// The session's guest holds them; each property get or set, and each Object
+// Collection count, at or find, is a `prop` need Go answers by calling the
+// kind's callbacks. Request and Action hand the session Host actions.
 type Objects struct {
-	recorded                   []Item
-	commandCursor              int
-	playbackError              error
-	queuedTraceActions         []traceAction
-	traceSaves                 map[string][]traceAction
-	core                       *talk.Core
-	group                      *talk.Group
-	record                     func(Item)
-	kinds                      map[string]*talk.ObjectKind
-	declarations               map[string]string
-	names                      map[*talk.ObjectKind]string
-	objects                    map[objectReference]*talk.Object
-	crossing, exposure, handle *big.Int
-	handles                    map[string]talk.Value
-	supplied                   map[any]string
-	replay                     []*replayEnvelope
-	playback, enabled, active  bool
-	outcomes                   []Envelope
-	resolving                  []Envelope
+	h    *Host
+	core *talk.Core
+	// The kinds declared, with the callbacks Go answers through.
+	kinds   map[string]*talk.ObjectKind
+	defs    map[string]talk.ObjectKindDef
+	encoded map[string]string
+	names   map[*talk.ObjectKind]string
+	objects map[objectReference]*talk.Object
+	// Kinds and objects the session made, which Go never calls.
+	unknown map[string]*talk.ObjectKind
+	// Envelopes declared before the session opens, or during a crossing,
+	// which go with its answer; nil between Host calls, when each goes at
+	// once.
+	pending  []string
+	opened   bool
+	crossing bool
 }
 
-func newObjects(core *talk.Core, g *talk.Group, record func(Item), items []Item, enabled bool) *Objects {
-	o := &Objects{core: core, group: g, record: record, kinds: map[string]*talk.ObjectKind{}, declarations: map[string]string{}, names: map[*talk.ObjectKind]string{}, objects: map[objectReference]*talk.Object{}, crossing: new(big.Int), exposure: new(big.Int), handle: new(big.Int), handles: map[string]talk.Value{}, playback: items != nil, enabled: enabled}
-	for i, item := range items {
-		if item.Kind == "envelope" {
-			e, err := ParseEnvelope(item.Text)
-			must(err)
-			o.replay = append(o.replay, &replayEnvelope{index: i, item: item, envelope: e})
-		}
-	}
-	o.supplied = map[any]string{}
-	o.recorded = items
-	o.attach(g)
-	return o
+func newObjects(h *Host) *Objects {
+	return &Objects{h: h, core: talk.New(), kinds: map[string]*talk.ObjectKind{}, defs: map[string]talk.ObjectKindDef{}, encoded: map[string]string{}, names: map[*talk.ObjectKind]string{}, objects: map[objectReference]*talk.Object{}, unknown: map[string]*talk.ObjectKind{}}
 }
-func (o *Objects) attach(g *talk.Group) {
-	o.group = g
-	sessionio.Attach(g, func(tree any) { o.expose(tree) })
-	for r := range o.objects {
-		if x, ok := g.ObjectByID(r.kind, r.id); ok {
-			o.objects[r] = x
-			o.names[x.Kind()] = r.kind
-		}
+
+// declare hands the session an envelope: with the opening, with a
+// crossing's answer, or else at once.
+func (o *Objects) declare(e Envelope) {
+	text := writeEnvelope(e)
+	if !o.opened || o.crossing {
+		o.pending = append(o.pending, text)
+		return
 	}
+	o.h.timed("session-input", map[string]any{"envelope": text})
 }
-func (o *Objects) emit(e Envelope) { o.record(Item{Kind: "envelope", Text: writeEnvelope(e)}) }
-func (o *Objects) next() *replayEnvelope {
-	for _, r := range o.replay {
-		if !r.consumed {
-			return r
-		}
+
+// opening is `session-open`'s `objects`: what Environment.Objects declared,
+// and its initial bindings.
+func (o *Objects) opening(bindings map[string]*talk.Object) []any {
+	refs := Envelope{}
+	for name, x := range bindings {
+		refs[name] = (objectReference{o.names[x.Kind()], x.ID()}).raw()
 	}
-	return nil
-}
-func (o *Objects) nextType() string {
-	if r := o.next(); r != nil {
-		return envelopeText(r.envelope["type"])
+	texts := []any{}
+	for _, t := range o.pending {
+		texts = append(texts, t)
 	}
-	return ""
+	texts = append(texts, writeEnvelope(Envelope{"type": rawJSON("setup"), "objects": json.RawMessage(writeEnvelope(refs))}))
+	o.pending = nil
+	o.opened = true
+	return texts
 }
-func (o *Objects) consume(typ string) Envelope {
-	r := o.next()
-	if r == nil || o.nextType() != typ {
-		envelopeError("expected " + typ)
-	}
-	r.consumed = true
-	o.record(r.item)
-	return r.envelope
-}
+
+// DefineKind declares an Object Kind, whose callbacks answer the session's
+// crossings.
 func (o *Objects) DefineKind(def talk.ObjectKindDef) (*talk.ObjectKind, error) {
-	// The passive declaration hook uses authoritative Shape and cost data.
 	props := append([]talk.Prop{}, def.Props...)
 	slices.SortFunc(props, func(a, b talk.Prop) int { return strings.Compare(a.Name, b.Name) })
 	rows := []json.RawMessage{}
@@ -115,15 +90,6 @@ func (o *Objects) DefineKind(def talk.ObjectKindDef) (*talk.ObjectKind, error) {
 			row["setCost"] = rawJSON(map[string]int64{"fuel": p.SetCost.Fuel, "alloc": p.SetCost.Alloc})
 		}
 		rows = append(rows, json.RawMessage(writeEnvelope(row)))
-		props[i].Get = func(x *talk.Object) (talk.Value, error) {
-			return o.property(x, p.Name, "get", talk.Nothing, func() (talk.Value, error) { return p.Get(x) })
-		}
-		if p.Set != nil {
-			props[i].Set = func(x *talk.Object, value talk.Value) error {
-				_, err := o.property(x, p.Name, "set", value, func() (talk.Value, error) { return talk.Nothing, p.Set(x, value) })
-				return err
-			}
-		}
 	}
 	parents := def.ParentKinds
 	if parents == nil {
@@ -131,25 +97,12 @@ func (o *Objects) DefineKind(def talk.ObjectKindDef) (*talk.ObjectKind, error) {
 	}
 	e := Envelope{"type": rawJSON("kind"), "name": rawJSON(def.Name), "props": rawJSON(rows), "parentKinds": rawJSON(parents)}
 	if def.Elements != nil {
-		elements := *def.Elements
-		e["elements"] = elementsDeclaration(&elements)
-		count, at, find := elements.Count, elements.At, elements.Find
-		elements.Count = func(x *talk.Object) (talk.Value, error) {
-			return o.collection(x, "count", talk.Nothing, func() (talk.Value, error) { return count(x) })
-		}
-		elements.At = func(x *talk.Object, index int64) (talk.Value, error) {
-			return o.collection(x, "at", talk.Int(index), func() (talk.Value, error) { return at(x, index) })
-		}
-		elements.Find = func(x *talk.Object, name string) (talk.Value, error) {
-			selector, _ := talk.Text(name)
-			return o.collection(x, "find", selector, func() (talk.Value, error) { return find(x, name) })
-		}
-		def.Elements = &elements
+		e["elements"] = elementsDeclaration(def.Elements)
 	}
 	encoded := writeEnvelope(e)
-	if old, ok := o.declarations[def.Name]; ok {
+	if old, ok := o.encoded[def.Name]; ok {
 		if old != encoded {
-			envelopeError("conflicting kind")
+			return nil, &talk.HostError{Code: talk.InvalidValue, Detail: "conflicting Object Kind"}
 		}
 		return o.kinds[def.Name], nil
 	}
@@ -159,121 +112,80 @@ func (o *Objects) DefineKind(def talk.ObjectKindDef) (*talk.ObjectKind, error) {
 		return nil, err
 	}
 	o.kinds[def.Name] = k
+	o.defs[def.Name] = def
 	o.names[k] = def.Name
-	o.declarations[def.Name] = encoded
-	if !o.playback {
-		o.emit(e)
-	}
+	o.encoded[def.Name] = encoded
+	o.declare(e)
 	return k, nil
 }
+
+// Object declares a Host Object of a kind DefineKind declared.
 func (o *Objects) Object(kind *talk.ObjectKind, id string, native any) (*talk.Object, error) {
 	name, ok := o.names[kind]
 	if !ok {
-		envelopeError("kind must be defined through Objects")
+		return nil, &talk.HostError{Code: talk.InvalidValue, Detail: "kind must be defined through Objects"}
 	}
 	r := objectReference{name, id}
 	if old := o.objects[r]; old != nil {
 		return old, nil
 	}
-	x, err := o.group.Object(kind, id, native)
-	if err != nil {
-		return nil, err
-	}
+	x := sessionio.DetachedObject(kind, id, native).(*talk.Object)
 	o.objects[r] = x
-	if !o.playback {
-		o.emit(Envelope{"type": rawJSON("object"), "object": r.raw()})
-	}
+	o.declare(Envelope{"type": rawJSON("object"), "object": r.raw()})
 	return x, nil
 }
-func (o *Objects) ref(raw []byte) *talk.Object {
-	r := envelopeRef(raw)
-	x := o.objects[r]
-	if x == nil {
-		envelopeError("unknown object")
+
+// kindName is a kind's name, whether Go declared it or the session made it.
+func (o *Objects) kindName(k *talk.ObjectKind) string {
+	if name, ok := o.names[k]; ok {
+		return name
 	}
+	for name, u := range o.unknown {
+		if u == k {
+			return name
+		}
+	}
+	return ""
+}
+
+// declared reports whether Go declared the object, for a live Restore with
+// no ResolveObject.
+func (o *Objects) declared(kind, id string) bool {
+	return o.objects[objectReference{kind, id}] != nil
+}
+
+// named is the Host Object kind and id name: one Go declared, or one the
+// session made, held under a kind with no callbacks.
+func (o *Objects) named(kind, id string) *talk.Object {
+	r := objectReference{kind, id}
+	if x := o.objects[r]; x != nil {
+		return x
+	}
+	k := o.kinds[kind]
+	if k == nil {
+		if k = o.unknown[kind]; k == nil {
+			var err error
+			if k, err = o.core.DefineObjectKind(talk.ObjectKindDef{Name: kind}); err != nil {
+				panic(err)
+			}
+			o.unknown[kind] = k
+		}
+	}
+	x := sessionio.DetachedObject(k, id, nil).(*talk.Object)
+	o.objects[r] = x
 	return x
 }
-func (o *Objects) registrations() {
-	for o.nextType() == "kind" || o.nextType() == "object" {
-		switch o.nextType() {
-		case "kind":
-			e := o.consume("kind")
-			name := envelopeText(e["name"])
-			if o.kinds[name] != nil {
-				envelopeError("duplicate kind")
-			}
-			def := talk.ObjectKindDef{Name: name}
-			json.Unmarshal(e["parentKinds"], &def.ParentKinds)
-			var rows []Envelope
-			json.Unmarshal(e["props"], &rows)
-			for _, p := range rows {
-				prop := talk.Prop{Name: envelopeText(p["name"]), Shape: decodeEnvelopeShape(p["shape"]), GetCost: decodeEnvelopeCost(p["getCost"]), Get: func(*talk.Object) (talk.Value, error) { panic("external getter in replay") }}
-				if !envelopeBool(p["readOnly"]) {
-					prop.SetCost = decodeEnvelopeCost(p["setCost"])
-					prop.Set = func(*talk.Object, talk.Value) error { return nil }
-				}
-				def.Props = append(def.Props, prop)
-			}
-			if raw, ok := e["elements"]; ok {
-				def.Elements = decodeEnvelopeElements(raw)
-				external := func() (talk.Value, error) { panic("external collection callback in replay") }
-				def.Elements.Count = func(*talk.Object) (talk.Value, error) { return external() }
-				def.Elements.At = func(*talk.Object, int64) (talk.Value, error) { return external() }
-				def.Elements.Find = func(*talk.Object, string) (talk.Value, error) { return external() }
-			}
-			_, err := o.DefineKind(def)
-			must(err)
-		case "object":
-			e := o.consume("object")
-			r := envelopeRef(e["object"])
-			if o.objects[r] != nil {
-				envelopeError("duplicate object")
-			}
-			k := o.kinds[r.kind]
-			if k == nil {
-				envelopeError("unknown kind")
-			}
-			_, err := o.Object(k, r.id, struct{}{})
-			must(err)
-		}
-	}
-}
-func (o *Objects) initial(bindings map[string]*talk.Object) {
-	if o.playback {
-		return
-	}
-	if !o.enabled {
-		return
-	}
-	refs := Envelope{}
-	for name, x := range bindings {
-		refs[name] = (objectReference{o.names[x.Kind()], x.ID()}).raw()
-	}
-	o.emit(Envelope{"type": rawJSON("setup"), "objects": json.RawMessage(writeEnvelope(refs))})
-}
-func (o *Objects) preload() map[string]*talk.Object {
-	o.registrations()
-	bindings := map[string]*talk.Object{}
-	if o.nextType() != "setup" {
-		if len(o.replay) > 0 {
-			envelopeError("missing setup")
-		}
-		return bindings
-	}
-	e := o.consume("setup")
-	for name, r := range envelopeObject(e["objects"]) {
-		bindings[name] = o.ref(r)
-	}
-	return bindings
-}
+
+// Encode is x as a session envelope holds it: a Host Object by its identity,
+// and a Function Value the session exposed by its handle.
 func (o *Objects) Encode(x talk.Value) json.RawMessage {
 	switch x.Kind() {
 	case talk.KindFunction:
-		found := o.supplied[sessionio.FunctionIdentity(x)]
-		if found == "" {
-			envelopeError("unexposed/invalidated function")
+		handle, ok := sessionio.FunctionHandle(x)
+		if !ok {
+			envelopeError("a Function Value the session didn't expose")
 		}
-		return json.RawMessage(`{"$sessionFunction":` + v.JSONString(found, false) + `}`)
+		return json.RawMessage(`{"$sessionFunction":` + v.JSONString(handle, false) + `}`)
 	case talk.KindList:
 		xs := []json.RawMessage{}
 		for i := 1; i <= x.Len(); i++ {
@@ -282,12 +194,7 @@ func (o *Objects) Encode(x talk.Value) json.RawMessage {
 		return rawJSON(xs)
 	case talk.KindMap:
 		ps := x.Entries()
-		tagged := false
-		for _, p := range ps {
-			if strings.HasPrefix(p.Key, "$") {
-				tagged = true
-			}
-		}
+		tagged := slices.ContainsFunc(ps, func(p talk.Pair) bool { return strings.HasPrefix(p.Key, "$") })
 		var b strings.Builder
 		if tagged {
 			b.WriteString(`{"$map":[`)
@@ -320,298 +227,185 @@ func (o *Objects) Encode(x talk.Value) json.RawMessage {
 		return json.RawMessage(b.String())
 	case talk.KindObject:
 		obj, _ := x.AsObject()
-		if obj == nil || o.names[obj.Kind()] == "" {
-			envelopeError("unregistered object")
+		if obj == nil || o.objects[objectReference{o.kindName(obj.Kind()), obj.ID()}] == nil {
+			envelopeError("a Host Object the session doesn't hold")
 		}
 	}
 	b, err := talk.EncodeValue(x)
-	must(err)
+	if err != nil {
+		envelopeError(err.Error())
+	}
 	return b
 }
+
 func (o *Objects) decode(raw []byte) talk.Value {
-	x, err := sessionio.Decode(raw, func(kind, id string) (any, bool) { x, ok := o.objects[objectReference{kind, id}]; return x, ok }, func(h string) (any, bool) { x, ok := o.handles[h]; return x, ok })
+	x, err := sessionio.Decode(raw, func(kind, id string) (any, bool) { return o.named(kind, id), true }, func(h string) (any, bool) { return sessionio.SessionFunction(h), true })
 	if err != nil {
 		envelopeError(err.Error())
 	}
 	return x.(talk.Value)
 }
 
-// collection records an Object Collection callback (#1143) as a property
-// crossing on `elements`, with its selector for `at` and `find`.
-func (o *Objects) collection(x *talk.Object, op string, selector talk.Value, callback func() (talk.Value, error)) (talk.Value, error) {
-	return o.property(x, "elements", op, selector, callback)
+// Request hands the session a Host action, encoding each Value as a session
+// envelope holds it, and returns its reply. During a crossing, the action
+// goes with the crossing's answer, and its reply is nil: the session records
+// it.
+func (o *Objects) Request(fields map[string]any) Envelope {
+	e := Envelope{}
+	for k, x := range fields {
+		e[k] = o.requestValue(x)
+	}
+	return o.Action(e)
 }
 
-// property records one crossing; input is a setter's value or a collection
-// lookup's selector.
-func (o *Objects) property(x *talk.Object, name, op string, input talk.Value, callback func() (talk.Value, error)) (result talk.Value, err error) {
-	if o.active {
-		envelopeError("reentrant callback")
+// Action hands the session a Host action whose Values are already encoded,
+// as Encode writes them.
+func (o *Objects) Action(request Envelope) Envelope {
+	validateRequest(request)
+	e := Envelope{"type": rawJSON("input"), "request": json.RawMessage(writeEnvelope(request))}
+	if !o.opened || o.crossing {
+		o.pending = append(o.pending, writeEnvelope(e))
+		return nil
 	}
-	if op == "set" {
-		o.expose(talk.List(input))
+	o.h.lastEnvelope = ""
+	o.declare(e)
+	recorded, err := ParseEnvelope(o.h.lastEnvelope)
+	if err != nil || envelopeText(recorded["type"]) != "input" {
+		envelopeError("the session recorded no Host action")
 	}
-	o.crossing.Add(o.crossing, big.NewInt(1))
-	r := objectReference{o.names[x.Kind()], x.ID()}
-	begin := Envelope{"type": rawJSON("property-begin"), "crossing": counterJSON(o.crossing), "object": r.raw(), "property": rawJSON(name), "operation": rawJSON(op)}
-	if op == "set" {
-		begin["value"] = o.Encode(input)
+	return envelopeObject(recorded["reply"])
+}
+
+func (o *Objects) requestValue(x any) json.RawMessage {
+	switch x := x.(type) {
+	case talk.Value:
+		return o.Encode(x)
+	case map[string]any:
+		e := Envelope{}
+		for k, val := range x {
+			e[k] = o.requestValue(val)
+		}
+		return json.RawMessage(writeEnvelope(e))
+	case []talk.Value:
+		xs := []json.RawMessage{}
+		for _, val := range x {
+			xs = append(xs, o.Encode(val))
+		}
+		return rawJSON(xs)
+	case []any:
+		xs := []json.RawMessage{}
+		for _, val := range x {
+			xs = append(xs, o.requestValue(val))
+		}
+		return rawJSON(xs)
+	default:
+		return rawJSON(x)
 	}
-	selector := op == "at" || op == "find"
-	if selector {
-		begin["selector"] = o.Encode(input)
+}
+
+// cross answers a `prop` need through the object's callbacks, with what
+// they declared and did meanwhile.
+func (o *Objects) cross(raw json.RawMessage) (answer map[string]any) {
+	var need struct {
+		Object   json.RawMessage `json:"object"`
+		Prop     string          `json:"prop"`
+		Op       string          `json:"op"`
+		Value    json.RawMessage `json:"value"`
+		Selector json.RawMessage `json:"selector"`
 	}
-	if o.playback {
-		defer func() {
-			if p := recover(); p != nil {
-				if err, ok := p.(error); ok {
-					o.playbackError = err
-				}
-				panic(p)
-			}
-		}()
-		e := o.consume("property-begin")
-		if envelopeCounter(e["crossing"]).Cmp(o.crossing) != 0 || envelopeRef(e["object"]) != r || envelopeText(e["property"]) != name || envelopeText(e["operation"]) != op || op == "set" && string(e["value"]) != string(begin["value"]) || selector && string(e["selector"]) != string(begin["selector"]) {
-			envelopeError("unmatched property crossing")
-		}
-		o.active = true
-		defer func() { o.active = false }()
-		for o.nextType() == "kind" || o.nextType() == "object" || o.nextType() == "input" {
-			if o.nextType() == "input" {
-				o.replayInput()
-			} else {
-				o.registrations()
-			}
-		}
-		end := o.consume("property-end")
-		if envelopeCounter(end["crossing"]).Cmp(o.crossing) != 0 {
-			envelopeError("out-of-order property end")
-		}
-		reply := envelopeObject(end["reply"])
-		if raw, ok := reply["value"]; ok {
-			if op == "set" {
-				envelopeError("value for setter")
-			}
-			return o.decode(raw), nil
-		}
-		if raw, ok := reply["ok"]; ok {
-			if op != "set" || !envelopeBool(raw) {
-				envelopeError("invalid ok")
-			}
-			return talk.Nothing, nil
-		}
-		if raw, ok := reply["fail"]; ok {
-			f := envelopeObject(raw)
-			envelopeFields(f, []string{"code", "message", "data"})
-			return talk.Nothing, &talk.ScriptError{Code: envelopeText(f["code"]), Message: envelopeText(f["message"]), Data: o.decode(f["data"])}
-		}
-		return talk.Nothing, errors.New("recorded Host property failure")
+	if err := json.Unmarshal(raw, &need); err != nil {
+		panic(err)
 	}
-	o.emit(begin)
-	o.active = true
-	defer func() { o.active = false }()
+	var ref struct {
+		Object [2]string `json:"$object"`
+	}
+	if err := json.Unmarshal(need.Object, &ref); err != nil {
+		panic(err)
+	}
+	x := o.objects[objectReference{ref.Object[0], ref.Object[1]}]
+	def, known := o.defs[ref.Object[0]]
+	o.crossing = true
+	o.pending = nil
 	defer func() {
+		o.crossing = false
 		if p := recover(); p != nil {
-			o.emit(Envelope{"type": rawJSON("property-end"), "crossing": counterJSON(o.crossing), "reply": rawJSON(map[string]bool{"hostError": true})})
-			panic(p)
+			// A callback that panics is a Host error, as a Group's is.
+			answer = map[string]any{"hostError": true}
 		}
+		if len(o.pending) > 0 {
+			envelopes := []any{}
+			for _, t := range o.pending {
+				envelopes = append(envelopes, t)
+			}
+			answer["envelopes"] = envelopes
+		}
+		o.pending = nil
 	}()
-	result, err = callback()
-	reply := Envelope{}
-	if err == nil {
-		if op == "set" {
-			reply["ok"] = rawJSON(true)
-		} else {
-			reply["value"] = o.Encode(result)
-		}
-	} else {
-		var script *talk.ScriptError
-		if errors.As(err, &script) {
-			reply["fail"] = json.RawMessage(writeEnvelope(Envelope{"code": rawJSON(script.Code), "message": rawJSON(script.Message), "data": o.Encode(script.Data)}))
-		} else {
-			reply["hostError"] = rawJSON(true)
-		}
+	if x == nil || !known {
+		return map[string]any{"hostError": true}
 	}
-	o.emit(Envelope{"type": rawJSON("property-end"), "crossing": counterJSON(o.crossing), "reply": json.RawMessage(writeEnvelope(reply))})
-	return
+	result := func(value talk.Value, err error) map[string]any {
+		if err != nil {
+			return failed(err)
+		}
+		return map[string]any{"value": o.Encode(value)}
+	}
+	if need.Prop == "elements" && need.Op != "" {
+		elements := def.Elements
+		if elements == nil {
+			return map[string]any{"hostError": true}
+		}
+		switch need.Op {
+		case "count":
+			return result(elements.Count(x))
+		case "at":
+			var index int64
+			if err := json.Unmarshal(need.Selector, &index); err != nil {
+				return map[string]any{"hostError": true}
+			}
+			return result(elements.At(x, index))
+		case "find":
+			var name string
+			if err := json.Unmarshal(need.Selector, &name); err != nil {
+				return map[string]any{"hostError": true}
+			}
+			return result(elements.Find(x, name))
+		}
+		return map[string]any{"hostError": true}
+	}
+	i := slices.IndexFunc(def.Props, func(p talk.Prop) bool { return p.Name == need.Prop })
+	if i < 0 {
+		return map[string]any{"hostError": true}
+	}
+	p := def.Props[i]
+	if need.Value != nil {
+		if p.Set == nil {
+			return map[string]any{"hostError": true}
+		}
+		if err := p.Set(x, o.decode(need.Value)); err != nil {
+			return failed(err)
+		}
+		return map[string]any{"ok": true}
+	}
+	return result(p.Get(x))
 }
-func (o *Objects) expose(tree any) {
-	defer func() {
-		if p := recover(); p != nil {
-			if err, ok := p.(error); ok && o.playback {
-				o.playbackError = err
-			}
-			panic(p)
-		}
-	}()
-	o.exposure.Add(o.exposure, big.NewInt(1))
-	if !o.enabled {
-		return
+
+// failed is a callback's error as `prop-result` gives it: a script error's
+// map, or a Host error.
+func failed(err error) map[string]any {
+	var script *talk.ScriptError
+	if !errors.As(err, &script) {
+		return map[string]any{"hostError": true}
 	}
-	var walk func(reflect.Value, []any)
-	walk = func(rv reflect.Value, path []any) {
-		if !rv.IsValid() {
-			return
+	f := map[string]any{"code": script.Code, "message": script.Message}
+	if script.Data.Kind() != talk.KindNothing {
+		raw, e := talk.EncodeValue(script.Data)
+		if e != nil {
+			return map[string]any{"hostError": true}
 		}
-		if rv.CanInterface() {
-			if x, ok := rv.Interface().(talk.Value); ok {
-				switch x.Kind() {
-				case talk.KindFunction:
-					o.handle.Add(o.handle, big.NewInt(1))
-					h := "f" + o.handle.String()
-					if o.playback {
-						e := o.consume("function")
-						if envelopeText(e["handle"]) != h || envelopeCounter(e["exposure"]).Cmp(o.exposure) != 0 || string(e["path"]) != string(rawJSON(path)) {
-							envelopeError("invalid function exposure/path")
-						}
-					} else {
-						o.emit(Envelope{"type": rawJSON("function"), "handle": rawJSON(h), "exposure": counterJSON(o.exposure), "path": rawJSON(path)})
-					}
-					o.handles[h] = x
-					o.supplied[sessionio.FunctionIdentity(x)] = h
-				case talk.KindList:
-					for i := 1; i <= x.Len(); i++ {
-						walk(reflect.ValueOf(x.Index(i)), append(slices.Clone(path), i-1))
-					}
-				case talk.KindMap:
-					for _, p := range x.Entries() {
-						walk(reflect.ValueOf(p.Val), append(slices.Clone(path), p.Key))
-					}
-				}
-				return
-			}
-		}
-		switch rv.Kind() {
-		case reflect.Pointer, reflect.Interface:
-			if !rv.IsNil() {
-				walk(rv.Elem(), path)
-			}
-		case reflect.Struct:
-			typ := rv.Type()
-			for i := 0; i < rv.NumField(); i++ {
-				if !rv.Field(i).CanInterface() {
-					continue
-				}
-				name := typ.Field(i).Name
-				if name == "Function" {
-					name = "Fn"
-				}
-				name = strings.ToLower(name[:1]) + name[1:]
-				walk(rv.Field(i), append(slices.Clone(path), name))
-			}
-		case reflect.Slice, reflect.Array:
-			for i := 0; i < rv.Len(); i++ {
-				walk(rv.Index(i), append(slices.Clone(path), i))
-			}
-		case reflect.Map:
-			keys := rv.MapKeys()
-			slices.SortFunc(keys, func(a, b reflect.Value) int { return strings.Compare(a.String(), b.String()) })
-			for _, k := range keys {
-				walk(rv.MapIndex(k), append(slices.Clone(path), k.String()))
-			}
-		}
+		f["data"] = raw
 	}
-	walk(reflect.ValueOf(tree), []any{})
-	if o.nextType() == "function" && envelopeCounter(o.next().envelope["exposure"]).Cmp(o.exposure) <= 0 {
-		envelopeError(fmt.Sprintf("path is not Function at exposure %s (%T)", o.exposure.String(), tree))
-	}
-}
-func (o *Objects) reports(reports []talk.Report) {
-	if o.playbackError != nil {
-		panic(o.playbackError)
-	}
-	for _, r := range reports {
-		o.expose(r)
-	}
-}
-func (o *Objects) snapshot(view talk.Inspection) {
-	tree := map[string]talk.Value{}
-	for _, s := range view.Scripts {
-		ps := []talk.Pair{}
-		for _, p := range s.Vars {
-			ps = append(ps, p)
-		}
-		m, err := talk.Map(ps...)
-		must(err)
-		tree[s.Name] = m
-	}
-	o.expose(tree)
-}
-func (o *Objects) resolve(kind, id string, callback func(string, string) (any, bool)) (any, bool) {
-	r := objectReference{kind, id}
-	if o.playback {
-		if len(o.resolving) == 0 {
-			e := o.consume("resolve")
-			json.Unmarshal(e["objects"], &o.resolving)
-		}
-		if len(o.resolving) == 0 {
-			envelopeError("missing resolve")
-		}
-		index := -1
-		for i, row := range o.resolving {
-			if envelopeRef(row["object"]) == r {
-				index = i
-				break
-			}
-		}
-		if index < 0 {
-			envelopeError("resolver identity mismatch")
-		}
-		row := o.resolving[index]
-		o.resolving = append(o.resolving[:index], o.resolving[index+1:]...)
-		return struct{}{}, envelopeBool(row["resolved"])
-	}
-	var native any
-	ok := false
-	if callback != nil {
-		native, ok = callback(kind, id)
-	}
-	o.outcomes = append(o.outcomes, Envelope{"object": r.raw(), "resolved": rawJSON(ok)})
-	return native, ok
-}
-func (o *Objects) restored() {
-	if o.playback && len(o.resolving) > 0 {
-		envelopeError("leftover resolver outcomes")
-	}
-	if len(o.outcomes) > 0 {
-		slices.SortFunc(o.outcomes, func(a, b Envelope) int {
-			x, y := envelopeRef(a["object"]), envelopeRef(b["object"])
-			if n := strings.Compare(x.kind, y.kind); n != 0 {
-				return n
-			}
-			return strings.Compare(x.id, y.id)
-		})
-		rows := []json.RawMessage{}
-		for _, r := range o.outcomes {
-			rows = append(rows, json.RawMessage(writeEnvelope(r)))
-		}
-		o.emit(Envelope{"type": rawJSON("resolve"), "objects": rawJSON(rows)})
-		o.outcomes = nil
-	}
-	o.handles = map[string]talk.Value{}
-	o.supplied = map[any]string{}
-}
-func (o *Objects) drain(index int) {
-	for _, r := range o.replay {
-		if r.index != index || r.consumed {
-			continue
-		}
-		switch o.nextType() {
-		case "input":
-			o.replayInput()
-		case "kind", "object":
-			o.registrations()
-		default:
-			envelopeError("unmatched envelope")
-		}
-		return
-	}
-}
-func (o *Objects) finish() {
-	if o.next() != nil {
-		envelopeError("leftover envelopes")
-	}
-	o.playback = false
+	return map[string]any{"fail": f}
 }
 
 // Shape declarations are provided by the Core, which holds the private Shape.
@@ -619,146 +413,4 @@ func shapeDeclaration(s talk.Shape) json.RawMessage {
 	var data any
 	json.Unmarshal(sessionio.Shape(s).(json.RawMessage), &data)
 	return rawJSON(data)
-}
-
-// NewObjectReplay attaches standalone object crossing playback to a Trace Core.
-func NewObjectReplay(core *talk.Core, group *talk.Group, items []Item) *Objects {
-	return newObjects(core, group, func(Item) {}, items, true)
-}
-func (o *Objects) Preload() map[string]*talk.Object    { return o.preload() }
-func (o *Objects) Attach(group *talk.Group)            { o.attach(group) }
-func (o *Objects) Reports(reports []talk.Report)       { o.reports(reports) }
-func (o *Objects) Snapshot(view talk.Inspection)       { o.snapshot(view) }
-func (o *Objects) Resolve(kind, id string) (any, bool) { return o.resolve(kind, id, nil) }
-func (o *Objects) Restored(name string) {
-	o.queuedTraceActions = slices.Clone(o.traceSaves[name])
-	o.restored()
-}
-func (o *Objects) Finish() { o.finish() }
-func (o *Objects) Handles() map[[2]string]*talk.Object {
-	out := map[[2]string]*talk.Object{}
-	for r, x := range o.objects {
-		out[[2]string{r.kind, r.id}] = x
-	}
-	return out
-}
-func (o *Objects) beforeCommand(name string) {
-	index := -1
-	for i := o.commandCursor; i < len(o.recorded); i++ {
-		item := o.recorded[i]
-		if item.Kind == "input" && (item.Text == ":"+name || strings.HasPrefix(item.Text, ":"+name+" ") || name == "vars" && o.describeSnapshot(i)) {
-			index = i
-			break
-		}
-	}
-	if index < 0 {
-		return
-	}
-	o.commandCursor = index + 1
-	for {
-		row := o.next()
-		if row == nil || row.index >= index {
-			break
-		}
-		switch o.nextType() {
-		case "input":
-			o.replayInputTracked(true)
-		case "kind", "object":
-			o.registrations()
-		default:
-			envelopeError("unmatched crossing before command")
-		}
-	}
-}
-
-// A variable describe produces the same vars Input as :vars. Its passive
-// value row distinguishes it from declaration-only lookups in the recording.
-func (o *Objects) describeSnapshot(index int) bool {
-	if !strings.HasPrefix(o.recorded[index].Text, ":describe ") {
-		return false
-	}
-	for _, item := range o.recorded[index+1:] {
-		if item.Kind == "input" {
-			break
-		}
-		if item.Kind == "output" && strings.HasPrefix(item.Text, "value ") {
-			return true
-		}
-	}
-	return false
-}
-
-func (o *Objects) TraceInput(name string, ids []string) bool {
-	if slices.Contains([]string{"save", "restore", "vars"}, name) {
-		o.beforeCommand(name)
-	}
-	o.registrations()
-	if name == "call-value" {
-		name = "call"
-	}
-	if name == "decide-broadcast" {
-		name = "decide"
-	}
-	for i, a := range o.queuedTraceActions {
-		if a.kind == name && (a.id == "" || len(ids) > 0 && a.id == ids[0]) {
-			o.queuedTraceActions = append(o.queuedTraceActions[:i], o.queuedTraceActions[i+1:]...)
-			return true
-		}
-	}
-	if o.nextType() != "input" {
-		return false
-	}
-	e := envelopeObject(o.next().envelope["request"])
-	if envelopeText(e["kind"]) != name {
-		return false
-	}
-	o.replayInput()
-	return true
-}
-
-func (o *Objects) Saved(name string) {
-	if o.traceSaves == nil {
-		o.traceSaves = map[string][]traceAction{}
-	}
-	o.traceSaves[name] = slices.Clone(o.queuedTraceActions)
-}
-
-func (o *Objects) CrossesHandles() bool {
-	var contains func(talk.Value) bool
-	contains = func(x talk.Value) bool {
-		if x.Kind() == talk.KindMap {
-			ps := x.Entries()
-			if len(ps) == 1 && ps[0].Key == "$sessionFunction" {
-				h, _ := ps[0].Val.AsText()
-				_, ok := o.handles[h]
-				if ok {
-					return true
-				}
-			}
-			for _, p := range ps {
-				if contains(p.Val) {
-					return true
-				}
-			}
-		}
-		if x.Kind() == talk.KindList {
-			for i := 1; i <= x.Len(); i++ {
-				if contains(x.Index(i)) {
-					return true
-				}
-			}
-		}
-		return false
-	}
-	for _, r := range o.replay {
-		if r.consumed {
-			continue
-		}
-		x, err := talk.DecodeJSON([]byte(r.item.Text))
-		must(err)
-		if contains(x) {
-			return true
-		}
-	}
-	return false
 }

@@ -75,39 +75,10 @@ func TestDeclarationDocumentationInTheSession(t *testing.T) {
 				var b bool
 				_ = json.Unmarshal(step.Expect, &b)
 				want = b
-			case step.Docs != nil || step.Library != nil:
-				var docs []Doc
-				if step.Docs != nil {
-					docs = h.Documentation(*step.Docs)
-				} else {
-					docs = h.LibraryDocumentation(step.Library[0], step.Library[1])
-				}
-				rows := [][]any{}
-				for _, d := range docs {
-					rows = append(rows, []any{d.Origin, d.Declaration, float64(d.Clause), d.Text})
-				}
-				got = rows
-				var w [][]any
-				_ = json.Unmarshal(step.Expect, &w)
-				if w == nil {
-					w = [][]any{}
-				}
-				want = w
-			case step.FunctionDoc != nil:
-				got = nil
-				for _, v := range h.Inspect().Scripts[0].Vars {
-					if v.Key == *step.FunctionDoc {
-						if doc, ok := h.FunctionDocumentation(v.Val); ok {
-							got = doc
-						}
-					}
-				}
-				var w *string
-				_ = json.Unmarshal(step.Expect, &w)
-				want = nil
-				if w != nil {
-					want = *w
-				}
+			default:
+				// Documentation and FunctionDocumentation were the Go Session
+				// Host's own; the Zig Session Host's tests cover them.
+				continue
 			}
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("%s, step %d:\n got %#v\nwant %#v", s.Name, i, got, want)
