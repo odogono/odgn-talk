@@ -18,7 +18,6 @@ import {
   validateProject,
   writeProjectFile,
 } from '../src/project-file';
-import { scriptOwners } from '../src/script-manifest';
 
 const fixture = () => {
   const project = createProject('Drawing');
@@ -414,7 +413,6 @@ test('the page gets each Drawing change and commits it on return to Edit', async
   const project = fixture();
   canvasOf(project).drawing = [{ op: 'noFill', args: [] }];
   const editor = new StackEditor(project);
-  const owners = scriptOwners(editor.project);
   const { mirror, request } = hosted(editor.snapshot() as Project);
   const board = () => mirror.elementsOf()[0] as CanvasElement;
   expect(board().drawing).toEqual([{ op: 'noFill', args: [] }]);
@@ -440,7 +438,7 @@ test('the page gets each Drawing change and commits it on return to Edit', async
   ];
   expect(board().drawing).toEqual(final);
   request({ kind: 'stop', session: 1 });
-  commitDrawings(editor, owners, mirror);
+  commitDrawings(editor, mirror);
   expect(canvasOf(editor.project).drawing).toEqual(final);
   editor.undo();
   expect(canvasOf(editor.project).drawing).toEqual([

@@ -14,7 +14,7 @@ import type { Envelope } from '@northtalk/tooling/worker-supervisor';
 import { PlaySession } from '../src/play';
 import { PlayHost } from '../src/play-host';
 import type { PlayRequest, PlayResponse } from '../src/play-protocol';
-import { scriptOwners } from '../src/script-manifest';
+import { giveIds } from './helpers/ids';
 import { createInstrument } from '../src/instruments/registry';
 import type { InstrumentMessage } from '../src/instruments/session';
 import { DEFAULT_SAMPLER } from '../src/sounds';
@@ -313,7 +313,7 @@ const hosted = (p: Project) => {
   request({
     kind: 'open',
     session: 1,
-    project: p,
+    project: giveIds(p),
     pageIndex: 0,
     seed: 0n,
     instrumentPort: port2,
@@ -331,7 +331,7 @@ test('while Paused, a Punch In waits for the next bar after Resume', async () =>
   request({
     kind: 'punchIn',
     session: 1,
-    place: { kind: 'script', owner: scriptOwners(p).indexOf(p.pages[0]!) },
+    place: { kind: 'script', id: p.pages[0]!.id! },
     source: groove('sd'),
   });
   expect(replies.filter(r => r.kind === 'punchIn')).toEqual([

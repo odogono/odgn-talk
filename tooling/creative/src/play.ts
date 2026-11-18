@@ -79,6 +79,7 @@ import {
   type TextElement,
 } from './model';
 import {
+  knownOwnerId,
   ownerId,
   scriptManifest,
   scriptOwners,
@@ -295,7 +296,7 @@ export class PlaySession {
   // changes wait until the Run ends or nothing is left to run, so the page
   // never draws a Drawing cleared but not yet redrawn (ADR 0116).
   #heldDrawings = new Map<DeepReadonly<CanvasElement>, string>();
-  // Each authored Canvas's place in `scriptOwners(project)`.
+  // Each authored Canvas's `ownerId`.
   #authoredCanvases = new Map<DeepReadonly<Element>, number>();
   #pageElements: ObjectElements<ScriptOwner> = {
     shape: elementShape,
@@ -397,7 +398,7 @@ export class PlaySession {
     return page ? this.project.pages.indexOf(page) : -1;
   }
 
-  /** An authored Canvas's place in `scriptOwners(project)`, if it is one. */
+  /** An authored Canvas's `ownerId`, if it is one and has an id. */
   authoredCanvas(element: DeepReadonly<CanvasElement>): number | undefined {
     return this.#authoredCanvases.get(element);
   }
@@ -1019,8 +1020,13 @@ export class PlaySession {
     );
     for (const [i, owner] of copies.entries()) {
       this.#authored.set(owner, originals[i]!);
-      if ('kind' in owner && owner.kind === 'canvas') {
-        this.#authoredCanvases.set(owner, i);
+      const authoredId = knownOwnerId(originals[i]!);
+      if (
+        'kind' in owner &&
+        owner.kind === 'canvas' &&
+        authoredId !== undefined
+      ) {
+        this.#authoredCanvases.set(owner, authoredId);
       }
       const kind =
         'kind' in owner

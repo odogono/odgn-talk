@@ -6,6 +6,7 @@ import { isReadable, sourceForm } from '@northtalk/ts/debug';
 import { text, type Value } from '@northtalk/ts';
 import type { Element } from './model';
 import type { PlaySession } from './play';
+import { knownOwnerId } from './script-manifest';
 
 /** How many items of a list or map are sent and shown. */
 export const ITEM_LIMIT = 100;
@@ -14,7 +15,7 @@ export const ITEM_LIMIT = 100;
  * A Script Variable's value as it crosses to the page. Lists and maps carry
  * their first `ITEM_LIMIT` items and their full length, and a cut-off one
  * that is readable carries its whole source form. An Element carries its
- * live name and, if authored, its place in `scriptOwners(project)`.
+ * live name and, if authored, its owner's `ownerId`.
  */
 export type VariableValue =
   | { kind: 'plain'; text: string }
@@ -100,12 +101,14 @@ const isElement = (owner: object): owner is DeepReadonly<Element> =>
 /**
  * The Script Variables of the Project's Script, the showing Page's Script
  * and its Elements' Scripts, in that order, leaving out Scripts without
- * any. `owners` places authored owners in `scriptOwners(project)`.
+ * any.
  */
-/** Encodes a value as the window shows it; `owners` as for `variablesOf`. */
+/**
+ * Encodes a value as the window shows it; an Element names its authored
+ * owner's `ownerId`.
+ */
 export const valueEncoder = (
   play: PlaySession,
-  owners: ReadonlyMap<unknown, number>,
 ): ((value: Value) => VariableValue) => {
   const element = (value: Value): VariableValue | undefined => {
     const object = value.asObject();
@@ -119,7 +122,7 @@ export const valueEncoder = (
       return undefined;
     }
     const ref = value.asObjectRef()!;
-    const owner = owners.get(play.authored.get(native) ?? native);
+    const owner = knownOwnerId(play.authored.get(native) ?? native);
     return {
       kind: 'object',
       host: ref.kind,
@@ -132,14 +135,11 @@ export const valueEncoder = (
   return value => encode(value, element);
 };
 
-export const variablesOf = (
-  play: PlaySession,
-  owners: ReadonlyMap<unknown, number>,
-): VariableScript[] => {
+export const variablesOf = (play: PlaySession): VariableScript[] => {
   const vars = new Map(
     play.inspection().scripts.map(script => [script.name, script.vars]),
   );
-  const encodeValue = valueEncoder(play, owners);
+  const encodeValue = valueEncoder(play);
   const ranked: [number, VariableScript][] = [];
   for (const [script, owner] of play.owners) {
     const rank =

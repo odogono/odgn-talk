@@ -42,7 +42,7 @@ import {
   type LineEngine,
   type MeasuredReply,
 } from './message-line';
-import { scriptOwners, type ScriptOwner } from './script-manifest';
+import { knownOwnerId } from './script-manifest';
 import {
   valueEncoder,
   variablesOf,
@@ -79,6 +79,26 @@ const pageAlign = ({ alignX, alignY }: DeepReadonly<Page>) => ({
 
 const withoutMembers = (element: DeepReadonly<Element>): Element =>
   (kindOf(element).forPage?.(element) ?? element) as Element;
+
+/**
+ * The `ownerId` of the authored owner of a loaded Script, absent for code an
+ * author cannot open or an owner without an id.
+ */
+const authoredIdOf = (play: PlaySession, script: string) => {
+  const owner = play.owners.get(script);
+  return owner && knownOwnerId(play.authored.get(owner) ?? owner);
+};
+
+/** The authored owner of a loaded Script with an `ownerId`, if any. */
+const authoredOwnerOf = (play: PlaySession, id: number) => {
+  for (const owner of play.owners.values()) {
+    const authored = play.authored.get(owner) ?? owner;
+    if (knownOwnerId(authored) === id) {
+      return authored;
+    }
+  }
+  return undefined;
+};
 
 /** What changed in each Drawing since `sent` last recorded it. */
 const drawingViews = (
@@ -232,7 +252,6 @@ export class PlayHost {
   #id = 0;
   #performanceTimer: ReturnType<typeof setInterval> | undefined;
   #timer: unknown;
-  #owners = new Map<unknown, number>();
   // What the page last received: each Element's JSON, by name.
   #sent = new Map<string, string>();
   #sentDrawings = new Map<DeepReadonly<CanvasElement>, DrawingMark>();
@@ -261,11 +280,9 @@ export class PlayHost {
   /** Sends a Pattern Event's place and audio time to the page (#2176). */
   #hear = (event: HeardEvent): void => {
     const session = this.#session;
-    const owner = session?.owners.get(event.owner);
-    const index =
-      owner && this.#owners.get(session!.authored.get(owner) ?? owner);
+    const owner = session && authoredIdOf(session, event.owner);
     // Only the audio clock can place it against what is heard.
-    if (index === undefined || !this.#audio.active) {
+    if (owner === undefined || !this.#audio.active) {
       return;
     }
     if (!this.#heard.length) {
@@ -278,7 +295,7 @@ export class PlayHost {
       });
     }
     this.#heard.push({
-      owner: index,
+      owner,
       text: event.text,
       cycle: event.cycle,
       from: event.from,
@@ -593,12 +610,11 @@ export class PlayHost {
         const { place } = request;
         const owner =
           place.kind === 'script'
-            ? ([...this.#owners].find(([, i]) => i === place.owner)?.[0] as
-                ScriptOwner | undefined)
+            ? authoredOwnerOf(session, place.id)
             : undefined;
         const library =
           place.kind === 'library'
-            ? session.project.libraries[place.index]
+            ? session.project.libraries.find(l => l.id === place.id)
             : undefined;
         const answer: PunchReply = owner
           ? session.punchIn(
@@ -631,7 +647,7 @@ export class PlayHost {
         this.#variablesPumps = session.pumps;
         reply({
           kind: 'variables',
-          ...(fresh ? { scripts: variablesOf(session, this.#owners) } : {}),
+          ...(fresh ? { scripts: variablesOf(session) } : {}),
         });
         return;
       }
@@ -665,9 +681,6 @@ export class PlayHost {
       this.#closeInstruments();
     }
     this.#id = request.session;
-    this.#owners = new Map(
-      scriptOwners(request.project).map((owner, i) => [owner, i]),
-    );
     this.#sent.clear();
     this.#sentDrawings.clear();
     this.#sentPalettes.clear();
@@ -734,7 +747,7 @@ export class PlayHost {
   /** Starts each Watch not still running; whether any Run started. */
   #startWatches(session: PlaySession): boolean {
     const results: WatchResult[] = [];
-    const encode = valueEncoder(session, this.#owners);
+    const encode = valueEncoder(session);
     let started = false;
     for (const { id, target, text } of this.#watches) {
       if (this.#watchRuns.has(id)) {
@@ -828,11 +841,9 @@ export class PlayHost {
       return;
     }
     for (const row of snapshot.scripts) {
-      const owner = session.owners.get(row.script);
-      const index =
-        owner && this.#owners.get(session.authored.get(owner) ?? owner);
-      if (index !== undefined) {
-        row.owner = index;
+      const owner = authoredIdOf(session, row.script);
+      if (owner !== undefined) {
+        row.owner = owner;
       }
       row.script = unitLabel(row.script);
     }
@@ -922,17 +933,13 @@ export class PlayHost {
   #placeOf(session: PlaySession, unit: string): SourcePlace | undefined {
     const library = session.libraryOf(unit);
     if (library) {
-      return {
-        kind: 'library',
-        index: session.project.libraries.findIndex(
-          l => l.name === library.name,
-        ),
-      };
+      const id = session.project.libraries.find(
+        l => l.name === library.name,
+      )?.id;
+      return id === undefined ? undefined : { kind: 'library', id };
     }
-    const owner = session.owners.get(unit);
-    const index =
-      owner && this.#owners.get(session.authored.get(owner) ?? owner);
-    return index === undefined ? undefined : { kind: 'script', owner: index };
+    const id = authoredIdOf(session, unit);
+    return id === undefined ? undefined : { kind: 'script', id };
   }
 
   /**
@@ -1014,7 +1021,7 @@ export class PlayHost {
       return started.result.then(
         value => ({
           reply: expression
-            ? { value: valueEncoder(session, this.#owners)(value) }
+            ? { value: valueEncoder(session)(value) }
             : valueReply(value),
           row: row(),
         }),
@@ -1042,7 +1049,7 @@ export class PlayHost {
       inspect: expression => {
         const result = this.#evaluate(session, `return ${expression}`);
         return 'value' in result
-          ? { value: valueEncoder(session, this.#owners)(result.value) }
+          ? { value: valueEncoder(session)(result.value) }
           : { error: evaluationError(result) };
       },
       command: text => {
@@ -1061,7 +1068,7 @@ export class PlayHost {
 
   // Every Watch, again, in the selected frame.
   #evaluateWatches(session: PlaySession): void {
-    const encode = valueEncoder(session, this.#owners);
+    const encode = valueEncoder(session);
     this.#postWatches(
       this.#watches.map(({ id, text }): WatchResult => {
         const result = this.#evaluate(session, `return ${text}`);
@@ -1082,7 +1089,7 @@ export class PlayHost {
       .snapshot()
       .scripts.find(s => s.name === pause.script)
       ?.runs.find(r => r.id === pause.run);
-    const encode = valueEncoder(session, this.#owners);
+    const encode = valueEncoder(session);
     const message = pause.error?.get('message');
     return {
       run: pause.run,
@@ -1191,20 +1198,19 @@ export class PlayHost {
     const notices = session.notices.splice(0);
     const problems = session.problems.slice(this.#problems).map(problem => {
       const target = problem.target;
+      const libraryId =
+        target?.kind === 'library'
+          ? session.project.libraries.find(
+              library => library.name === target.library.name,
+            )?.id
+          : undefined;
       return {
         line: problem.line,
         message: problem.message,
-        owner: this.#owners.get(problem.owner) ?? 0,
-        ...(target?.kind === 'library'
-          ? {
-              target: {
-                kind: 'library' as const,
-                index: session.project.libraries.findIndex(
-                  library => library.name === target.library.name,
-                ),
-              },
-            }
-          : {}),
+        owner: knownOwnerId(problem.owner) ?? 0,
+        ...(libraryId === undefined
+          ? {}
+          : { target: { kind: 'library' as const, id: libraryId } }),
       };
     });
     this.#problems = session.problems.length;

@@ -28,6 +28,13 @@ export type ScriptOwner = DeepReadonly<Project | Page | Element>;
 export const ownerId = (owner: ScriptOwner): number =>
   'pages' in owner ? 0 : owner.id!;
 
+/**
+ * An owner's session id, absent when no editor gave it one, as for a Project
+ * built outside the editor.
+ */
+export const knownOwnerId = (owner: ScriptOwner): number | undefined =>
+  'pages' in owner ? 0 : owner.id;
+
 /** Every Script owner: the Project, then each Page followed by its Elements. */
 export const scriptOwners = <P extends DeepReadonly<Project> | Project>(
   project: P,

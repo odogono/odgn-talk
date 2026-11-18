@@ -5,7 +5,6 @@
 // The session runs in the Play worker (#1225); the page draws from its
 // mirror of Play State and posts reader input to the worker.
 import { pageTrust } from './add-ons/page';
-import type { DeepReadonly } from './readonly';
 import { WorkerSupervisor } from '@northtalk/tooling/worker-supervisor';
 import { scriptNameProblems } from './script-names';
 import { byId, h, isTyping } from './dom';
@@ -36,9 +35,8 @@ import {
 import { ReaderTextHistory } from './play-text';
 import {
   ownerById,
-  ownerId,
+  knownOwnerId,
   scriptOwners,
-  type ScriptOwner,
   scriptPage,
 } from './script-manifest';
 import { browserSoundBackend } from './sounds';
@@ -179,29 +177,23 @@ export const mountPlay = (shell: StackShell): void => {
         post({ kind: 'performance', session: sessionId, epoch });
       }
     },
-    index => {
-      const owner = owners[index];
-      if (owner && generation === shell.editor.generation) {
-        const current = ownerById(shell.editor.project, ownerId(owner));
+    id => {
+      if (generation === shell.editor.generation) {
+        const current = ownerById(shell.editor.project, id);
         if (current) {
           shell.openScript(current);
         }
       }
     },
   );
-  // Clicking an authored Element in the Variables window selects it;
-  // `index` places it in `list`, which is `owners` but for Edit's `:inspect`.
-  const selectOwner = (
-    list: readonly ScriptOwner[],
-    of: number,
-    index: number,
-  ): void => {
-    const owner = list[index];
-    if (!owner || of !== shell.editor.generation) {
+  // Clicking an authored Element in the Variables window selects it, by its
+  // `ownerId`, unless the Project it was named in (`of`) has gone.
+  const selectOwner = (of: number, id: number): void => {
+    if (of !== shell.editor.generation) {
       return;
     }
     const project = shell.editor.project;
-    const current = ownerById(project, ownerId(owner));
+    const current = ownerById(project, id);
     const page = current && scriptPage(project, current);
     if (!current || !page || 'elements' in current) {
       return;
@@ -213,7 +205,7 @@ export const mountPlay = (shell: StackShell): void => {
     shell.editor.click(current.name);
   };
   const variables = new VariablesWindow(
-    index => selectOwner(owners, generation, index),
+    id => selectOwner(generation, id),
     () => sendWatches(),
     (frame, index) => {
       if (allowed().atStoppedRun) {
@@ -227,20 +219,14 @@ export const mountPlay = (shell: StackShell): void => {
   );
   // Breakpoints (ADR 0147) go to a browsing session, placed in the Project
   // as it was loaded; those in source edited since then stay behind.
-  const placeOf = (source: CodeSelection): SourcePlace | undefined => {
-    if (source.kind === 'library') {
-      const index = libraries.findIndex(l => l.id === source.id);
-      return index < 0 ? undefined : { kind: 'library', index };
-    }
-    const owner = playing && ownerById(playing, source.id);
-    const index = owner ? owners.indexOf(owner) : -1;
-    return index < 0 ? undefined : { kind: 'script', owner: index };
-  };
+  const loadedOf = (kind: SourcePlace['kind']) =>
+    kind === 'library' ? loadedLibraries : loadedScripts;
+  // Test Scripts never load in Play, so they have no place.
+  const placeOf = ({ kind, id }: CodeSelection): SourcePlace | undefined =>
+    kind !== 'test' && loadedOf(kind).has(id) ? { kind, id } : undefined;
   const loadedSource = (source: CodeSelection): string | undefined => {
     const place = placeOf(source);
-    return place?.kind === 'library'
-      ? loadedLibraries[place.index]
-      : place && loadedScripts[place.owner];
+    return place && loadedOf(place.kind).get(place.id);
   };
   let sentBreakpoints = '';
   const sendBreakpoints = () => {
@@ -305,11 +291,7 @@ export const mountPlay = (shell: StackShell): void => {
         }
         const { reply } = response;
         if (reply.kind === 'now' || reply.kind === 'bar') {
-          if (place.kind === 'library') {
-            loadedLibraries[place.index] = text;
-          } else {
-            loadedScripts[place.owner] = text;
-          }
+          loadedOf(place.kind).set(place.id, text);
           shell.breakpoints.setLoaded(loadedSource);
           sendBreakpoints();
         }
@@ -338,15 +320,9 @@ export const mountPlay = (shell: StackShell): void => {
   // Where a frame's line is in the authored Project, if it is still there.
   const stoppedAt = (frame: FrameView | undefined) => {
     const place = frame?.place;
-    const source: CodeSelection | undefined =
-      place?.kind === 'library'
-        ? libraries[place.index]?.id === undefined
-          ? undefined
-          : { kind: 'library', id: libraries[place.index]!.id! }
-        : place && owners[place.owner]
-          ? { kind: 'script', id: ownerId(owners[place.owner]!) }
-          : undefined;
-    return source && { line: frame!.line, source };
+    return place && loadedOf(place.kind).has(place.id)
+      ? { line: frame.line, source: { kind: place.kind, id: place.id } }
+      : undefined;
   };
   // Watches go to a browsing session; the worker runs them while paused.
   const sendWatches = () => {
@@ -434,13 +410,10 @@ export const mountPlay = (shell: StackShell): void => {
   let sessionId = 0;
   // The Project as it was when Play started, for assets and problem owners.
   let playing: Project | undefined;
-  // Problem owners by the place the worker names, in the authored Project.
-  let owners: ReturnType<typeof scriptOwners<DeepReadonly<Project>>> = [];
-  let libraries: DeepReadonly<Project['libraries']> = [];
   // Each owner's Script and each Library's source as the session loaded
-  // them; authored edits change the owners in place.
-  let loadedScripts: string[] = [];
-  let loadedLibraries: string[] = [];
+  // them, by `ownerId` and Library id; the places the worker names.
+  let loadedScripts = new Map<number, string>();
+  let loadedLibraries = new Map<number, string>();
   let mode: PlayMode | undefined;
   /** What the session allows now (play-controls.ts). */
   const allowed = () => controls(session, mode);
@@ -488,11 +461,10 @@ export const mountPlay = (shell: StackShell): void => {
     }
     const now = audio.reading().audio;
     for (const event of events) {
-      const owner = owners[event.owner];
-      if (!owner) {
+      const id = event.owner;
+      if (!loadedScripts.has(id)) {
         continue;
       }
-      const id = ownerId(owner);
       const ms = Math.max(MIN_LIT_MS, (event.end - event.at) * 1000);
       const timer = setTimeout(
         () => {
@@ -780,20 +752,19 @@ export const mountPlay = (shell: StackShell): void => {
     draw();
     prompts.draw(session.prompt, response.notices);
     errors.add(
-      response.problems.map(problem => ({
-        line: problem.line,
-        message: problem.message,
-        owner: owners[problem.owner] ?? shell.editor.project,
-        ...(problem.target?.kind === 'library' &&
-        libraries[problem.target.index]
-          ? {
-              target: {
-                kind: 'library' as const,
-                library: libraries[problem.target.index]!,
-              },
-            }
-          : {}),
-      })),
+      response.problems.map(problem => {
+        const target = problem.target;
+        const library =
+          target && playing?.libraries.find(l => l.id === target.id);
+        return {
+          line: problem.line,
+          message: problem.message,
+          owner:
+            (playing && ownerById(playing, problem.owner)) ??
+            shell.editor.project,
+          ...(library ? { target: { kind: 'library' as const, library } } : {}),
+        };
+      }),
     );
     requestFrame();
   };
@@ -1242,7 +1213,7 @@ export const mountPlay = (shell: StackShell): void => {
     }
     shell.setPlaying(undefined);
     if (commit && generation === shell.editor.generation) {
-      commitDrawings(shell.editor, owners, ended);
+      commitDrawings(shell.editor, ended);
     }
   };
   let errorsGeneration = shell.editor.generation;
@@ -1283,10 +1254,18 @@ export const mountPlay = (shell: StackShell): void => {
         },
       );
     }
-    owners = scriptOwners(shell.editor.project);
-    libraries = [...shell.editor.project.libraries];
-    loadedScripts = owners.map(owner => owner.script ?? '');
-    loadedLibraries = libraries.map(library => library.source);
+    // The editor gives every owner and Library an id (ProjectTree).
+    loadedScripts = new Map(
+      scriptOwners(playing).flatMap(owner => {
+        const id = knownOwnerId(owner);
+        return id === undefined ? [] : [[id, owner.script ?? '']];
+      }),
+    );
+    loadedLibraries = new Map(
+      playing.libraries.flatMap(library =>
+        library.id === undefined ? [] : [[library.id, library.source]],
+      ),
+    );
     // Each session's Instrument commands come over a fresh channel, from the
     // worker to the worklet and never through this thread (ADR 0156).
     const channel = instrumentAudio ? new MessageChannel() : undefined;
@@ -1627,11 +1606,9 @@ export const mountPlay = (shell: StackShell): void => {
   });
   const syncMessage = mountMessageWindow(shell, {
     inspected: (text, value, context, inspectedIn) => {
-      const [list, of] =
-        inspectedIn === undefined
-          ? [scriptOwners(shell.editor.project), shell.editor.generation]
-          : [owners, generation];
-      const select = (index: number) => selectOwner(list, of, index);
+      const of =
+        inspectedIn === undefined ? shell.editor.generation : generation;
+      const select = (id: number) => selectOwner(of, id);
       variables.inspect(text, value, context, select);
       return select;
     },
