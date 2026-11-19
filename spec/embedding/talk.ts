@@ -812,6 +812,8 @@ export interface Group {
   script(name: string): Script | undefined;
   /** Any time, inside a Pump too. Its Scripts' names in load order; not a Host Input, and not traced. */
   scriptNames(): string[];
+  /** Any time, inside a Pump too. The user Libraries it holds now, in the order it added them, as RestoreOptions.libraries takes them; includes those ReplaceLibrary recompiled. Not a Host Input, and not traced. */
+  libraries(): Library[];
   /** Worker. Throws LoadError or HostError. */
   load(o: LoadOptions): Script;
   /** Worker, Host Input. */
