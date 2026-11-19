@@ -1,9 +1,13 @@
 import {
   emptyAccounting,
   accountRoot,
+  accountingReport,
   accountingTail,
+  putAncestry,
   type AccountingReport,
   type RunAncestry,
+  type RunDiscarded,
+  type RunStarted,
 } from './run-accounting';
 export type {
   RunAncestry,
@@ -398,6 +402,7 @@ export type Report =
       script: string;
     }
   | ({ kind: 'decided' } & Decided);
+type RunEnd = Extract<Report, { kind: 'run end' }>;
 export type PumpResult = {
   fuelUsed: number;
   /** The earliest deadline the next Pump could fire, if there is one. */
@@ -880,11 +885,13 @@ export class TsGroup implements Group {
         if (!parent) {
           throw new Error(`missing accounting parent ${parentRun}`);
         }
-        d.ancestry = {
-          rootDelivery: parent.report.rootDelivery,
-          parentRun,
-          ...(d.reply ? { parentCall: d.reply } : {}),
-        };
+        d.ancestry = d.reply
+          ? {
+              rootDelivery: parent.report.rootDelivery,
+              parentRun,
+              parentCall: d.reply,
+            }
+          : { rootDelivery: parent.report.rootDelivery, parentRun };
       }
     }
     accountRoot(this.accounting, d.ancestry.rootDelivery);
@@ -893,28 +900,26 @@ export class TsGroup implements Group {
 
   private accountStart(s: ScriptState, r: Running) {
     const ancestry = this.ancestry(r.delivery);
+    const d = r.delivery;
     this.accounting.runs.set(r.id, {
       order: ++this.accounting.next,
-      report: {
-        kind: 'run accounting',
-        ...ancestry,
-        script: s.name,
-        run: r.id,
-        fuel: r.run.fuel,
-        state: 'live',
-      },
+      report: accountingReport(ancestry, s.name, r.id, r.run.fuel),
     });
-    this.drainReports.push({
-      kind: 'run started',
-      ...ancestry,
-      script: s.name,
-      run: r.id,
-      ...(r.delivery.id ? { delivery: r.delivery.id } : {}),
-      ...(r.delivery.fn
-        ? { fn: r.delivery.fn }
-        : { selector: r.delivery.message }),
-      args: [...r.delivery.args],
-    });
+    // Assigned in the report's key order rather than spread (#2235).
+    const started: Partial<RunStarted> = { kind: 'run started' };
+    putAncestry(started, ancestry);
+    started.script = s.name;
+    started.run = r.id;
+    if (d.id) {
+      started.delivery = d.id;
+    }
+    if (d.fn) {
+      started.fn = d.fn;
+    } else {
+      started.selector = d.message;
+    }
+    started.args = d.args.slice();
+    this.drainReports.push(started as RunStarted);
   }
 
   private accountEnd(
@@ -929,13 +934,12 @@ export class TsGroup implements Group {
     row.report.fuel = r.run.fuel;
     row.report.state = state;
     if (state === 'discarded') {
-      this.drainReports.push({
-        kind: 'run discarded',
-        ...this.ancestry(r.delivery),
-        script: row.report.script,
-        run: r.id,
-        reason: reason!,
-      });
+      const discarded: Partial<RunDiscarded> = { kind: 'run discarded' };
+      putAncestry(discarded, this.ancestry(r.delivery));
+      discarded.script = row.report.script;
+      discarded.run = r.id;
+      discarded.reason = reason!;
+      this.drainReports.push(discarded as RunDiscarded);
     }
   }
 
@@ -2075,14 +2079,12 @@ export class TsGroup implements Group {
         });
         this.accounting.runs.set(rec.id, {
           order: rec.order,
-          report: {
-            kind: 'run accounting',
-            ...this.ancestry(r.delivery),
-            script: script.name,
-            run: rec.id,
-            fuel: rec.fuel,
-            state: 'live',
-          },
+          report: accountingReport(
+            this.ancestry(r.delivery),
+            script.name,
+            rec.id,
+            rec.fuel,
+          ),
         });
         markRest(r, { fuel: rec.segmentFuel, alloc: rec.segmentAlloc });
       }
@@ -6655,40 +6657,54 @@ export class TsGroup implements Group {
       ...(error ? { error } : {}),
     });
     this.accountEnd(running, 'terminal');
-    reports.push({
-      kind: 'run end',
-      script: s.name,
-      run: running.id,
-      ...(delivery.id ? { delivery: delivery.id } : {}),
-      ...(delivery.broadcast ? { broadcast: delivery.broadcast } : {}),
-      ...(handler ? { handler } : {}),
-      ...(fallback ? { fallback } : {}),
-      ...(outcome.kind === 'cancelled' && outcome.cleanupFailed
-        ? {
-            cleanupFailed:
-              'code' in outcome.cleanupFailed
-                ? outcome.cleanupFailed
-                : {
-                    limit: limitWord(outcome.cleanupFailed.limit) as Exclude<
-                      LimitWord,
-                      'fuel'
-                    >,
-                  },
-          }
-        : {}),
-      outcome: outcome.kind,
-      ...(outcome.kind === 'effect failed' ? { effect: outcome.effect } : {}),
-      ...(result ? { result } : {}),
-      ...(error ? { error: hostError(error) } : {}),
-      ...(limit ? { limit } : {}),
-      ...(outcome.kind === 'errored'
-        ? { at: location(outcome.at) }
-        : outcome.kind === 'limit fault'
-          ? { at: location(outcome) }
-          : {}),
-      fuel: run.fuel,
-      alloc: run.alloc,
-    });
+    // Assigned in the report's key order rather than spread (#2235).
+    const end: Partial<RunEnd> = { kind: 'run end' };
+    end.script = s.name;
+    end.run = running.id;
+    if (delivery.id) {
+      end.delivery = delivery.id;
+    }
+    if (delivery.broadcast) {
+      end.broadcast = delivery.broadcast;
+    }
+    if (handler) {
+      end.handler = handler;
+    }
+    if (fallback) {
+      end.fallback = fallback;
+    }
+    if (outcome.kind === 'cancelled' && outcome.cleanupFailed) {
+      end.cleanupFailed =
+        'code' in outcome.cleanupFailed
+          ? outcome.cleanupFailed
+          : {
+              limit: limitWord(outcome.cleanupFailed.limit) as Exclude<
+                LimitWord,
+                'fuel'
+              >,
+            };
+    }
+    end.outcome = outcome.kind;
+    if (outcome.kind === 'effect failed') {
+      end.effect = outcome.effect;
+    }
+    if (result) {
+      end.result = result;
+    }
+    if (error) {
+      end.error = hostError(error);
+    }
+    if (limit) {
+      end.limit = limit;
+    }
+    if (outcome.kind === 'errored') {
+      end.at = location(outcome.at);
+    } else if (outcome.kind === 'limit fault') {
+      end.at = location(outcome);
+    }
+    end.fuel = run.fuel;
+    end.alloc = run.alloc;
+    reports.push(end as RunEnd);
     if (
       outcome.kind === 'errored' ||
       outcome.kind === 'limit fault' ||
