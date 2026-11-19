@@ -14,6 +14,8 @@ It is also published to npm as [`@northtalk/editor`](tools/package/README.md), f
 - **`@northtalk/editor/lsp-protocol`:** the messages between a page and the LSP worker.
 - **The worker:** a page builds [`src/lsp.worker.ts`](src/lsp.worker.ts) as one of its entry points and starts it with `new Worker('./lsp.worker.js', { type: 'module' })`.
 
+A Host that checks with `@northtalk/ts` itself passes each `LoadDiagnostic` to `diagnosticsSpec` with the range from `line`/`col` to `endLine`/`endCol`, the token it is reported at. LSP positions count from zero, so it takes one from each line and column. `LoadDiagnostic` columns count Unicode scalars and LSP columns count UTF-16 units, so a character outside the Basic Multilingual Plane, such as an emoji, adds one more to every column after it.
+
 Highlighting colours come from the page's CSS variables `--northtalk-keyword`, `--northtalk-string`, `--northtalk-number`, `--northtalk-comment` and `--northtalk-operator`, each with a fallback.
 
 ## Testing

@@ -67,8 +67,10 @@ defmodule NorthTalk.OwnerTest do
   end
 
   test "a load error carries the diagnostics", %{group: group} do
-    assert {:error, %LoadError{diagnostics: [%{"code" => "unexpected token", "line" => 3}]}} =
-             NorthTalk.load(group, "bad", "on x\n  return (\nend x\n")
+    assert {:error,
+            %LoadError{
+              diagnostics: [%{"code" => "unexpected token", "line" => 3, "col" => 1, "endLine" => 3, "endCol" => 4}]
+            }} = NorthTalk.load(group, "bad", "on x\n  return (\nend x\n")
   end
 
   test "forbid_suspension refuses a wait at load, and the same source loads without it", %{group: group} do
