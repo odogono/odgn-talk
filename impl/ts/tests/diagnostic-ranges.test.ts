@@ -32,6 +32,11 @@ const rejected = (work: () => unknown): readonly LoadDiagnostic[] => {
 };
 
 describe('diagnostic ranges', () => {
+  test('an unterminated interpolation spans its dollar-brace opener', () => {
+    expect(ranges('constant x = `hello ${1 +\n')).toEqual([
+      { line: 1, col: 21, endLine: 1, endCol: 23 },
+    ]);
+  });
   test('a checker diagnostic spans its token', () => {
     expect(ranges('on go\n  return absent\nend go')).toEqual([
       { line: 2, col: 10, endLine: 2, endCol: 16 },

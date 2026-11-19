@@ -254,12 +254,17 @@ export class Lexer {
     const parts: TextPart[] = [];
     let start = begin;
     let i = begin;
-    const error = (code: SyntaxErrorCode, at: number, incomplete = false) => ({
+    const error = (
+      code: SyntaxErrorCode,
+      at: number,
+      incomplete = false,
+      width = 1,
+    ) => ({
       ...this.tok(
         'error',
         code,
         at,
-        Math.min(s.length, at + 1),
+        Math.min(s.length, at + width),
         space,
         mode,
         code,
@@ -311,7 +316,8 @@ export class Lexer {
             };
           }
           if (t.t === 'eof') {
-            return error('unterminated interpolation', at, true);
+            // Reported at its dollar-brace opener, both characters (chapter 2).
+            return error('unterminated interpolation', at, true, 2);
           }
           if (t.t === 'op' && t.v === '}' && depth === 0) {
             parts.push({
