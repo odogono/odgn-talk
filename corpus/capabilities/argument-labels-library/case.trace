@@ -5,7 +5,7 @@
 > add-library router identity=021ef70193cc46553838c79de968de4cd5addf36726ec397ae59cf8732355edb
 > load s identity=eb301410844614c7aecd1b5badab03ffe1dd2f280ead3afdc625a6953a9b0020
 > load other identity=d66b7d3478329da55fc688dfd09854c4129d92e9e5a649b03c5c2bd9e78f24fc
-diag other code="wrong labels" pos=3:1
+diag other code="wrong labels" pos=3:1 end=3:4
 > stub world.move value="red hangar"
 > deliver d1 to=s message=go args=["pass", "red hangar"]
 > pump clock=2026-09-30T09:00:00Z

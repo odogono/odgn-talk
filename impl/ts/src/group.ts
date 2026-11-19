@@ -132,6 +132,7 @@ import {
   linksOf,
   loadOrReject,
   prepare,
+  rangesOf,
   stdlibNames,
   type Library,
   type OperationRef,
@@ -3869,7 +3870,7 @@ export class TsGroup implements Group {
       );
       let unit = compiledScripts.get(identity);
       if (!unit) {
-        unit = loadOrReject(name, () =>
+        unit = loadOrReject(name, p.ranges, () =>
           lowerTree(p.checked.tree!, {
             name,
             unit: 'script',
@@ -3878,7 +3879,7 @@ export class TsGroup implements Group {
         );
         compiledScripts.set(identity, unit);
       }
-      const loaded = loadOrReject(name, () =>
+      const loaded = loadOrReject(name, p.ranges, () =>
         loadScript(
           unit,
           limits,
@@ -3908,6 +3909,7 @@ export class TsGroup implements Group {
             [
               ['code', JSON.stringify(d.code)],
               ['pos', `${d.line}:${d.col}`],
+              ['end', `${d.endLine}:${d.endCol}`],
             ],
           ),
         );
@@ -4119,8 +4121,9 @@ export class TsGroup implements Group {
         ...s.units.map((unit, i) => ({
           root: unit.tree.root,
           name: s.loaded.units[i]!.name,
+          ranges: () => rangesOf(unit.source, unit.tree),
         })),
-        { root: p.checked.tree.root, name },
+        { root: p.checked.tree.root, name, ranges: () => p.ranges },
       ];
       checkDecisionCalls(
         units.map(unit => ({
@@ -4140,6 +4143,8 @@ export class TsGroup implements Group {
                 unit: unit.name,
                 line: leaf.span.line,
                 col: leaf.span.col,
+                // An earlier unit's veto is positioned, and ends, in that unit.
+                ...unit.ranges().of(leaf.span),
                 message: code,
               });
             }

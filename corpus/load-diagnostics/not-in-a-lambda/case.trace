@@ -1,4 +1,4 @@
 # Pins `not in a lambda` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=690a29e78c8eda19ac1ca9835c9e8e5bd6d5c83b9d42e846d152aaad86a9e415
-diag bad code="not in a lambda" pos=2:12
+diag bad code="not in a lambda" pos=2:12 end=2:15
 > vars

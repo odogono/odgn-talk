@@ -5,13 +5,13 @@
 > add-library right identity=1cfe10dcf35513cf42805dfc263937e349579c05ec7a06b3b687041c1cafc9dd
 > add-library top identity=db394703e4d3bdd31e80205ebaef3017be736d8c86c6dffbfb8ab99cc6236c16
 > load missing identity=581178b5ac2dc647186aae98053c9e277ee6729646c6805911a1535468ef092a
-diag missing code="missing grant" pos=1:1
-diag missing code="missing grant" pos=2:1
+diag missing code="missing grant" pos=1:1 end=1:4
+diag missing code="missing grant" pos=2:1 end=2:4
 > load wrong identity=c0b844b757d66c59597b51702398d4c0a38f26b2a196c619a98bd0922634f57b
-diag wrong code="wrong argument" pos=1:1
-diag wrong code="wrong argument" pos=1:1
-diag wrong code="wrong argument" pos=2:1
-diag wrong code="wrong argument" pos=2:1
+diag wrong code="wrong argument" pos=1:1 end=1:4
+diag wrong code="wrong argument" pos=1:1 end=1:4
+diag wrong code="wrong argument" pos=2:1 end=2:4
+diag wrong code="wrong argument" pos=2:1 end=2:4
 > load valid identity=d28199029066dbf23a70abfc2642bd298e19141fdd699208dee8aac28600494d
 > vars
 vars valid

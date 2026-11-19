@@ -1,0 +1,21 @@
+# Pins diagnostic ranges (chapter 2, Syntax errors; #2331): a syntax error at
+# a line end and one at the end of the source have an empty range, so `end`
+# equals `pos`, and a diagnostic on a multi-line text literal ends on the
+# literal's last line, counting columns in Unicode scalars.
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "line-end"
+source = "line-end.talk"
+
+[[scripts]]
+name = "end-of-source"
+source = "end-of-source.talk"
+
+[[scripts]]
+name = "multi-line-text"
+source = "multi-line-text.talk"

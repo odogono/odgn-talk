@@ -3,13 +3,13 @@
 # `pass any message`, which is `wrong message` anywhere else. A second
 # parameter is a syntax error. `on any x` is an ordinary Handler named `any`.
 > load deciding identity=d5fd9c6d36abfb0762bb1f4ebf3da58e00936b0c891cf2e843cf1f939949a99a
-diag deciding code="bad suffixes" pos=2:19
+diag deciding code="bad suffixes" pos=2:19 end=2:27
 > load named-pass identity=a5c39079d299e3277cc6a81a934542a7c00036e1607e6dc7f11e62c27cbd0c59
-diag named-pass code="wrong message" pos=3:8
+diag named-pass code="wrong message" pos=3:8 end=3:12
 > load stray-pass identity=fe0d0598f213c6a85eb42b0b8612e82b2cac67763ca940adcda9763adad4ebc2
-diag stray-pass code="wrong message" pos=3:8
+diag stray-pass code="wrong message" pos=3:8 end=3:11
 > load two-params identity=1907ca85c19b1dc62c7574a552e1655bd8d9b1e23b164749ba234171f7176d74
-diag two-params code="unexpected token" pos=2:19
+diag two-params code="unexpected token" pos=2:19 end=2:20
 > load any identity=711f138dc7829f49c2cbc491b8458c1cd4ebec9f34f6169aa91b7be3d480f575
 > deliver d1 to=any message=any args=[7]
 > pump clock=2026-10-07T09:00:00Z

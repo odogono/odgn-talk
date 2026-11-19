@@ -1,11 +1,11 @@
 
 > load s identity=76373c953cc5bb1dc3c116458a104f602837c9d8ed5059da1e4f1c3d24ad62b5
-diag s code="missing and wait" pos=2:2
-diag s code="missing and wait" pos=3:2
-diag s code="missing and wait" pos=4:2
-diag s code="wrong mode" pos=7:2
-diag s code="wrong mode" pos=9:3
-diag s code="can't write" pos=14:15
-diag s code="can't write" pos=18:16
-diag s code="can't write" pos=24:16
+diag s code="missing and wait" pos=2:2 end=2:9
+diag s code="missing and wait" pos=3:2 end=3:6
+diag s code="missing and wait" pos=4:2 end=4:6
+diag s code="wrong mode" pos=7:2 end=7:6
+diag s code="wrong mode" pos=9:3 end=9:7
+diag s code="can't write" pos=14:15 end=14:16
+diag s code="can't write" pos=18:16 end=18:19
+diag s code="can't write" pos=24:16 end=24:22
 > vars

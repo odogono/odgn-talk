@@ -1,4 +1,4 @@
 # Pins `outside a loop` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=8cd660db606b8aca948e12085f449263f4e67bfd048692538b975efceeb5d549
-diag bad code="outside a loop" pos=2:1
+diag bad code="outside a loop" pos=2:1 end=2:5
 > vars

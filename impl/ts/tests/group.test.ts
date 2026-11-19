@@ -135,7 +135,7 @@ describe('loading', () => {
     ).toThrow(LoadError);
     expect(withoutIdentity(lines)).toEqual([
       '> load bad',
-      'diag bad code="unknown name" pos=2:10',
+      'diag bad code="unknown name" pos=2:10 end=2:16',
     ]);
     expect(g.script('bad')).toBeUndefined();
   });
@@ -155,11 +155,13 @@ describe('loading', () => {
         d.unit,
         d.line,
         d.col,
+        d.endLine,
+        d.endCol,
       ]),
-    ).toEqual([['initialiser failed', 'bad', 1, 16]]);
+    ).toEqual([['initialiser failed', 'bad', 1, 16, 1, 17]]);
     expect(withoutIdentity(lines)).toEqual([
       '> load bad',
-      'diag bad code="initialiser failed" pos=1:16',
+      'diag bad code="initialiser failed" pos=1:16 end=1:17',
     ]);
     expect(g.script('bad')).toBeUndefined();
   });

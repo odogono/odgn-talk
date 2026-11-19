@@ -14,7 +14,8 @@ import {
   type EffectUse,
   type GrantDecls,
 } from './effects';
-import type { SemanticNode, SemanticTree } from './semantic';
+import type { SemanticNode, SemanticTree, SourceSpan } from './semantic';
+import { Lexer } from './lexer';
 import { LoadError, type LoadDiagnostic } from './errors';
 import { costModel, languageVersion } from './generated/machine';
 import { diagnosticCodes } from './generated/syntax';
@@ -114,14 +115,81 @@ export const codeOf = (l: Library): Code => compiled.get(l)!.code;
 export const linksOf = (imports: readonly Library[]) =>
   new Map(imports.map(l => [l.name, codeOf(l)]));
 
+type RangeEnd = Pick<LoadDiagnostic, 'endLine' | 'endCol'>;
+type Ranges = {
+  /** The end of the token found at `line`:`col`, or an empty range. */
+  at: (line: number, col: number) => RangeEnd;
+  /** The end of a token's span. */
+  of: (span: SourceSpan) => RangeEnd;
+};
+
+/**
+ * Where a unit's diagnostic ranges end (chapter 2, Syntax errors): at the end
+ * of the token a diagnostic is reported at, in lines and scalar columns. A
+ * line end and the end of the source give an empty range, and so does a
+ * position no token of `tree` starts at.
+ */
+export const rangesOf = (
+  source: string,
+  tree: SemanticTree | null = null,
+): Ranges => {
+  let lexer: Lexer | undefined;
+  let starts: Map<string, SourceSpan> | undefined;
+  const of = (span: SourceSpan): RangeEnd => {
+    // A line end's token covers its `\n` or `\r\n`, so its range is empty.
+    if (
+      span.end <= span.start ||
+      /^[\n\r]+$/u.test(source.slice(span.start, span.end))
+    ) {
+      return { endLine: span.line, endCol: span.col };
+    }
+    lexer ??= new Lexer(source);
+    const end = lexer.where(span.end);
+    return { endLine: end.line, endCol: end.col };
+  };
+  const at = (line: number, col: number): RangeEnd => {
+    if (!starts) {
+      starts = new Map();
+      const work: SemanticNode[] = tree ? [tree.root] : [];
+      while (work.length) {
+        for (const child of work.pop()!.children) {
+          if (child.kind === 'node') {
+            work.push(child);
+          } else if (child.span.end > child.span.start) {
+            starts.set(`${child.span.line}:${child.span.col}`, child.span);
+          }
+        }
+      }
+    }
+    const span = starts.get(`${line}:${col}`);
+    return span ? of(span) : { endLine: line, endCol: col };
+  };
+  return { at, of };
+};
+
 // A checked unit's load diagnostics, or none.
 const diagnosticsOf = (
   checked: CheckResult,
   unit: string,
+  ranges: Ranges,
 ): LoadDiagnostic[] | null => {
   if (checked.error) {
     const { code, tok, message } = checked.error;
-    return [{ code, message, unit, line: tok.line, col: tok.col }];
+    return [
+      {
+        code,
+        message,
+        unit,
+        line: tok.line,
+        col: tok.col,
+        ...ranges.of({
+          start: tok.pos,
+          end: tok.end,
+          line: tok.line,
+          col: tok.col,
+        }),
+      },
+    ];
   }
   if (!checked.ok) {
     return checked.diagnostics.map(d => ({
@@ -130,6 +198,7 @@ const diagnosticsOf = (
       unit,
       line: d.span.line,
       col: d.span.col,
+      ...ranges.of(d.span),
     }));
   }
   return null;
@@ -141,6 +210,7 @@ const checkLibraryNeeds = (
   root: SemanticNode,
   available: ReadonlyMap<string, Library>,
   grants: GrantDecls,
+  ranges: Ranges,
 ): LoadDiagnostic[] => {
   const diagnostics: LoadDiagnostic[] = [];
   const uses = new Map(
@@ -167,6 +237,7 @@ const checkLibraryNeeds = (
       continue;
     }
     const missing = new Set<string>();
+    const end = ranges.at(use.span.line, use.span.col);
     for (const site of compiled.get(library)!.sites) {
       const reference = `${site.capability}.${site.operation}`;
       const report = (code: string) =>
@@ -175,6 +246,7 @@ const checkLibraryNeeds = (
           unit: name,
           line: use.span.line,
           col: use.span.col,
+          ...end,
           message: `${code}: ${reference} at ${site.unit}:${site.node.span.line}:${site.node.span.col}`,
         });
       const operations = Object.hasOwn(grants, site.capability)
@@ -222,10 +294,11 @@ export const prepare = (
     ),
     stdlib: registeredStdlib,
   });
-  const diagnostics = diagnosticsOf(checked, name) ?? [];
+  const ranges = rangesOf(source, checked.tree);
+  const diagnostics = diagnosticsOf(checked, name, ranges) ?? [];
   if (unit === 'script' && grants && checked.tree) {
     diagnostics.push(
-      ...checkLibraryNeeds(name, checked.tree.root, available, grants),
+      ...checkLibraryNeeds(name, checked.tree.root, available, grants, ranges),
     );
   }
   const names = checked.tree ? importsOf(checked.tree) : [];
@@ -246,11 +319,16 @@ export const prepare = (
       : null,
     imports,
     identity: codeIdentity(unit, name, source, imports.map(identityOf)),
+    ranges,
   };
 };
 
 /** Lower a checked unit, turning a failure to load into its diagnostic. */
-export const loadOrReject = <T>(name: string, load: () => T): T => {
+export const loadOrReject = <T>(
+  name: string,
+  ranges: Ranges,
+  load: () => T,
+): T => {
   try {
     return load();
   } catch (error) {
@@ -262,6 +340,7 @@ export const loadOrReject = <T>(name: string, load: () => T): T => {
           unit: name,
           line: error.line,
           col: error.col,
+          ...ranges.at(error.line, error.col),
         },
       ]);
     }
@@ -338,7 +417,7 @@ const build = (
     const tree = p.checked.tree!;
     entry = {
       exports: exportsOf(tree),
-      code: loadOrReject(src.name, () =>
+      code: loadOrReject(src.name, p.ranges, () =>
         loadLibrary(
           isStdlib
             ? lowerStdlibIntrinsics(
@@ -437,6 +516,7 @@ export const replacementLibraries = (
         unit: replacement.name,
         line,
         col: 1,
+        ...p.ranges.at(line, 1),
         message: 'import cycle',
       },
     ]);

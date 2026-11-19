@@ -15,7 +15,7 @@ scope s/r1.c1 grant=r name=file action=opened
 preempt s/r1 start delivery=d1 handler=go clause=1 by=slice fuel=40 alloc=8
 pumped state=sliced fuel=40
 > reload s carry=yes source="on" identity=7520c8979d91b26cc10e4a13a3782126a97cdd38052b0dabd82843d6403e804b
-diag s code="unexpected token" pos=1:3
+diag s code="unexpected token" pos=1:3 end=1:3
 > reload s carry=yes source="script variable count = 0" & newline & "on go" & newline & "return count" & newline & "end go" identity=876b6c639fe4cf23048ac2c5b49e45dad1df22d1722229aabcf59ebc75291a30
 call s/r1.c2 op=r.close args=[] result=nothing automatic=yes
 scope s/r1.c2 grant=r name=file action=abandoned

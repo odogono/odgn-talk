@@ -1,4 +1,4 @@
 # Pins `capture in repetition` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=3998899cae3555d63d5d14a9aa3857250c68699ff4b9ab12e584123bd4c3f501
-diag bad code="capture in repetition" pos=2:18
+diag bad code="capture in repetition" pos=2:18 end=2:19
 > vars

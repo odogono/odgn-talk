@@ -4,8 +4,8 @@
 
 > load s identity=2939049178f9a5af4cb5bd4e3a327f699763d24e9590104239e79bef9d9c70f7
 > extend s source="on extra" & newline & "  tell till to note " & quote & "x" & quote & newline & "  ask clock to now" & newline & "end extra" identity=d18c07dfe9eccf1a76315a60635b01f2611e99ac2001f2ca46c5b436c65d90c7
-diag s+1 code="unknown operation" pos=2:16
-diag s+1 code="unknown operation" pos=3:7
+diag s+1 code="unknown operation" pos=2:16 end=2:20
+diag s+1 code="unknown operation" pos=3:7 end=3:12
 > stub till.price value=7
 > deliver d1 to=s message=go
 > pump clock=2026-09-30T10:00:00Z

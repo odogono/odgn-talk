@@ -1,4 +1,4 @@
 # Pins `bad number` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=d360606d8144b6389bbc811bfe5ef31a2eeb98905dc240b38b6d7dff12363f94
-diag bad code="bad number" pos=1:14
+diag bad code="bad number" pos=1:14 end=1:49
 > vars

@@ -1,4 +1,4 @@
 # Pins `no item chunk` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=69ac175a18b773686b5632f2255293848866b25977b07017ebced24cf1bfa577
-diag bad code="no item chunk" pos=2:20
+diag bad code="no item chunk" pos=2:20 end=2:29
 > vars

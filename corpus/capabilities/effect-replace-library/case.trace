@@ -15,8 +15,8 @@ scope s/r1.c1 grant=r name=file action=opened
 preempt s/r1 start delivery=d1 handler=go clause=1 by=slice fuel=40 alloc=8
 pumped state=sliced fuel=40
 > replace-library user carry=yes source="function other" & newline & "return 1" & newline & "end other" identity=550ad6e72d34a1fbd75b4f5e8562a969d792ea70e52107aa4d287647833da511
-diag s code="unknown import" pos=1:5
-diag s code="unknown name" pos=5:5
+diag s code="unknown import" pos=1:5 end=1:8
+diag s code="unknown name" pos=5:5 end=5:8
 > replace-library user carry=yes source="function one" & newline & "return 2" & newline & "end one" identity=56037a115d109e5669e4e1d31d0feb39f4a95a833b500ebad964c0bab79d8e7c
 call s/r1.c2 op=r.close args=[] result=nothing automatic=yes
 scope s/r1.c2 grant=r name=file action=abandoned

@@ -4,9 +4,9 @@
 > add-library helper identity=9b2afceff971a422ad808641c08b470413d37ab90f41be0bb1a9d10dd3e5d13a
 > add-library wrapper identity=b83d7093843c230ef2063fb95536b83591db4bd3e1e8827e89ae4acf9fb85f1a
 > load missing identity=512040eb5d3845c43879af3cbe61ec70e4fa19351862812c32f949eaa740d0aa
-diag missing code="missing grant" pos=1:1
-diag missing code="missing grant" pos=1:1
-diag missing code="missing grant" pos=1:1
+diag missing code="missing grant" pos=1:1 end=1:4
+diag missing code="missing grant" pos=1:1 end=1:4
+diag missing code="missing grant" pos=1:1 end=1:4
 > load s identity=d44a2fb4ebcf49dc5b590676011b2836260534df6388cad332ad633b02afa508
 > stub io.read value=7
 > deliver d1 to=s message=immediate

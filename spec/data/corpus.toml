@@ -1245,11 +1245,9 @@ key = "pos"
 type = "pos"
 is = "its position"
 
-# Optional until #2333 re-blesses the corpus with it; then required.
 [[record.key]]
 key = "end"
 type = "pos"
-optional = true
 is = "the end of its range, exclusive: the end of the token at its position, or the position itself where the range is empty (chapter 2)"
 
 [[record]]
