@@ -7,6 +7,24 @@ tracked separately in the Spec's Data Files.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-19
+
+### Breaking
+
+- **zig:** Give every Zig load diagnostic and syntax error an end position, the exclusive end of the token it is reported at, in `talk_diagnostic`'s `end_line`/`end_col`, the `load error` and `analyze-*` replies' `endLine`/`endCol`, and the Trace's `diag … end=`. `talk_diagnostic` grows, so a C Host built against an earlier `talk.h` must be rebuilt.
+
+### Added
+
+- **ts:** The TS Core gives every load diagnostic an end position, `endLine` and `endCol`, so a Host can mark the whole token it is reported at, and the Trace writes it as `end=` on each `diag` record.
+
+### Fixed
+
+- **ts:** The TS Session Host no longer records an empty `setup` envelope, and replays a Transcript without one as having no object bindings. `:clock advance` refuses a negative duration even when it rounds to nothing.
+
+### Performance
+
+- **ts:** Hash code identities about twice as fast, taking about 10% off each small-Script Load on Bun and all of the regression since ADR 0132 on Node (#2230).
+
 ## [0.9.0] - 2026-11-16
 
 ### Added
