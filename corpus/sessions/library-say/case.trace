@@ -1,0 +1,11 @@
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> add-library base identity=1935541958ca48f38789febd1343525fc7122075fb468aa04a6442cac48bc7a0
+> extend session source="use f from base" identity=eec6239434bf4582630ed4d4b71f83c1172b734b5ebf2b880464b7cf10335122
+> extend session source="on entry1" & newline & "return f()" & newline & "end entry1" & newline identity=47061bec1d51e0adf79b6920c37cfe23904dd1458633303a3200f227da09b192
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=17 alloc=0 state=0 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 value=1 fuel=17 alloc=0
+pumped state=idle fuel=17
+> vars
+vars session

@@ -1,0 +1,8 @@
+# A measured Entry prints its pending Fuel row when it yields to read, then its final row when it settles (#2329).
+> :clock virtual 2026-09-30T10:00:00Z
+> :fuel ask console to read and wait
+fuel {entry: "entry1", fuel: 14, state: "pending", interrupted: false, runs: 1, queued: 0}
+< hi
+fuel {entry: "entry1", fuel: 19, state: "complete", interrupted: false, runs: 0, queued: 0}
+> :fuel
+fuel {entry: "entry1", fuel: 19, state: "complete", interrupted: false, runs: 0, queued: 0}

@@ -11,9 +11,6 @@ import (
 func TestTraceErrorMessageProvenance(t *testing.T) {
 	for _, origin := range []string{"Core", "Script", "Host"} {
 		t.Run(origin, func(t *testing.T) {
-			if origin == "Core" {
-				t.Skip("the Zig Session Host shows a Core-raised message in Trace rows (#2329)")
-			}
 			var objects *Objects
 			h := New(Environment{Objects: func(o *Objects) map[string]*talk.Object { objects = o; return nil }})
 			for _, source := range []string{
@@ -79,7 +76,6 @@ func TestFuelEntryContinuesLikeAnEntry(t *testing.T) {
 // A measured Entry that yields to `read` prints its pending row, then its
 // final row at the Host call where its family settles.
 func TestFuelRowsAtYieldAndSettlement(t *testing.T) {
-	t.Skip("the Zig Session Host prints no Fuel row at a yield (#2329)")
 	h := New(Environment{})
 	h.Input(":clock virtual 2026-09-30T10:00:00Z")
 	out := h.Input(":fuel ask console to read and wait")

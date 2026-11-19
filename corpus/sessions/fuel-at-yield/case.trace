@@ -1,0 +1,14 @@
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="on entry1" & newline & "ask console to read and wait" & newline & "end entry1" & newline identity=94dc7936893d41eefdff66634954f4f093e9d564ff92cb878ad4661204755b7b
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+call session/r1.c1 op=console.read args=[]
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=14 alloc=0 state=224 end=ask-wait
+pumped state=idle fuel=14 next=2026-10-25T06:31:23.647Z
+> answer session/r1.c1 value="hi"
+> pump clock=2026-09-30T10:00:00Z
+seg session/r1 resume fuel=5 alloc=18 state=0 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=19 alloc=18
+pumped state=idle fuel=5
+> vars
+vars session

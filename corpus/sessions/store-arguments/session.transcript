@@ -1,0 +1,10 @@
+# :store takes at most one Store name, and only :store load takes | lines (#2329).
+> :clock virtual 2026-09-30T10:00:00Z
+> :store a b
+! bad arguments
+> :store clear
+| x
+! bad arguments
+> :store
+> 1 + 1
+2

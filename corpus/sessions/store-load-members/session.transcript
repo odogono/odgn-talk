@@ -1,0 +1,16 @@
+# :store load reads each member name as its key, never a tag, and a null member loads no key (#2329).
+> :clock virtual 2026-09-30T10:00:00Z
+> :store load
+| {"k":null,"j":1}
+loaded 1 keys
+> :store
+"j" = 1
+> :store load
+| {"$map":7}
+loaded 1 keys
+> :store
+"$map" = 7
+> :store save out.json
+wrote out.json
+> 1 + 1
+2

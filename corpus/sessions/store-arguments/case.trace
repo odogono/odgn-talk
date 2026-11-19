@@ -1,0 +1,9 @@
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="on entry1" & newline & "return 1 + 1" & newline & "end entry1" & newline identity=d56ca8914ad13e42869557f203d73ba8181ccdd15de228a2df0febc20c621356
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=12 alloc=16 state=0 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 value=2 fuel=12 alloc=16
+pumped state=idle fuel=12
+> vars
+vars session
