@@ -1,4 +1,4 @@
 # Pins `bits not whole bytes` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=3c6c668c2251e006d3f037839c6ce999a3f803d7bdd596f55e6dcf974cfd222c
-diag bad code="bits not whole bytes" pos=2:10
+diag bad code="bits not whole bytes" pos=2:10 end=2:11
 > vars

@@ -1,6 +1,6 @@
 # First blessing approved by the maintainer on 2026-10-05 for #134.
 # A plain local Handler call cannot conceal a nested Join Suspension Point.
 > load bad identity=dabde54bae631d61937affd1df7c7a1ce79e61c02ba215851cb26a8cf9efd523
-diag bad code="missing and wait" pos=4:3
-diag bad code="can't suspend here" pos=5:7
+diag bad code="missing and wait" pos=4:3 end=4:9
+diag bad code="can't suspend here" pos=5:7 end=5:13
 > vars

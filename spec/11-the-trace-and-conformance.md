@@ -364,7 +364,7 @@ Each `reason` is what dispatch already found, so nothing runs again to find it. 
 | `unhandled` | `delivery` (optional) | `message`, `args`?, `target`? | an `unhandled` report; the id is absent for a message a Script sent |
 | `call-failed` | `call` | `op` | a `call failed` report, whose detail is left out |
 | `decided` | `delivery` | `verdict`, `vetoes`?, `undecided`? | a `decided` report, by the Decision's delivery id or broadcast id |
-| `diag` | `unit` | `code`, `pos`, `end`? | a load-time diagnostic, or the first syntax error |
+| `diag` | `unit` | `code`, `pos`, `end` | a load-time diagnostic, or the first syntax error |
 | `counters` | `script` | `fuel`, `alloc`, `runs`, `faults`, `state`, `mailbox` | a snapshot of the Script's lifetime work and current state (chapter 9) |
 | `vars` | `script` |  | a Script's Script Variables, each as `<name>=<value>`, in declaration order |
 | `pumped` |  | `state`, `fuel`, `next`? | the end of a Pump |

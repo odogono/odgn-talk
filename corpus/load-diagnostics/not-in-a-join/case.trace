@@ -1,5 +1,5 @@
 # Pins `not in a join` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=5d2913a7b2501118a46675376024b8ce4154fef4ed7759f5f2d1d65cedf5a5e8
-diag bad code="empty join" pos=2:1
-diag bad code="not in a join" pos=3:1
+diag bad code="empty join" pos=2:1 end=2:5
+diag bad code="not in a join" pos=3:1 end=3:7
 > vars

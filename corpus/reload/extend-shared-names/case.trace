@@ -3,11 +3,11 @@
 > load s identity=4f0bef13d58f7e3d527de81fbfebf7380d41fa45d8a405134c39babc615753b8
 > extend s source="constant copy = bar + qux" & newline & "script variable result = []" & newline & "on later" & newline & "  foo" & newline & "  put it into seen" & newline & "  bar and wait" & newline & "  put [seen, it] into seen" & newline & "  baz" & newline & "  put it after seen" & newline & "  qux and wait" & newline & "  put [foo, bar, baz, qux, copy, seen, it] into result" & newline & "  return result" & newline & "end later" identity=be5841ab2e4d7fcaa9284ab52ed2ecd446a845b6b67d7cca7ccb13b3808b3390
 > extend s source="on invalid" & newline & "  bar" & newline & "end invalid" identity=40d7507854bd068a791eafb8ea17e58a6dde55258633d345ef38f83d97af42a7
-diag s+2 code="missing and wait" pos=2:3
+diag s+2 code="missing and wait" pos=2:3 end=2:6
 > extend s source="on invalid" & newline & "  qux" & newline & "end invalid" identity=d8b6a878a9027e5dc51cb260df276c41321ea2ac8f81908f7701fd9e7b149f4e
-diag s+2 code="missing and wait" pos=2:3
+diag s+2 code="missing and wait" pos=2:3 end=2:6
 > extend s source="function invalid" & newline & "  qux and wait" & newline & "end invalid" identity=de6f2e7e7a945de9661769d90609c133558132345596f507f31a1be21f28d5ba
-diag s+2 code="can't suspend here" pos=2:3
+diag s+2 code="can't suspend here" pos=2:3 end=2:6
 > extend s source="script variable foo = 9" identity=b0530cdda531eb7bd7e2dcddbff980191cd9403ec5fd97c1a175e79225d99229
 refused code="name reused"
 > extend s source="constant bar = 9" identity=7c85bfedb5aa4eaec1f74a1edc9db6826ea840f55fef00447aa491d95c4b8f6c

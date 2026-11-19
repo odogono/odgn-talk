@@ -1,0 +1,8 @@
+# Unblessed: load diagnostic ranges (#2333); first blessing awaits human review.
+> load line-end identity=aceb451750ed6fc3cff55d275ded08bf9802d3c1645097805497f10c3cc72c83
+diag line-end code="unexpected token" pos=2:11 end=2:11
+> load end-of-source identity=e1a707da2c0b854d0fa84b73c3e41e193fd3068d691d8496f30a7da8212f1b31
+diag end-of-source code="unexpected token" pos=2:11 end=2:11
+> load multi-line-text identity=caf54cbd342fa7540f19efb60d3edcfeb63ef949fe66170d798e3d7c7d5fccff
+diag multi-line-text code="duplicate key" pos=2:17 end=4:6
+> vars

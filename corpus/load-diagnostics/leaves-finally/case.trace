@@ -1,4 +1,4 @@
 # Pins `leaves finally` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=b51b63f821a0846852265a6c003f92dfd0b1d20e552f875a0aff1d151a2f3fd4
-diag bad code="leaves finally" pos=4:1
+diag bad code="leaves finally" pos=4:1 end=4:7
 > vars

@@ -51,7 +51,7 @@ pumped state=idle fuel=33 next=2026-09-30T10:00:30Z
 > pump clock=2026-09-30T10:00:00Z
 pumped state=rewound fuel=0 next=2026-09-30T10:00:30Z
 > reload session carry=yes mailbox=keep source="script variable n = 10" & newline & "on tick, queued" & newline & "  say missing" & newline & "end tick" & newline identity=882f0530327d87783c772b962940f22cd476210c9411d6ab31a0976fdad79d91
-diag session code="unknown name" pos=3:7
+diag session code="unknown name" pos=3:7 end=3:14
 > pump clock=2026-09-30T10:00:00Z
 seg session/r8 start from=session/r6 handler=tick clause=1 fuel=4 alloc=0 state=456 end=park
 pumped state=idle fuel=4 next=2026-09-30T10:00:30Z

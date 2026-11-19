@@ -10,8 +10,8 @@
 seg a/r1 start delivery=d1 handler=make clause=1 fuel=21 alloc=32 state=208 end=wait until=1970-01-01T00:00:01Z
 pumped state=idle fuel=21 next=1970-01-01T00:00:01Z
 > replace-library base carry=yes source="function other" & newline & "  return 2" & newline & "end other" identity=054daecbbd7fdbf1d3da1d48a9c40747ff4197d2a96e51383d70530c0c15d855
-diag middle code="unknown import" pos=1:5
-diag middle code="unknown name" pos=3:10
+diag middle code="unknown import" pos=1:5 end=1:10
+diag middle code="unknown name" pos=3:10 end=3:15
 > replace-library base carry=yes source="function count" & newline & "  return 7" & newline & "end count" identity=b7805d5d4c32cdf3d70ff7e8d7bf3f3bd6324c00adc764a3fbb395663dc892e1
 stopped a reason="reload" discarded=[a/r1]
 stopped b reason="reload"

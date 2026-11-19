@@ -5,7 +5,7 @@
 > add-library base identity=2dc1e226eb6cff82fd64f3665edbdfc323d6545654b8c29f1e3237ef70c7d96a
 > add-library wrapper identity=2cd806cb407348fd924073e7c305acf819f5d7632aeef7044b880f4605f4b690
 > load missing identity=0041e3180ca3bb2ccfa340f9fd2e0f33ee2997c5450b1dfd3d99910131e7bc46
-diag missing code="missing grant" pos=1:1
+diag missing code="missing grant" pos=1:1 end=1:4
 > load s identity=a7b5cc28bc1e383bacd10ef5ed72c6be09b50f5cb19627b6c0da52934a3df7dd
 > stub io.read value=7
 > deliver d1 to=s message=go

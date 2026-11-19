@@ -1,10 +1,10 @@
 # First blessing approved for #681 on 2026-10-12; see docs/reviews/container-properties/README.md.
 > load leaf identity=44e92955cee97d840e68400f9e37115b50bcfa947dccd64f33ceaad5b03eaa27
-diag leaf code="not a container" pos=2:14
+diag leaf code="not a container" pos=2:14 end=2:17
 > load intermediate identity=35f667b3fece718a8456f7f84bfa0c1c67d76b6a92e96dc9db403802da3bfdbe
-diag intermediate code="not a container" pos=2:10
+diag intermediate code="not a container" pos=2:10 end=2:14
 > load possessive identity=8d5d0305943e2916ed1bbc223ace788efd93e68a5b6b89bb6bda6d9c5733ead1
-diag possessive code="not a container" pos=2:7
+diag possessive code="not a container" pos=2:7 end=2:8
 > load keys identity=b239ab490fb5c8876800b46bb54bfc71e71843815fa801ba94154cda6694dd81
 > deliver d1 to=keys message=go
 > pump clock=2026-10-12T09:00:00Z

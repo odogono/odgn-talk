@@ -38,6 +38,13 @@ export const invalidValue: (message: string) => never = message => {
 export type LoadDiagnostic = {
   code: string;
   col: number;
+  /**
+   * The end of its range, exclusive, in the same unit and units as `line` and
+   * `col`: the end of the token there, or `line`/`col` for an empty range
+   * (chapter 2, Syntax errors).
+   */
+  endCol: number;
+  endLine: number;
   line: number;
   message: string;
   unit: string;

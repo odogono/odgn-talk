@@ -1,17 +1,17 @@
 # First blessing approved by the maintainer on 2026-10-07 for #141.
 # Labelled pass checks, syntax traps, suspension and selector clashes.
 > load bad identity=e135dc1fc907e3a67ae7661623de997997e9247925e3f630f1a6b9ea6588a0ec
-diag bad code="wrong message" pos=2:8
+diag bad code="wrong message" pos=2:8 end=2:12
 > load wrong-label identity=eff7c352dd687e4fae97c238ebfba0bea0bc03851c4c3078815e9986d9bbf051
-diag wrong-label code="wrong message" pos=2:8
+diag wrong-label code="wrong message" pos=2:8 end=2:12
 > load head identity=c3ac2cb1dca143b917d7d19ada90504705429e890d8483b35845e1b0b8e5e2ae
-diag head code="unexpected token" pos=1:18
+diag head code="unexpected token" pos=1:18 end=1:23
 > load chunk identity=164d14ca55ea04772addb1e42e816b7edfe3e6bfe4211b7d7ffcd53842fac08e
-diag chunk code="unexpected token" pos=2:20
+diag chunk code="unexpected token" pos=2:20 end=2:21
 > load unit identity=2102c93efa7f3e8adeb0ffb8ea37580169047cfcee2d22c5777ffbb75c3320aa
-diag unit code="unexpected token" pos=2:13
+diag unit code="unexpected token" pos=2:13 end=2:14
 > load suspend identity=582e9e08da28beebd8dd6883881ab2313042bc4a4a92f64fde253f6383cdc78f
-diag suspend code="missing and wait" pos=5:3
+diag suspend code="missing and wait" pos=5:3 end=5:7
 > load clash identity=dfbb4de8f06772688fc8d0faa0fa2cda3c49cbe4b883ff1714cfa648dd6f1967
 > deliver d1 to=clash message=go
 > pump clock=2026-09-30T09:00:00Z

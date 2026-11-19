@@ -14,7 +14,7 @@
 
 # A LoadError leaves the Script unchanged (chapter 10, Reload).
 > reload sized carry=yes source="script variable p = <50 digits>" identity=13529c7c0fb2a8ae1fe36ac2e18cbb39bbb54868a35280e794d8efb282c8ea5e
-diag sized code="pattern too large" pos=1:21
+diag sized code="pattern too large" pos=1:21 end=1:22
 
 > vars
 vars sized p=<49 digits>

@@ -1,15 +1,15 @@
 # First blessing approved by the maintainer on 2026-10-05 for #134.
 > load bad identity=4557ebf2b1f14a24a292a46bd1c57d6e692aaa163aec3f168a5d4e4e550c6b9c
-diag bad code="can't write" pos=2:3
-diag bad code="can't write" pos=3:3
-diag bad code="can't write" pos=4:3
-diag bad code="can't write" pos=5:3
-diag bad code="can't write" pos=6:3
-diag bad code="can't write" pos=7:3
+diag bad code="can't write" pos=2:3 end=2:6
+diag bad code="can't write" pos=3:3 end=3:6
+diag bad code="can't write" pos=4:3 end=4:6
+diag bad code="can't write" pos=5:3 end=5:6
+diag bad code="can't write" pos=6:3 end=6:6
+diag bad code="can't write" pos=7:3 end=7:6
 > load guard identity=90f4e4b4c06fa118ef6df7460d40cbfc3d78347918466908d48c54f50252a940
-diag guard code="not in a guard" pos=1:15
-diag guard code="not in a guard" pos=3:17
-diag guard code="not in a guard" pos=5:16
-diag guard code="not in a guard" pos=7:17
-diag guard code="not in a guard" pos=9:17
+diag guard code="not in a guard" pos=1:15 end=1:18
+diag guard code="not in a guard" pos=3:17 end=3:20
+diag guard code="not in a guard" pos=5:16 end=5:19
+diag guard code="not in a guard" pos=7:17 end=7:20
+diag guard code="not in a guard" pos=9:17 end=9:20
 > vars

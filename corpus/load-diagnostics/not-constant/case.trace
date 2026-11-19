@@ -1,4 +1,4 @@
 # Pins `not constant` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=7a210ad65877018ae5df7dc8f56aa0e3d93cca8e514918b59121128e7c31dd57
-diag bad code="not constant" pos=2:14
+diag bad code="not constant" pos=2:14 end=2:15
 > vars

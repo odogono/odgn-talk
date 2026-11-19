@@ -2,12 +2,12 @@
 # good, granted only `stamp`, loads.
 
 > load bad identity=f278c80eaf4ddf5ccca8b8663e5cae7d1b75d89b47acc5903f4e1478f1d8bbdd
-diag bad code="unknown operation" pos=4:7
-diag bad code="unknown operation" pos=5:16
-diag bad code="wrong mode" pos=6:3
-diag bad code="wrong argument count" pos=7:16
-diag bad code="wrong argument" pos=8:22
-diag bad code="unknown operation" pos=9:3
+diag bad code="unknown operation" pos=4:7 end=4:13
+diag bad code="unknown operation" pos=5:16 end=5:21
+diag bad code="wrong mode" pos=6:3 end=6:7
+diag bad code="wrong argument count" pos=7:16 end=7:19
+diag bad code="wrong argument" pos=8:22 end=8:23
+diag bad code="unknown operation" pos=9:3 end=9:6
 > load good identity=dd453819e307b31cbd92b9acc4c81c2b37f1ca4866d22a7472261b3a5fc20106
 > stub clock.stamp value="x!"
 > deliver d1 to=good message=go

@@ -1,4 +1,4 @@
 # Pins `unknown kind` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=0ba173934d788f5c8b839561ac4700400f26e614e6b208d6f3a5eec26ace91fb
-diag bad code="unknown kind" pos=2:15
+diag bad code="unknown kind" pos=2:15 end=2:20
 > vars

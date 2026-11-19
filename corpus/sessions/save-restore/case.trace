@@ -43,7 +43,7 @@ seg session/r6 start delivery=d4 handler=entry4 clause=1 fuel=7 alloc=0 state=41
 run session/r6 outcome=completed delivery=d4 handler=entry4 value=1 fuel=7 alloc=0
 pumped state=idle fuel=7 next=2026-09-30T10:00:05Z
 > extend session source="on entry5" & newline & "return late()" & newline & "end entry5" & newline identity=402e6e2a19189b90da6a61603abb390e50036e49c578d03f475e1b6235e2bfca
-diag session+7 code="unknown name" pos=2:8
+diag session+7 code="unknown name" pos=2:8 end=2:12
 > vars
 vars session n=1
 > answer session/r3.c1 value="body"

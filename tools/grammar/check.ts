@@ -206,7 +206,7 @@ for (const f of files(join(ROOT, 'corpus'), '.talk')) {
     );
     expected = [
       ...readFileSync(traceFile, 'utf8').matchAll(
-        /^diag (\S+) code="([^"]+)" pos=(\d+):(\d+)$/gm,
+        /^diag (\S+) code="([^"]+)" pos=(\d+):(\d+) end=\d+:\d+$/gm,
       ),
     ].find(
       m => names.has(m[1]!) && grammar.syntax_error.some(e => e.code === m[2]),

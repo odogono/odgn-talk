@@ -237,7 +237,7 @@ describe('compiling and adding Libraries', () => {
     expect(() =>
       group.load({ name: 's', source: 'use one, two from a\non go\nend go' }),
     ).toThrow(LoadError);
-    expect(lines.at(-1)).toBe('diag s code="unknown import" pos=1:10');
+    expect(lines.at(-1)).toBe('diag s code="unknown import" pos=1:10 end=1:13');
   });
 
   test('a user Library may import a stdlib Library, which needs no adding', () => {

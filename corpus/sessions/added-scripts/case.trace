@@ -68,7 +68,7 @@ pumped state=idle fuel=3
 vars session
 vars counter n=2
 > load broken identity=b25ecc79951aaf7ed3c753f7e3d69c30875f87c6fbec8844c725b77bbc6ec186
-diag broken code="unknown name" pos=2:10
+diag broken code="unknown name" pos=2:10 end=2:14
 > vars
 vars session
 vars counter n=2
