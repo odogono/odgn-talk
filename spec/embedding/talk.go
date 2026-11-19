@@ -48,6 +48,8 @@ type Diagnostic struct {
 	Unit    string // the Script or Library the diagnostic is in
 	Line    int
 	Col     int
+	EndLine int // the end of its range (chapter 2), exclusive
+	EndCol  int
 }
 
 // HostError is Host misuse, refused at admission or reported by Pump at drain. Its Code comes
