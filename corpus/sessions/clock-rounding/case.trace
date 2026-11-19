@@ -1,0 +1,9 @@
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> pump clock=2026-09-30T10:00:00Z
+pumped state=idle fuel=0
+> pump clock=2026-09-30T10:00:00.000002Z
+pumped state=idle fuel=0
+> pump clock=2026-09-30T10:00:00.000004Z
+pumped state=idle fuel=0
+> vars
+vars session

@@ -1,0 +1,12 @@
+# A Library Handler may use say, which counts as console.write (#2329).
+> :clock virtual 2026-09-30T10:00:00Z
+> :library add base
+| function f
+|   return 1
+| end f
+| on greet n
+|   say n
+| end greet
+> use f from base
+> f()
+1

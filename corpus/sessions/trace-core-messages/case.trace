@@ -1,0 +1,18 @@
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="script variable caught" identity=b2aeab9d0eaef70fe8764bfb71e0b94b24a3a1a6815a12b2854979a724a97e9f
+> extend session source="on error e" & newline & " put e into caught" & newline & " send seen with [e] to session" & newline & "end error" identity=7c2f212e1e250a0ad09f50fc147c313fe35bdf949db6fb284365e966e05e6d7d
+> extend session source="on seen x" & newline & " return x" & newline & "end seen" identity=521b3325731c27e828045eef7fb648df5b37f9359c0636094d9496454b5686e1
+> extend session source="on entry1" & newline & "return 1 / 0" & newline & "end entry1" & newline identity=9a0f24f451b46b8c0e485b005ab6f5022061589f616e8b963a54ee741649edf4
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+raise session/r1 code="division by zero" at=session+4:4 pos=2:10
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=13 alloc=0 state=8 end=error
+run session/r1 outcome=errored delivery=d1 handler=entry1 error={code: "division by zero", at: {unit: "session+4", handler: "entry1", line: 2, column: 10}} fuel=13 alloc=0
+send session/r2 to=session message=seen args=[[{code: "division by zero", at: {unit: "session+4", handler: "entry1", line: 2, column: 10}}]]
+seg session/r2 start from=session/r1 handler=error clause=1 fuel=50 alloc=834 state=810 end=return
+run session/r2 outcome=completed handler=error fuel=50 alloc=834
+seg session/r3 start from=session/r2 handler=seen clause=1 fuel=7 alloc=0 state=377 end=return
+run session/r3 outcome=completed handler=seen value=[{code: "division by zero", at: {unit: "session+4", handler: "entry1", line: 2, column: 10}}] fuel=7 alloc=0
+pumped state=idle fuel=70
+> vars
+vars session caught={code: "division by zero", at: {unit: "session+4", handler: "entry1", line: 2, column: 10}}

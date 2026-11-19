@@ -1,0 +1,18 @@
+# A Core-raised error map in a trace row has no message, at any depth (#2329).
+> :clock virtual 2026-09-30T10:00:00Z
+> script variable caught
+> on error e
+|  put e into caught
+|  send seen with [e] to session
+| end error
+> on seen x
+|  return x
+| end seen
+> :trace error
+> :trace seen
+> 1 / 0
+! error {code: "division by zero"} at 1:3
+trace start {script: "session", run: "session/r2", selector: "error", args: [{code: "division by zero", at: {unit: "session+4", handler: "entry1", line: 2, column: 10}}]}
+trace end {script: "session", run: "session/r2", selector: "error", outcome: "completed", result: nothing}
+trace start {script: "session", run: "session/r3", selector: "seen", args: [[{code: "division by zero", at: {unit: "session+4", handler: "entry1", line: 2, column: 10}}]]}
+trace end {script: "session", run: "session/r3", selector: "seen", outcome: "completed", result: [{code: "division by zero", at: {unit: "session+4", handler: "entry1", line: 2, column: 10}}]}

@@ -88,15 +88,14 @@ func TestSessionStoreFilesAndAtomicRefusals(t *testing.T) {
 	if written["out.json"] != `{"a":[1,"two"],"b":{"$quantity":["2.5","km"]}}` {
 		t.Fatal(written)
 	}
-	// The Zig Session Host loads a null value as a key, and refuses a key
-	// that looks like a tag (#2329).
+	input(t, h, ":store load nothing.json other", "loaded 0 keys")
+	input(t, h, ":store load tag.json tags", "loaded 1 keys")
+	input(t, h, ":store tags", `"$map" = 7`)
 	input(t, h, ":store load nested.json nested", "loaded 1 keys")
 	input(t, h, ":store nested", `"k" = {"$x": 2}`)
 	input(t, h, ":store clear", "cleared default")
 	input(t, h, ":store")
-	// The Zig Session Host takes `:store a b` as a save, and `:store clear`
-	// with further lines as a clear (#2329).
-	for _, source := range []string{":store save", ":store clear a b", ":store load"} {
+	for _, source := range []string{":store save", ":store a b", ":store clear a b", ":store load", ":store clear\n{}"} {
 		input(t, h, source, "! bad arguments")
 	}
 }
@@ -110,14 +109,13 @@ func TestSessionStoreLoadQuotas(t *testing.T) {
 	input(t, h, ":store")
 }
 func TestSessionStoreTranscriptParity(t *testing.T) {
-	t.Skip("the Zig Session Host records no empty setup (#2329)")
 	h, items, _ := storeSession(map[string]string{"scores.json": "{\n  \"best\": 9\n}\n"})
 	input(t, h, ":grant s store")
 	input(t, h, ":store load scores.json", "loaded 1 keys")
 	input(t, h, "on best\n  ask s to get \"best\"\n  say it\nend best")
 	input(t, h, "best", "9")
 	// Same Transcript asserted by the TS Session Host tests.
-	expected := "> :grant s store\n> :store load\n| {\n|   \"best\": 9\n| }\nloaded 1 keys\n% {\"objects\":{},\"type\":\"setup\"}\n> on best\n|   ask s to get \"best\"\n|   say it\n| end best\n> best\n@ 2026-10-07T10:00:00Z\n9\n"
+	expected := "> :grant s store\n> :store load\n| {\n|   \"best\": 9\n| }\nloaded 1 keys\n> on best\n|   ask s to get \"best\"\n|   say it\n| end best\n> best\n@ 2026-10-07T10:00:00Z\n9\n"
 	recorded := driver.WriteTranscript(*items)
 	if recorded != expected {
 		t.Fatalf("got:\n%s\nwant:\n%s", recorded, expected)

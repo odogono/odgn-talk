@@ -1,0 +1,11 @@
+# :clock advance rounds half-even to whole microseconds, and refuses a negative duration even when it rounds to nothing (#2329).
+> :clock virtual 2026-09-30T10:00:00Z
+> :clock advance 0.0000005 s
+> :clock advance 0.0000015 s
+> :clock advance 0.0000025 s
+> :clock
+virtual 2026-09-30T10:00:00.000004Z
+> :clock advance -0.0000000001 s
+! bad arguments
+> :clock
+virtual 2026-09-30T10:00:00.000004Z

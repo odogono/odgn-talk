@@ -104,7 +104,6 @@ func TestSessionStoreTraceReplaysIndependently(t *testing.T) {
 }
 
 func TestSessionObjectTraceReplaysIndependently(t *testing.T) {
-	t.Skip("the Zig Session Host doesn't describe a held Host Object's metadata (#2329)")
 	var items []session.Item
 	var trace []string
 	reads := 0
