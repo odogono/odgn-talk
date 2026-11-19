@@ -83,7 +83,8 @@ pub const Token = struct {
     /// Whether space, a comment or a line start comes straight before it,
     /// which tells a call's `(` from a grouping one.
     space_before: bool,
-    /// For `invalid`: the error's code and where it is reported.
+    /// For `invalid`: the error's code and where it is reported. The end of
+    /// its range is in `Shared.error_ends`, so tokens stay small.
     code: Code = .unexpected_token,
     offset: usize = 0,
 
@@ -195,6 +196,13 @@ pub const Shared = struct {
     fenced: std.AutoHashMapUnmanaged(usize, Fenced) = .empty,
     /// The error a failed scan found, until `next` turns it into a token.
     diagnostic: ?Diagnostic = null,
+    /// The exclusive end of each lexical error's range, by its offset.
+    error_ends: std.AutoHashMapUnmanaged(usize, usize) = .empty,
+
+    /// The lexical error at `t`, an `invalid` token, with its range.
+    pub fn failure(self: *const Shared, t: Token) Diagnostic {
+        return .{ .code = t.code, .offset = t.offset, .end = self.error_ends.get(t.offset) orelse characterEnd(self.source, t.offset) };
+    }
 };
 
 pub const Lexer = struct {
@@ -212,8 +220,14 @@ pub const Lexer = struct {
         return .{ .shared = self.shared, .limit = h.end };
     }
 
+    /// Fails at `offset`, its range the one character there.
     fn fail(self: Lexer, code: Code, offset: usize) error{Syntax} {
-        self.shared.diagnostic = .{ .code = code, .offset = offset, .end = characterEnd(self.shared.source, offset) };
+        return self.failRange(code, offset, characterEnd(self.shared.source, offset));
+    }
+
+    /// Fails at `offset`, its range the token that starts there, to `end`.
+    fn failRange(self: Lexer, code: Code, offset: usize, end: usize) error{Syntax} {
+        self.shared.diagnostic = .{ .code = code, .offset = offset, .end = end };
         return error.Syntax;
     }
 
@@ -250,6 +264,7 @@ pub const Lexer = struct {
             error.Syntax => {
                 const d = self.shared.diagnostic.?;
                 self.shared.diagnostic = null;
+                try self.shared.error_ends.put(self.shared.arena, d.offset, d.end);
                 return .{ .kind = .invalid, .start = at, .end = at + 1, .space_before = false, .code = d.code, .offset = d.offset };
             },
             else => |other| other,
@@ -365,7 +380,7 @@ pub const Lexer = struct {
         const stop = end orelse return null;
         const text = s[at..stop];
         if (mode == .conversion and std.mem.indexOfAny(u8, text, "*/^") == null) return null;
-        if (!validUnit(text)) return self.fail(.bad_unit, at);
+        if (!validUnit(text)) return self.failRange(.bad_unit, at, stop);
         return stop - at;
     }
 
@@ -378,7 +393,8 @@ pub const Lexer = struct {
             '\n', '\r' => break,
             else => {},
         };
-        return self.fail(.unterminated_text, at);
+        // Its token runs to its line's end.
+        return self.failRange(.unterminated_text, at, i);
     }
 
     fn remember(self: Lexer, at: usize, f: Fenced) Error!Fenced {
@@ -463,7 +479,8 @@ pub const Lexer = struct {
                 else => {},
             }
             if (c == '}' and depth == 0) {
-                if (empty) return self.fail(.empty_interpolation, dollar);
+                // At the hole's `${`.
+                if (empty) return self.failRange(.empty_interpolation, dollar, dollar + 2);
                 return i;
             }
             if (c == '-' and i + 1 < self.limit and s[i + 1] == '-') {
@@ -859,7 +876,7 @@ const Fixture = struct {
         while (true) {
             const t = try f.lexer().next(pos, mode);
             if (t.kind == .invalid) {
-                f.shared.diagnostic = .{ .code = t.code, .offset = t.offset, .end = characterEnd(f.shared.source, t.offset) };
+                f.shared.diagnostic = f.shared.failure(t);
                 return error.Syntax;
             }
             if (out.items.len > 0) try out.append(a, ' ');

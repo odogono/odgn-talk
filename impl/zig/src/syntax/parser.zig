@@ -341,7 +341,7 @@ const Parser = struct {
 
     fn failAt(p: *Parser, t: Token) error{Syntax} {
         if (t.kind == .invalid) {
-            if (p.failure == null) p.failure = .{ .code = t.code, .offset = t.offset, .end = lexer.characterEnd(p.lex.shared.source, t.offset) };
+            if (p.failure == null) p.failure = p.lex.shared.failure(t);
             return error.Syntax;
         }
         if (p.unitWithoutNumber(t)) return p.failCode(.unit_without_number, t);
@@ -2569,8 +2569,12 @@ test "a syntax error's range is the token it is reported at, its end exclusive" 
     // A multi-line text literal's range crosses its lines.
     try expectRange("on t\n  put \"\"\"\n    a\u{1F600}\n    \"\"\" into 3\nend t\n", "not a container at 4:14-4:15");
     try expectRange("on t\n  put 1 into \"\"\"\n    a\u{1F600}\n    \"\"\"\nend t\n", "not a container at 2:14-4:8");
-    // A lexical error's range is the one character there.
+    // A lexical error's range is its token: a bad character, a Unit, a
+    // quoted text to its line's end, and an empty hole's `${`.
     try expectRange("on t\n  put \u{1F600} into x\nend t\n", "bad character at 2:7-2:8");
+    try expectRange("on t\n  return 5 m*ft\nend t\n", "bad unit at 2:12-2:16");
+    try expectRange("on t\n  put \"\u{1F600}bc into x\r\nend t\n", "unterminated text at 2:7-2:18");
+    try expectRange("on t\n  return `${}`\nend t\n", "empty interpolation at 2:11-2:13");
 }
 
 fn expectOutcome(source: []const u8, expected: []const u8) !void {
