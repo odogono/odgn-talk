@@ -811,7 +811,7 @@ export class TsGroup implements Group {
   private readonly trace: ((line: string) => void) | undefined;
   private readonly onReady: (() => void) | undefined;
   private readonly scripts: ScriptState[] = [];
-  private readonly libraries = new Map<string, Library>();
+  private readonly libraryMap = new Map<string, Library>();
   private readonly waits = new Waits<Running, ScriptState>();
   private readonly functionGroup = {};
   private readonly objects = new Map<string, ObjectState>();
@@ -1061,7 +1061,7 @@ export class TsGroup implements Group {
             visit(code, s.name);
           }
         }
-        for (const library of this.libraries.values()) {
+        for (const library of this.libraryMap.values()) {
           visit(codeOf(library));
         }
         return sources;
@@ -1257,7 +1257,7 @@ export class TsGroup implements Group {
         canonicalJSON({
           language: languageVersion,
           costModel: costModel.version,
-          libraries: [...this.libraries.values()]
+          libraries: [...this.libraryMap.values()]
             .sort(byName)
             .map(l => [l.name, identityOf(l)]),
           scripts,
@@ -1331,7 +1331,7 @@ export class TsGroup implements Group {
       issued: this.issued,
       chargeCounter: this.chargeCounter,
       lastClock: this.lastClock,
-      libraries: this.libraries,
+      libraries: this.libraryMap,
       name: this.savedName ?? this.name,
       objects: this.objects,
       randomState: this.randomState,
@@ -1387,12 +1387,12 @@ export class TsGroup implements Group {
         object.parent === undefined ? null : objects[object.parent]!;
     });
     for (const library of o.libraries) {
-      group.libraries.set(library.name, library);
+      group.libraryMap.set(library.name, library);
     }
     let mismatch = save.libraries.some(
       l =>
-        !group.libraries.has(l.name) ||
-        identityOf(group.libraries.get(l.name)!) !== hexOf(l.identity),
+        !group.libraryMap.has(l.name) ||
+        identityOf(group.libraryMap.get(l.name)!) !== hexOf(l.identity),
     );
     // A mismatch in anything but Script code is never partial (ADR 0143).
     let wholeGroup =
@@ -1539,7 +1539,7 @@ export class TsGroup implements Group {
       mismatch && !wholeGroup && o.onMismatch === 'reload changed';
     const variablesOnly = mismatch && !partial;
     const withheld = save.libraries
-      .filter(l => !group.libraries.has(l.name))
+      .filter(l => !group.libraryMap.has(l.name))
       .map(l => l.name);
     const restoreLine = (result?: RestoreResult) =>
       recordLine(
@@ -3645,6 +3645,15 @@ export class TsGroup implements Group {
     return this.scripts.map(s => s.name);
   }
 
+  /**
+   * Any time, inside a Pump too. The user Libraries it holds now, as
+   * `restore` takes them, including those `replaceLibrary` recompiled
+   * (chapter 9); not a Host Input, and not traced.
+   */
+  libraries(): Library[] {
+    return [...this.libraryMap.values()];
+  }
+
   // Notify once per accepted Host Input, including urgent inputs drained in this Pump.
   private queueInput(input: QueuedInput, notify = true): void {
     const landing = this.debugController?.current;
@@ -3781,7 +3790,7 @@ export class TsGroup implements Group {
       'script',
       o.name,
       o.source,
-      this.libraries,
+      this.libraryMap,
       objects,
       declarationsOf(grants),
       undefined,
@@ -3923,7 +3932,7 @@ export class TsGroup implements Group {
     s: ScriptState,
     source: string,
     carry: CarryOver,
-    libraries = this.libraries,
+    libraries = this.libraryMap,
     extensions: readonly string[] = [],
     keepMailbox = false,
   ) {
@@ -4018,7 +4027,7 @@ export class TsGroup implements Group {
     this.worker();
     this.requireKnownEffects();
     const s = this.scripts.find(s => s.name === name)!;
-    const p = prepare('script', name, source, this.libraries);
+    const p = prepare('script', name, source, this.libraryMap);
     this.trace?.(
       recordLine(
         'reload',
@@ -4036,7 +4045,7 @@ export class TsGroup implements Group {
       s,
       source,
       carry,
-      this.libraries,
+      this.libraryMap,
       [],
       keepMailbox,
     );
@@ -4046,7 +4055,7 @@ export class TsGroup implements Group {
   private extension(
     s: ScriptState,
     source: string,
-    libraries = this.libraries,
+    libraries = this.libraryMap,
   ) {
     const name = `${s.name}+${s.units.length}`;
     const existing: Record<string, ExistingName> = {};
@@ -4320,12 +4329,12 @@ export class TsGroup implements Group {
     if (stdlibNames.has(l.name)) {
       refuse('reserved name', `${l.name} is a stdlib Library's name`);
     }
-    if (this.libraries.has(l.name)) {
+    if (this.libraryMap.has(l.name)) {
       refuse('name reused', `The Group already holds a Library ${l.name}`);
     }
     // The stdlib Libraries are always there.
     for (const i of l.imports.filter(i => !stdlibNames.has(i.name))) {
-      const held = this.libraries.get(i.name);
+      const held = this.libraryMap.get(i.name);
       if (!held || identityOf(held) !== identityOf(i)) {
         refuse(
           'library mismatch',
@@ -4333,7 +4342,7 @@ export class TsGroup implements Group {
         );
       }
     }
-    this.libraries.set(l.name, l);
+    this.libraryMap.set(l.name, l);
   }
 
   /** Worker. Prepare every dependent before changing the Group. */
@@ -4365,25 +4374,25 @@ export class TsGroup implements Group {
     if (stdlibNames.has(l.name)) {
       refuse('reserved name');
     }
-    if (!this.libraries.has(l.name)) {
+    if (!this.libraryMap.has(l.name)) {
       refuse('library mismatch');
     }
     for (const imported of l.imports.filter(i => !stdlibNames.has(i.name))) {
-      const held = this.libraries.get(imported.name);
+      const held = this.libraryMap.get(imported.name);
       if (!held || identityOf(held) !== identityOf(imported)) {
         refuse('library mismatch');
       }
     }
     let libraries: Map<string, Library>;
     try {
-      libraries = replacementLibraries(this.libraries, l);
+      libraries = replacementLibraries(this.libraryMap, l);
     } catch (error) {
       this.writeDiagnostics(error);
       throw error;
     }
     const affected = new Set(
       [...libraries]
-        .filter(([name, library]) => library !== this.libraries.get(name))
+        .filter(([name, library]) => library !== this.libraryMap.get(name))
         .map(([name]) => name),
     );
     affected.add(l.name);
@@ -4410,9 +4419,9 @@ export class TsGroup implements Group {
     if (this.effectStateUnknown) {
       return reports;
     }
-    this.libraries.clear();
+    this.libraryMap.clear();
     for (const [name, library] of libraries) {
-      this.libraries.set(name, library);
+      this.libraryMap.set(name, library);
     }
     return reports;
   }

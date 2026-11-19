@@ -1109,6 +1109,14 @@ export class WasmGroup implements Group {
     return [...this.#scripts.keys()];
   }
 
+  /** Not yet: the reactor's `libraries` message comes with #2349. */
+  libraries(): Library[] {
+    throw new HostError(
+      'invalid value',
+      "This reactor can't list a Group's Libraries yet (#2349)",
+    );
+  }
+
   #grantHandles(grants: Readonly<Record<string, Grant<unknown>>>) {
     return Object.fromEntries(
       Object.entries(grants).map(([name, g]) => [name, this.#session.grant(g)]),

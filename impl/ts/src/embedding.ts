@@ -105,6 +105,7 @@ export type Group = {
   dispose(o: HostObject): void;
   fingerprint(): Uint8Array;
   inspect(): Inspection;
+  libraries(): Library[];
   load(o: LoadOptions): Script;
   readonly name: string;
   object<N>(
