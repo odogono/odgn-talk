@@ -495,20 +495,30 @@ pub const Stores = struct {
     /// Encoding replaces the Store's contents, as one commit. Null when it
     /// is refused.
     pub fn load(s: *Stores, name: []const u8, json: []const u8) !?usize {
-        var v: ?*c.talk_value = null;
-        if (c.talk_decode_value(json.ptr, json.len, null, null, &v) != c.TALK_OK) return null;
-        defer c.talk_value_release(v);
-        const value: *const Value = @ptrCast(@alignCast(v.?));
-        if (value.data != .map) return null;
+        // Each member on its own: its name is the key as written, never a
+        // tag, and only its value is a Value Encoding. A value of Nothing is
+        // a missing key.
+        if (!northtalk.unicode.utf8.validate(json)) return null;
+        var arena: std.heap.ArenaAllocator = .init(s.gpa);
+        defer arena.deinit();
+        const ja = arena.allocator();
+        const parsed = std.json.parseFromSliceLeaky(std.json.Value, ja, json, .{ .parse_numbers = false, .duplicate_field_behavior = .@"error" }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else null;
+        if (parsed != .object) return null;
         var next: std.StringArrayHashMapUnmanaged(Store.Entry) = .empty;
         var total: u64 = 0;
-        for (0..value.data.map.len) |map_index| {
-            const p = value.data.map.at(map_index);
-            if (p.key.len == 0) return null;
-            const e = s.encode(@ptrCast(p.value)) orelse return null;
+        var members = parsed.object.iterator();
+        while (members.next()) |member| {
+            const raw = member.key_ptr.*;
+            if (!northtalk.unicode.utf8.validate(raw)) return null;
+            const key = try northtalk.unicode.nfc(ja, raw);
+            if (key.len == 0 or next.contains(key)) return null;
+            const value = northtalk.encoding.decodeParsed(s.gpa, member.value_ptr.*, .{}) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else null;
+            defer value.release();
+            if (value.data == .nothing) continue;
+            const e = s.encode(@ptrCast(value)) orelse return null;
             if (e.size > quota.value) return null;
-            total += textSize(p.key) + e.size;
-            try next.put(s.a(), try s.a().dupe(u8, p.key), e);
+            total += textSize(key) + e.size;
+            try next.put(s.a(), try s.a().dupe(u8, key), e);
         }
         if (next.count() > quota.keys or total > quota.size) return null;
         const store = s.named(name);

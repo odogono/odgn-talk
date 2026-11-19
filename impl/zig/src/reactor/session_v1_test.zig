@@ -648,3 +648,130 @@ test "a prop-result whose envelopes include a malformed one applies none of them
     try std.testing.expectEqual(@as(usize, 1), delivered);
     try std.testing.expect(std.mem.endsWith(u8, g.output.items[g.output.items.len - 1], "] pong"));
 }
+
+// ------------------------------------------------------------ TS parity (#2329)
+
+/// Sends one input and returns the output rows it printed.
+fn said(g: *Guest, input: []const u8, more: []const []const u8) ![]const []const u8 {
+    const before = g.output.items.len;
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .input = input, .more = more }));
+    return g.output.items[before..];
+}
+
+fn expectRows(want: []const []const u8, got: []const []const u8) !void {
+    std.testing.expectEqual(want.len, got.len) catch |e| {
+        for (got) |l| std.debug.print("got: {s}\n", .{l});
+        return e;
+    };
+    for (want, got) |x, y| try std.testing.expectEqualStrings(x, y);
+}
+
+fn parityGuest(g: *Guest) !void {
+    try g.init(std.testing.allocator);
+    _ = try okOf(try g.sendAs(null, "session-open", .{ .clock = "2026-09-30T10:00:00Z" }));
+}
+
+test ":clock advance rounds an exact duration half-even to whole microseconds" {
+    var g: Guest = undefined;
+    try parityGuest(&g);
+    defer g.deinit();
+    for ([_][]const u8{ ":clock advance 0.0000005 s", ":clock advance 0.0000015 s", ":clock advance 0.0000025 s" }) |x| try expectRows(&.{}, try said(&g, x, &.{}));
+    try expectRows(&.{"virtual 2026-09-30T10:00:00.000004Z"}, try said(&g, ":clock", &.{}));
+    // A negative duration is refused before rounding.
+    try expectRows(&.{"! bad arguments"}, try said(&g, ":clock advance -0.0000000001 s", &.{}));
+}
+
+test ":fuel prints a pending row when its Entry yields, then the final row on settlement" {
+    var g: Guest = undefined;
+    try parityGuest(&g);
+    defer g.deinit();
+    const asked = try okOf(try g.sendAs(null, "session-input", .{ .input = ":fuel ask console to read and wait" }));
+    try std.testing.expectEqualStrings("read", asked.object.get("waiting").?.string);
+    try expectRows(&.{"fuel {entry: \"entry1\", fuel: 14, state: \"pending\", interrupted: false, runs: 1, queued: 0}"}, g.output.items);
+    const before = g.output.items.len;
+    _ = try okOf(try g.sendAs(null, "session-input", .{ .line = "hi" }));
+    try expectRows(&.{"fuel {entry: \"entry1\", fuel: 19, state: \"complete\", interrupted: false, runs: 0, queued: 0}"}, g.output.items[before..]);
+    const settled = g.output.items.len;
+    _ = try okOf(try g.sendAs(null, "session-pump", .{}));
+    try std.testing.expectEqual(settled, g.output.items.len);
+}
+
+test ":store load reads each member on its own, and Nothing is a missing key" {
+    var g: Guest = undefined;
+    try parityGuest(&g);
+    defer g.deinit();
+    try expectRows(&.{"loaded 0 keys"}, try said(&g, ":store load", &.{"{\"k\":null}"}));
+    try expectRows(&.{}, try said(&g, ":store", &.{}));
+    // A member name is the key as written, never a tag.
+    try expectRows(&.{"loaded 1 keys"}, try said(&g, ":store load", &.{"{\"$map\":7}"}));
+    try expectRows(&.{"\"$map\" = 7"}, try said(&g, ":store", &.{}));
+    try expectRows(&.{"loaded 1 keys"}, try said(&g, ":store load nested", &.{"{\"k\":{\"$map\":[[\"$x\",2]]}}"}));
+    try expectRows(&.{"\"k\" = {\"$x\": 2}"}, try said(&g, ":store nested", &.{}));
+    for ([_][]const u8{ "[1]", "{ \"\": 1 }", "{\"k\":1,\"k\":2}", "{\"\\ud800\":1}", "{\"k\":{\"$dec\":\"3\"}}", "{\"k\":1.0}", "{\"k\":{\"$map\":[]}}" }) |file|
+        try expectRows(&.{"! bad arguments"}, try said(&g, ":store load", &.{file}));
+    try expectRows(&.{"\"$map\" = 7"}, try said(&g, ":store", &.{}));
+}
+
+test ":store takes | lines only for load, and saves only by name" {
+    var g: Guest = undefined;
+    try parityGuest(&g);
+    defer g.deinit();
+    try expectRows(&.{"! bad arguments"}, try said(&g, ":store a b", &.{}));
+    try expectRows(&.{"loaded 1 keys"}, try said(&g, ":store load", &.{"{\"k\":1}"}));
+    try expectRows(&.{"! bad arguments"}, try said(&g, ":store clear", &.{"{}"}));
+    try expectRows(&.{"\"k\" = 1"}, try said(&g, ":store", &.{}));
+}
+
+test "a Library Handler may say, as console.write" {
+    var g: Guest = undefined;
+    try parityGuest(&g);
+    defer g.deinit();
+    try expectRows(&.{}, try said(&g, ":library add base", &.{ "function f", "return 1", "end f", "on greet n", "say n", "end greet" }));
+    try expectRows(&.{}, try said(&g, ":library add wrapper", &.{ "use f, greet from base", "function g", "return f()", "end g" }));
+    try expectRows(&.{}, try said(&g, "use g from wrapper", &.{}));
+    try expectRows(&.{}, try said(&g, ":library replace base", &.{ "function f", "return 2", "end f", "on greet n", "say n", "end greet" }));
+    try expectRows(&.{"2"}, try said(&g, "g()", &.{}));
+}
+
+test "a Core-raised error map in a trace row has no message" {
+    var g: Guest = undefined;
+    try parityGuest(&g);
+    defer g.deinit();
+    try expectRows(&.{}, try said(&g, "script variable caught", &.{}));
+    try expectRows(&.{}, try said(&g, "on error e", &.{ " put e into caught", " send seen with [e] to session", "end error" }));
+    try expectRows(&.{}, try said(&g, "on seen x", &.{ " return x", "end seen" }));
+    for ([_][]const u8{ ":trace error", ":trace seen" }) |x| try expectRows(&.{}, try said(&g, x, &.{}));
+    const rows = try said(&g, "1 / 0", &.{});
+    var traced: usize = 0;
+    for (rows) |row| {
+        if (!std.mem.startsWith(u8, row, "trace ") or std.mem.indexOf(u8, row, "code: \"division by zero\"") == null) continue;
+        traced += 1;
+        try std.testing.expect(std.mem.indexOf(u8, row, "message:") == null);
+    }
+    // The direct error argument, the relayed argument and its result.
+    std.testing.expectEqual(@as(usize, 3), traced) catch |e| {
+        for (rows) |l| std.debug.print("row: {s}\n", .{l});
+        return e;
+    };
+    // The Handler still holds the whole error.
+    try expectRows(&.{"\"Division by zero\""}, try said(&g, "the message of caught", &.{}));
+}
+
+test ":describe of a binding that holds a Host Object prints its object and property rows" {
+    var g: Guest = undefined;
+    try g.init(std.testing.allocator);
+    defer g.deinit();
+    try openLamp(&g);
+    _ = try said(&g, "put desk into held", &.{});
+    const rows = try said(&g, ":describe held", &.{});
+    var object = false;
+    var property = false;
+    for (rows) |row| {
+        object = object or std.mem.eql(u8, row, "object {kind: \"Lamp\", id: \"desk\", disposed: false}");
+        property = property or std.mem.eql(u8, row, "property {name: \"level\", shape: \"any\", readOnly: true, getCost: {fuel: 0, alloc: 0}, setCost: nothing}");
+    }
+    std.testing.expect(object and property) catch |e| {
+        for (rows) |l| std.debug.print("row: {s}\n", .{l});
+        return e;
+    };
+}

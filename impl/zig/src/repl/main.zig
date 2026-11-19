@@ -206,20 +206,50 @@ fn fileLines(io: std.Io, a: std.mem.Allocator, path: []const u8) ?[]const []cons
 
 /// A command that names a file, `:library add|replace <name> <path>`,
 /// `:script add <name> <path>`,
-/// `:fix <run> <path>` or `:store load [<store>] <path>`, as the Session
+/// `:fix <run> <path>` or `:store load <path> [<store>]`, as the Session
 /// Host takes it: without the path, and with the file's lines.
 fn withFile(io: std.Io, a: std.mem.Allocator, input: transcript.Input) ?transcript.Input {
+    if (input.more.len > 0) return input;
+    const named = fileWord(a, input.first) orelse return input;
+    const lines = fileLines(io, a, named.path) orelse return null;
+    return .{ .first = named.first, .more = lines };
+}
+
+/// The path a command names a file by, and the command without it.
+fn fileWord(a: std.mem.Allocator, first: []const u8) ?struct { path: []const u8, first: []const u8 } {
     var words: std.ArrayList([]const u8) = .empty;
-    var it = std.mem.tokenizeAny(u8, input.first, " \t");
+    var it = std.mem.tokenizeAny(u8, first, " \t");
     while (it.next()) |w| words.append(a, w) catch return null;
     const items = words.items;
-    const names_file = (items.len == 4 and (std.mem.eql(u8, items[0], ":library") or std.mem.eql(u8, items[0], ":script"))) or
-        (items.len == 3 and std.mem.eql(u8, items[0], ":fix")) or
-        (items.len >= 3 and items.len <= 4 and std.mem.eql(u8, items[0], ":store") and std.mem.eql(u8, items[1], "load"));
-    if (!names_file or input.more.len > 0) return input;
-    const lines = fileLines(io, a, items[items.len - 1]) orelse return null;
-    const first = std.mem.join(a, " ", items[0 .. items.len - 1]) catch return null;
-    return .{ .first = first, .more = lines };
+    const at = if ((items.len == 4 and (std.mem.eql(u8, items[0], ":library") or std.mem.eql(u8, items[0], ":script"))) or
+        (items.len == 3 and std.mem.eql(u8, items[0], ":fix")))
+        items.len - 1
+    else if (items.len >= 3 and items.len <= 4 and std.mem.eql(u8, items[0], ":store") and std.mem.eql(u8, items[1], "load"))
+        2
+    else
+        return null;
+    var rest: std.ArrayList([]const u8) = .empty;
+    for (items, 0..) |w, i| if (i != at) rest.append(a, w) catch return null;
+    return .{ .path = items[at], .first = std.mem.join(a, " ", rest.items) catch return null };
+}
+
+test "a command names its file by the word its form gives" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const cases = [_][3][]const u8{
+        .{ ":store load scores.json", "scores.json", ":store load" },
+        .{ ":store load scores.json nested", "scores.json", ":store load nested" },
+        .{ ":library add tools tools.talk", "tools.talk", ":library add tools" },
+        .{ ":script add helper helper.talk", "helper.talk", ":script add helper" },
+        .{ ":fix run1 fixed.talk", "fixed.talk", ":fix run1" },
+    };
+    for (cases) |x| {
+        const named = fileWord(a, x[0]).?;
+        try std.testing.expectEqualStrings(x[1], named.path);
+        try std.testing.expectEqualStrings(x[2], named.first);
+    }
+    for ([_][]const u8{ ":store load", ":store save out.json", ":library add tools", ":vars" }) |x| try std.testing.expect(fileWord(a, x) == null);
 }
 
 pub fn main(init: std.process.Init) !u8 {
