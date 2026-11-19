@@ -494,6 +494,10 @@ describe('The Clock, limits and Runs', () => {
       '! clock backwards',
     ]);
     expect(host.input(':clock advance -1 s')).toEqual(['! bad arguments']);
+    expect(host.input(':clock advance -0.0000000001 s')).toEqual([
+      '! bad arguments',
+    ]);
+    expect(host.input(':clock advance 0.0000005 s')).toEqual([]);
     host.input(':clock real');
     expect(host.input(':clock advance 1 s')).toEqual(['! clock is real']);
     // A real reading earlier than the last Pump's is taken as the last Pump's.
