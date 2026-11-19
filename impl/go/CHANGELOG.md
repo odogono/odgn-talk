@@ -9,6 +9,22 @@ Spec's Data Files.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-19
+
+### Breaking
+
+- **go:** Go sessions run the Zig Session Host through the embedded reactor's `session-v1`, so `session.Host` behaves as the Zig REPL does; `Host.Grants`, `MockOperations`, `UserLibraries`, `AddedScripts`, `GrantBinding`, `ObjectTranscript`, `Source`, the `Documentation` methods, `Record`, `Write`, `ReadCall`, `NewObjectReplay` and the replay-only `Objects` methods are gone, and `Host.Close` ends a session's guest (#2278).
+- **zig:** Give every Zig load diagnostic and syntax error an end position, the exclusive end of the token it is reported at, in `talk_diagnostic`'s `end_line`/`end_col`, the `load error` and `analyze-*` replies' `endLine`/`endCol`, and the Trace's `diag … end=`. `talk_diagnostic` grows, so a C Host built against an earlier `talk.h` must be rebuilt.
+
+### Added
+
+- **go:** Fill in each `Diagnostic`'s `EndLine` and `EndCol`, the exclusive end of the token a load diagnostic is reported at.
+- **go:** Add `northtalk.org/go/peer`, a Peer Router for the `peer` Capability. It carries Remote Sends between the Groups attached to it, and withdraws a Script's Peer Exposures when its `peer` Grant is stopped, revoked or disabled, or when its Group is detached. Reload keeps them (#2268).
+
+### Fixed
+
+- **go:** The Go Runner now withdraws a Script's Peer Exposures when the Script is stopped or its `peer` Grant is revoked or disabled, and keeps them across a Reload. Before, it never withdrew them, so a stopped Script stayed reachable. `northtalk.org/go/peer` gains `Link`, `Connect`, `Close`, `Options.Dial` and `Options.AddressOf` for carrying Remote Sends to other Hosts, and the Runner's mutual TLS and loopback TCP are now links (#2268).
+
 ## [0.3.0] - 2026-11-16
 
 ### Added
