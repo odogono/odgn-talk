@@ -137,7 +137,40 @@ comptime {
     if (std.enums.values(Code).len != grammar.syntax_error.len + 1) @compileError("a Code isn't in grammar.toml");
 }
 
-pub const Diagnostic = struct { code: Code, offset: usize };
+/// A syntax error: its code, where it is reported, and the exclusive end of
+/// its range (chapter 2, Syntax errors), all byte offsets.
+pub const Diagnostic = struct { code: Code, offset: usize, end: usize };
+
+/// The end of a syntax error's or load-time diagnostic's range at token `t`:
+/// the token's end, or its start for a line end or the end of the source,
+/// which have no characters (chapter 2, Syntax errors).
+pub fn rangeEnd(t: Token) usize {
+    return switch (t.kind) {
+        .newline, .eof => t.start,
+        else => t.end,
+    };
+}
+
+/// The end of a lexical error's range at `offset`: the one character there,
+/// or none at a line end or the end of the source.
+pub fn characterEnd(source: []const u8, offset: usize) usize {
+    if (offset >= source.len or source[offset] == '\n' or source[offset] == '\r') return offset;
+    const n = std.unicode.utf8ByteSequenceLength(source[offset]) catch 1;
+    return @min(source.len, offset + n);
+}
+
+/// The end of the range of a token that starts at `offset`, lexed afresh in
+/// `mode`, for a diagnostic that keeps only its start: `offset` itself when
+/// no token starts there.
+pub fn tokenEndAt(arena: Allocator, source: []const u8, offset: usize, mode: Mode) Allocator.Error!usize {
+    if (offset >= source.len) return offset;
+    var shared: Shared = .{ .source = source, .arena = arena };
+    const lex: Lexer = .init(&shared);
+    if (lex.skip(offset) != offset) return offset;
+    const t = try lex.next(offset, mode);
+    if (t.kind == .invalid) return offset;
+    return rangeEnd(t);
+}
 
 const Error = error{Syntax} || Allocator.Error;
 
@@ -180,7 +213,7 @@ pub const Lexer = struct {
     }
 
     fn fail(self: Lexer, code: Code, offset: usize) error{Syntax} {
-        self.shared.diagnostic = .{ .code = code, .offset = offset };
+        self.shared.diagnostic = .{ .code = code, .offset = offset, .end = characterEnd(self.shared.source, offset) };
         return error.Syntax;
     }
 
@@ -762,6 +795,19 @@ pub const Lines = struct {
 
     pub const Position = struct { line: usize, column: usize };
 
+    /// The byte offset of `p`, the inverse of `position`: the line's end, or
+    /// the source's, when `p` is past it.
+    pub fn offsetOf(self: *const Lines, p: Position) usize {
+        if (p.line == 0 or p.line > self.starts.len) return self.source.len;
+        var i = self.starts[p.line - 1];
+        var column: usize = 1;
+        while (column < p.column and i < self.source.len and self.source[i] != '\n' and self.source[i] != '\r') {
+            i += std.unicode.utf8ByteSequenceLength(self.source[i]) catch 1;
+            column += 1;
+        }
+        return @min(i, self.source.len);
+    }
+
     pub fn position(self: *Lines, offset: usize) Position {
         var lo: usize = 0;
         var hi = self.starts.len - 1;
@@ -813,7 +859,7 @@ const Fixture = struct {
         while (true) {
             const t = try f.lexer().next(pos, mode);
             if (t.kind == .invalid) {
-                f.shared.diagnostic = .{ .code = t.code, .offset = t.offset };
+                f.shared.diagnostic = .{ .code = t.code, .offset = t.offset, .end = characterEnd(f.shared.source, t.offset) };
                 return error.Syntax;
             }
             if (out.items.len > 0) try out.append(a, ' ');
@@ -994,4 +1040,25 @@ test "positions count scalar values" {
     try testing.expectEqual(Lines.Position{ .line = 2, .column = 4 }, lines.position(10));
     try testing.expectEqual(Lines.Position{ .line = 3, .column = 1 }, lines.position(12));
     try testing.expectEqual(Lines.Position{ .line = 1, .column = 2 }, lines.position(1));
+}
+
+test "offsets from positions, and a range's end at a token or character" {
+    const source = "a\r\nbé\u{1F600}x\ry";
+    var lines: Lines = try .init(testing.allocator, source);
+    defer lines.deinit(testing.allocator);
+    for ([_]usize{ 0, 1, 3, 4, 6, 10, 12, 13 }) |offset| try testing.expectEqual(offset, lines.offsetOf(lines.position(offset)));
+    // An astral character is one column, and four bytes.
+    try testing.expectEqual(@as(usize, 10), characterEnd(source, 6));
+    // A line end, LF or CRLF, and the end of the source have no characters.
+    try testing.expectEqual(@as(usize, 1), characterEnd(source, 1));
+    try testing.expectEqual(@as(usize, 11), characterEnd(source, 11));
+    try testing.expectEqual(source.len, characterEnd(source, source.len));
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    // The token at a raising instruction's position, or none.
+    try testing.expectEqual(@as(usize, 3), try tokenEndAt(a, "1 / 0", 2, .operator));
+    try testing.expectEqual(@as(usize, 1), try tokenEndAt(a, "1 / 0", 1, .operator));
+    try testing.expectEqual(@as(usize, 1), try tokenEndAt(a, "x\n", 1, .operator));
+    try testing.expectEqual(@as(usize, 2), try tokenEndAt(a, "x\n", 2, .operator));
 }

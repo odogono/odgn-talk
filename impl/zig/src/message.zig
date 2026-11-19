@@ -619,7 +619,7 @@ fn diagnosticMessage(code: []const u8) []const u8 {
 }
 
 /// The `load error` reply for a refused load, from the `diag` records
-/// its Trace made: `diag <unit> code="…" pos=<line>:<col>`.
+/// its Trace made: `diag <unit> code="…" pos=<line>:<col> end=<line>:<col>`.
 fn loadError(gpa: Allocator, ref: i64, lines: []const []u8, group: *const machine.Group) []u8 {
     if (handling) |s| s.reply_error = true;
     var o = Out.init(gpa);
@@ -636,12 +636,11 @@ fn loadError(gpa: Allocator, ref: i64, lines: []const []u8, group: *const machin
         const code_end = std.mem.indexOfScalar(u8, rest, '"') orelse continue;
         const code = rest[0..code_end];
         const pos_at = std.mem.indexOf(u8, rest, " pos=") orelse continue;
-        const pos = rest[pos_at + 5 ..];
-        const colon = std.mem.indexOfScalar(u8, pos, ':') orelse continue;
-        const line_no = std.fmt.parseInt(i64, pos[0..colon], 10) catch continue;
-        const col = std.fmt.parseInt(i64, pos[colon + 1 ..], 10) catch continue;
-        const hint = if (std.mem.eql(u8, code, "unknown name")) group.whoseHint(unit, line_no, col) else null;
-        writeDiagnostic(&o, &first, code, unit, line_no, col, hint);
+        const at = tracePos(rest[pos_at + 5 ..]) orelse continue;
+        const end_at = std.mem.indexOf(u8, rest, " end=") orelse continue;
+        const end = tracePos(rest[end_at + 5 ..]) orelse continue;
+        const hint = if (std.mem.eql(u8, code, "unknown name")) group.whoseHint(unit, at.line, at.col) else null;
+        writeDiagnostic(&o, &first, code, unit, at, end, hint);
     }
     o.raw("]}}") catch {};
     return o.finish() catch protocolError(gpa, ref, "out of memory");
@@ -655,14 +654,26 @@ fn libraryLoadError(gpa: Allocator, ref: i64, e: *const talk.LoadError) []u8 {
     o.int(ref) catch {};
     o.raw(",\"err\":{\"kind\":\"load error\",\"diagnostics\":[") catch {};
     var first = true;
-    for (e.diagnostics[0..e.diagnostics_len]) |d| writeDiagnostic(&o, &first, d.code[0..d.code_len], d.unit[0..d.unit_len], d.line, d.col, null);
+    for (e.diagnostics[0..e.diagnostics_len]) |d| writeDiagnostic(&o, &first, d.code[0..d.code_len], d.unit[0..d.unit_len], .{ .line = d.line, .col = d.col }, .{ .line = d.end_line, .col = d.end_col }, null);
     o.raw("]}}") catch {};
     return o.finish() catch protocolError(gpa, ref, "out of memory");
 }
 
-/// `whose_name` is an unknown name inside a Whose Clause condition, where
-/// only the first token is a Whose Key (ADR 0074).
-fn writeDiagnostic(o: *Out, first: *bool, code: []const u8, unit: []const u8, line: i64, col: i64, whose_name: ?[]const u8) void {
+const Pos = struct { line: i64, col: i64 };
+
+/// A `diag` record's `<line>:<col>`, up to the next space.
+fn tracePos(text: []const u8) ?Pos {
+    const pos = text[0 .. std.mem.indexOfAny(u8, text, " \n") orelse text.len];
+    const colon = std.mem.indexOfScalar(u8, pos, ':') orelse return null;
+    const line = std.fmt.parseInt(i64, pos[0..colon], 10) catch return null;
+    const col = std.fmt.parseInt(i64, pos[colon + 1 ..], 10) catch return null;
+    return .{ .line = line, .col = col };
+}
+
+/// `end` is the exclusive end of its range. `whose_name` is an unknown name
+/// inside a Whose Clause condition, where only the first token is a Whose
+/// Key (ADR 0074).
+fn writeDiagnostic(o: *Out, first: *bool, code: []const u8, unit: []const u8, at: Pos, end: Pos, whose_name: ?[]const u8) void {
     if (!first.*) o.raw(",") catch {};
     first.* = false;
     o.raw("{\"code\":") catch {};
@@ -676,9 +687,13 @@ fn writeDiagnostic(o: *Out, first: *bool, code: []const u8, unit: []const u8, li
     o.raw(",\"unit\":") catch {};
     o.text(unit) catch {};
     o.raw(",\"line\":") catch {};
-    o.int(line) catch {};
+    o.int(at.line) catch {};
     o.raw(",\"col\":") catch {};
-    o.int(col) catch {};
+    o.int(at.col) catch {};
+    o.raw(",\"endLine\":") catch {};
+    o.int(end.line) catch {};
+    o.raw(",\"endCol\":") catch {};
+    o.int(end.col) catch {};
     o.raw("}") catch {};
 }
 
@@ -2381,6 +2396,10 @@ fn writeProblem(o: *Out, p: analysis.Problem) Allocator.Error!void {
     try o.int(p.line);
     try o.raw(",\"col\":");
     try o.int(p.column);
+    try o.raw(",\"endLine\":");
+    try o.int(p.end_line);
+    try o.raw(",\"endCol\":");
+    try o.int(p.end_column);
     try o.raw(if (p.incomplete) ",\"incomplete\":true" else ",\"incomplete\":false");
     try o.raw(if (p.trailing) ",\"trailing\":true}" else ",\"trailing\":false}");
 }
@@ -6866,6 +6885,47 @@ test "a prop need, a load error's diagnostics, and a fault that loses nothing" {
     try std.testing.expectEqualStrings("limit fault", spun.object.get("outcome").?.string);
     try std.testing.expectEqualStrings("fuel", spun.object.get("limit").?.string);
     _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{10}));
+}
+
+test "a load error's diagnostics and an analysis problem carry their range (#2334)" {
+    const t = std.testing;
+    const s = Session.init(t.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"analysis-v1\"]}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{2}));
+    const Want = struct { code: []const u8, line: i64, col: i64, end_line: i64, end_col: i64 };
+    const expect = struct {
+        fn one(reply: std.json.Value, want: Want) !void {
+            const ds = reply.object.get("err").?.object.get("diagnostics").?.array.items;
+            try t.expectEqual(@as(usize, 1), ds.len);
+            const d = ds[0].object;
+            try t.expectEqualStrings(want.code, d.get("code").?.string);
+            try t.expectEqual(want.line, d.get("line").?.integer);
+            try t.expectEqual(want.col, d.get("col").?.integer);
+            try t.expectEqual(want.end_line, d.get("endLine").?.integer);
+            try t.expectEqual(want.end_col, d.get("endCol").?.integer);
+        }
+    };
+    // A Script's, from its `diag` records: the token, and an empty range at
+    // the end of the source.
+    try expect.one(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on go\\n  return zed\\nend go\\n\"}}", .{3}), .{ .code = "unknown name", .line = 2, .col = 10, .end_line = 2, .end_col = 13 });
+    try expect.one(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on go\\n  put 1 into\"}}", .{4}), .{ .code = "unexpected token", .line = 2, .col = 13, .end_line = 2, .end_col = 13 });
+    // A Library's, from its talk.h diagnostics.
+    try expect.one(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"bad\",\"version\":\"1\",\"source\":\"function f\\n  put 1 into 3\\nend f\\n\"}}", .{5}), .{ .code = "not a container", .line = 2, .col = 14, .end_line = 2, .end_col = 15 });
+    try expect.one(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"bad\",\"version\":\"1\",\"source\":\"constant x = 1 / 0\\n\"}}", .{6}), .{ .code = "initialiser failed", .line = 1, .col = 16, .end_line = 1, .end_col = 17 });
+    // An Entry's first syntax error.
+    const entry = try okOf(try c.send("{{\"m\":\"analyze-entry\",\"ref\":{d},\"source\":\"put 1 into \\\"\\u00e9\\ud83d\\ude00\\\"\"}}", .{7}));
+    const p = entry.object.get("problem").?.object;
+    try t.expectEqualStrings("not a container", p.get("code").?.string);
+    try t.expectEqual(@as(i64, 12), p.get("col").?.integer);
+    try t.expectEqual(@as(i64, 1), p.get("endLine").?.integer);
+    try t.expectEqual(@as(i64, 16), p.get("endCol").?.integer);
+    const source = try okOf(try c.send("{{\"m\":\"analyze-source\",\"ref\":{d},\"source\":\"function f\\n\"}}", .{8}));
+    const q = source.object.get("problem").?.object;
+    try t.expectEqual(q.get("line").?.integer, q.get("endLine").?.integer);
+    try t.expectEqual(q.get("col").?.integer, q.get("endCol").?.integer);
 }
 
 test "a later unknown name in a Whose condition suggests `it's` (#1937)" {

@@ -1042,8 +1042,8 @@ typedef talk_id talk_delivery_id;
 typedef talk_id talk_broadcast_id;
 typedef talk_id talk_run_id;
 
-/* A load-time diagnostic: its catalogue code, the unit it is in, and its
- * position. */
+/* A load-time diagnostic: its catalogue code, the unit it is in, its
+ * position, and the exclusive end of its range (chapter 2). */
 typedef struct talk_diagnostic {
     const char *code;
     size_t code_len;
@@ -1053,6 +1053,8 @@ typedef struct talk_diagnostic {
     size_t unit_len;
     int64_t line;
     int64_t col;
+    int64_t end_line; /* the end of its range, exclusive */
+    int64_t end_col;
 } talk_diagnostic;
 
 /* A Load or a Library's compile refused with diagnostics. */

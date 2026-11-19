@@ -97,18 +97,36 @@ comptime {
     }
 }
 
+/// A range in a unit's source, by line and column, its end exclusive.
+pub const Span = struct { start: lexer.Lines.Position, end: lexer.Lines.Position };
+
 pub const Diagnostic = struct {
     code: Code,
     offset: usize = 0,
+    /// The exclusive end of its range, the token it is reported at
+    /// (chapter 2, Syntax errors): `offset` itself where it is empty.
+    end: usize = 0,
     /// An `unknown name` inside a Whose Clause condition: only its first
     /// token is a Whose Key, so this was probably meant as `it's <name>`
     /// (ADR 0074). The Name's token.
     whose_name: ?ast.Tok = null,
-    /// An inherited veto keeps its position in the defining code unit.
-    inherited_position: ?lexer.Lines.Position = null,
+    /// An inherited veto keeps its position and range in the defining code
+    /// unit.
+    inherited: ?Span = null,
+
+    /// At token `t` of `tree`, with its range.
+    pub fn at(code: Code, tree: *const ast.Tree, t: Tok) Diagnostic {
+        const token = tree.tokens[t];
+        return .{ .code = code, .offset = token.start, .end = lexer.rangeEnd(token) };
+    }
 
     pub fn position(d: Diagnostic, lines: *lexer.Lines) lexer.Lines.Position {
-        return d.inherited_position orelse lines.position(d.offset);
+        return if (d.inherited) |x| x.start else lines.position(d.offset);
+    }
+
+    /// The exclusive end of its range.
+    pub fn endPosition(d: Diagnostic, lines: *lexer.Lines) lexer.Lines.Position {
+        return if (d.inherited) |x| x.end else lines.position(d.end);
     }
 
     pub fn lessThan(lines: *lexer.Lines, x: Diagnostic, y: Diagnostic) bool {
@@ -272,8 +290,8 @@ pub const Export = struct {
     total: usize = 0,
     may_suspend: bool = false,
     /// A local call cannot enter a Handler containing these vetoes. Retain
-    /// their positions after its syntax tree is released, for later Extend.
-    vetoes: []const lexer.Lines.Position = &.{},
+    /// their ranges after its syntax tree is released, for later Extend.
+    vetoes: []const Span = &.{},
 };
 
 pub const Library = struct { name: []const u8, exports: []const Export };
@@ -443,7 +461,7 @@ pub fn exportsWithScratch(arena: Allocator, scratch: Allocator, tree: *const ast
     }
     var handlers: std.StringHashMapUnmanaged(void) = .empty;
     defer handlers.deinit(scratch);
-    var vetoes: std.StringHashMapUnmanaged(std.ArrayList(lexer.Lines.Position)) = .empty;
+    var vetoes: std.StringHashMapUnmanaged(std.ArrayList(Span)) = .empty;
     defer {
         var lists = vetoes.valueIterator();
         while (lists.next()) |list| list.deinit(scratch);
@@ -458,7 +476,10 @@ pub fn exportsWithScratch(arena: Allocator, scratch: Allocator, tree: *const ast
         var tokens: std.ArrayList(Tok) = .empty;
         defer tokens.deinit(scratch);
         try vetoTokens(scratch, h.body, &tokens);
-        for (tokens.items) |t| try entry.value_ptr.append(scratch, lines.position(tree.tokens[t].start));
+        for (tokens.items) |t| {
+            const start = lines.position(tree.tokens[t].start);
+            try entry.value_ptr.append(scratch, .{ .start = start, .end = lines.position(lexer.rangeEnd(tree.tokens[t])) });
+        }
     };
     for (tree.declarations) |d| {
         if (d.private != null) continue;
@@ -480,7 +501,7 @@ pub fn exportsWithScratch(arena: Allocator, scratch: Allocator, tree: *const ast
                     .name = name,
                     .kind = .handler,
                     .may_suspend = suspends.get(name) orelse false,
-                    .vetoes = try arena.dupe(lexer.Lines.Position, vetoes.get(name).?.items),
+                    .vetoes = try arena.dupe(Span, vetoes.get(name).?.items),
                 });
             },
             else => {},
@@ -679,7 +700,7 @@ const Checker = struct {
     function_scopes: std.StringHashMapUnmanaged(u32) = .empty,
 
     fn report(c: *Checker, code: Code, t: Tok) Allocator.Error!void {
-        try c.diagnostics.append(c.a, .{ .code = code, .offset = c.tree.tokens[t].start });
+        try c.diagnostics.append(c.a, .at(code, c.tree, t));
     }
 
     fn text(c: *Checker, t: Tok) []const u8 {
@@ -1720,7 +1741,7 @@ const Checker = struct {
     }
 
     fn inheritedVetoes(c: *Checker, ex: Export) Allocator.Error!void {
-        for (ex.vetoes) |p| try c.diagnostics.append(c.a, .{ .code = .veto_outside_a_decision, .inherited_position = p });
+        for (ex.vetoes) |p| try c.diagnostics.append(c.a, .{ .code = .veto_outside_a_decision, .inherited = p });
     }
 
     fn receiver(c: *Checker, s: *Scope, e: *const Expr) Allocator.Error!void {
@@ -2347,7 +2368,9 @@ const Checker = struct {
                     try c.nameValue(t, r);
                     if (in == .initialiser) c.constantName(t, r);
                 } else {
-                    try c.diagnostics.append(c.a, .{ .code = .unknown_name, .offset = c.start(t), .whose_name = if (c.whose_depth > 0) t else null });
+                    var d: Diagnostic = .at(.unknown_name, c.tree, t);
+                    d.whose_name = if (c.whose_depth > 0) t else null;
+                    try c.diagnostics.append(c.a, d);
                     if (in == .initialiser) c.notConstant(t);
                 }
             },
@@ -2910,6 +2933,21 @@ test "inherited veto diagnostics retain all clauses and positions and deduplicat
     try expectDiagnostics("on caller\n return given guarded: guarded()\nend caller", context, "");
 }
 
+test "a load-time diagnostic's range is its token, its end exclusive (#2334)" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    for ([_]struct { []const u8, []const u8 }{
+        // Columns count Unicode scalars: an astral character before the token.
+        .{ "on t\n  return \"\u{1F600}\" & zed\nend t\n", "unknown name at 2:16 end=2:19\n" },
+        // CRLF line ends.
+        .{ "on t\r\n  return zed\r\nend t\r\n", "unknown name at 2:10 end=2:13\n" },
+        // Lines after a multi-line text literal.
+        .{ "on t\n  return 1 + \"\"\"\n    a\u{1F600}\n    \"\"\" & zed\nend t\n", "unknown name at 4:11 end=4:14\n" },
+        .{ "use zed from nowhere\n", "unknown import at 1:14 end=1:21\n" },
+    }) |case| try testing.expectEqualStrings(case[1], try checkUnit(a, case[0], .{}, null, true));
+}
+
 test "Library Imports still clash with local Handlers" {
     for ([_]Export{
         .{ .name = "foo", .kind = .constant },
@@ -3338,22 +3376,29 @@ fn expectedDiagnostics(a: Allocator, trace: []const u8, unit: []const u8) ![]con
     return out.items;
 }
 
-/// Checks a unit, giving its diagnostics as text and, for a Library, its
+/// Checks a unit, giving its diagnostics as text, each with its range's
+/// end as a Trace's `diag` writes it when `ends`, and, for a Library, its
 /// exports.
-fn checkUnit(a: Allocator, source: []const u8, context: Context, exported: ?*[]const Export) ![]const u8 {
+fn checkUnit(a: Allocator, source: []const u8, context: Context, exported: ?*[]const Export, ends: bool) ![]const u8 {
     const result = try parser.parse(a, source);
     var lines: lexer.Lines = try .init(a, source);
     var out: std.ArrayList(u8) = .empty;
     switch (result) {
         .failure => |d| {
             const p = lines.position(d.offset);
-            try out.print(a, "{s} at {d}:{d}\n", .{ d.code.spelling(), p.line, p.column });
+            try out.print(a, "{s} at {d}:{d}", .{ d.code.spelling(), p.line, p.column });
+            const e = lines.position(d.end);
+            if (ends) try out.print(a, " end={d}:{d}", .{ e.line, e.column });
+            try out.append(a, '\n');
         },
         .tree => |*tree| {
             const checked = try check(a, tree, context);
             for (checked.diagnostics) |d| {
-                const p = lines.position(d.offset);
-                try out.print(a, "{s} at {d}:{d}\n", .{ d.code.spelling(), p.line, p.column });
+                const p = d.position(&lines);
+                try out.print(a, "{s} at {d}:{d}", .{ d.code.spelling(), p.line, p.column });
+                const e = d.endPosition(&lines);
+                if (ends) try out.print(a, " end={d}:{d}", .{ e.line, e.column });
+                try out.append(a, '\n');
             }
             if (exported) |e| e.* = try exports(a, tree, &checked);
         },
@@ -3399,7 +3444,7 @@ test "every corpus unit gives the diagnostics its case expects" {
             for (all) |u| if (u.library) {
                 const source = try dir.readFileAlloc(io, try std.fmt.allocPrint(a, "{s}/{s}", .{ case, u.source }), a, .unlimited);
                 var exported: []const Export = &.{};
-                _ = try checkUnit(a, source, .{ .library = true, .libraries = libraries.items }, &exported);
+                _ = try checkUnit(a, source, .{ .library = true, .libraries = libraries.items }, &exported, false);
                 libraries.items[i].exports = exported;
                 i += 1;
             };
@@ -3407,8 +3452,10 @@ test "every corpus unit gives the diagnostics its case expects" {
         for (all) |u| {
             if (u.source.len == 0) continue;
             const source = try dir.readFileAlloc(io, try std.fmt.allocPrint(a, "{s}/{s}", .{ case, u.source }), a, .unlimited);
-            const got = try checkUnit(a, source, .{ .library = u.library, .objects = u.objects, .grants = if (u.library) null else u.grants, .libraries = libraries.items, .forbid_suspension = u.forbid_suspension }, null);
             const expected = try expectedDiagnostics(a, trace, u.name);
+            // Ranges once the case's `diag` records give them (#2333).
+            const ends = std.mem.indexOf(u8, expected, " end=") != null;
+            const got = try checkUnit(a, source, .{ .library = u.library, .objects = u.objects, .grants = if (u.library) null else u.grants, .libraries = libraries.items, .forbid_suspension = u.forbid_suspension }, null, ends);
             units += 1;
             if (!std.mem.eql(u8, got, expected)) {
                 failures += 1;

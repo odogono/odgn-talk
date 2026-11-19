@@ -333,15 +333,19 @@ const Parser = struct {
         return p.push(t);
     }
 
-    fn failCode(p: *Parser, code: lexer.Code, offset: usize) error{Syntax} {
-        if (p.failure == null) p.failure = .{ .code = code, .offset = offset };
+    /// Fails with `code` at token `t`, its range the token's (chapter 2).
+    fn failCode(p: *Parser, code: lexer.Code, t: Token) error{Syntax} {
+        if (p.failure == null) p.failure = .{ .code = code, .offset = t.start, .end = lexer.rangeEnd(t) };
         return error.Syntax;
     }
 
     fn failAt(p: *Parser, t: Token) error{Syntax} {
-        if (t.kind == .invalid) return p.failCode(t.code, t.offset);
-        if (p.unitWithoutNumber(t)) return p.failCode(.unit_without_number, t.start);
-        return p.failCode(.unexpected_token, t.start);
+        if (t.kind == .invalid) {
+            if (p.failure == null) p.failure = .{ .code = t.code, .offset = t.offset, .end = lexer.characterEnd(p.lex.shared.source, t.offset) };
+            return error.Syntax;
+        }
+        if (p.unitWithoutNumber(t)) return p.failCode(.unit_without_number, t);
+        return p.failCode(.unexpected_token, t);
     }
 
     /// A Unit word straight after a Name or a closing bracket on its line, as
@@ -357,7 +361,7 @@ const Parser = struct {
         return p.failAt(try p.peek(mode));
     }
 
-    fn enter(p: *Parser, at: usize) error{Syntax}!void {
+    fn enter(p: *Parser, at: Token) error{Syntax}!void {
         p.depth += 1;
         if (p.depth > max_depth) return p.failCode(.source_nesting_too_deep, at);
     }
@@ -408,7 +412,7 @@ const Parser = struct {
     /// A Reserved Word where the grammar wants a Name is `reserved word`,
     /// reported at the word (#2089).
     fn failName(p: *Parser, t: Token) error{Syntax} {
-        if (t.kind == .word and reserved.has(p.word(t))) return p.failCode(.reserved_word, t.start);
+        if (t.kind == .word and reserved.has(p.word(t))) return p.failCode(.reserved_word, t);
         return p.failAt(t);
     }
 
@@ -468,7 +472,7 @@ const Parser = struct {
             if (k) |e| depth = @max(depth, e.depth);
         }
         depth += 1;
-        if (depth > max_depth) return p.failCode(.source_nesting_too_deep, p.tokens.items[pos].start);
+        if (depth > max_depth) return p.failCode(.source_nesting_too_deep, p.tokens.items[pos]);
         return p.create(Expr, .{ .pos = pos, .depth = depth, .data = data });
     }
 
@@ -556,7 +560,7 @@ const Parser = struct {
 
     fn shapeTerm(p: *Parser) Error!*ast.ShapeExpr {
         const t = try p.peek(.conversion);
-        try p.enter(t.start);
+        try p.enter(t);
         defer p.leave();
         if (t.kind == .unit or t.kind == .invalid) {
             const u = try p.next(.conversion);
@@ -781,7 +785,7 @@ const Parser = struct {
 
     fn block(p: *Parser, terms: []const []const u8) Error!ast.Block {
         const first = try p.peek(.operand);
-        try p.enter(first.start);
+        try p.enter(first);
         defer p.leave();
         var out: std.ArrayList(*Stmt) = .empty;
         while (true) {
@@ -998,19 +1002,19 @@ const Parser = struct {
                 .name => break,
                 .word => |w| {
                     if (key_target and (w == .me or w == .it)) break;
-                    return p.failCode(.not_a_container, t.start);
+                    return p.failCode(.not_a_container, t);
                 },
                 .target => {
                     if (key_target) break;
-                    return p.failCode(.not_a_container, t.start);
+                    return p.failCode(.not_a_container, t);
                 },
                 .chunk => |c| c.of,
                 .key => |k| k.base,
                 .group => |g| g,
                 // `set` may read through an Object Element Reference;
                 // nothing writes one.
-                .element => |el| if (property_target) el.of else return p.failCode(.not_a_container, t.start),
-                else => return p.failCode(.not_a_container, t.start),
+                .element => |el| if (property_target) el.of else return p.failCode(.not_a_container, t),
+                else => return p.failCode(.not_a_container, t),
             };
         }
         return e;
@@ -1272,7 +1276,7 @@ const Parser = struct {
             // `with` alone is a Name, so `repeat with times` still counts.
             if (p.isWord(t, "with")) {
                 const n = try p.peek2("repeat-with", .operator);
-                if (p.isName(n) and !follow.has(p.word(n))) return p.failCode(.repeat_with, t.start);
+                if (p.isName(n) and !follow.has(p.word(n))) return p.failCode(.repeat_with, t);
             }
             const n = try p.expr();
             _ = try p.expectWord("times", .operator);
@@ -1418,7 +1422,7 @@ const Parser = struct {
 
     fn expr(p: *Parser) Error!*Expr {
         const t = try p.peek(.operand);
-        try p.enter(t.start);
+        try p.enter(t);
         defer p.leave();
         if (p.isWord(t, "given")) return p.lambda();
         // A Whose Clause is a whole Expression, as a Lambda is.
@@ -1513,7 +1517,7 @@ const Parser = struct {
     fn notExpr(p: *Parser) Error!*Expr {
         const t = try p.peek(.operand);
         if (p.isWord(t, "not")) {
-            try p.enter(t.start);
+            try p.enter(t);
             defer p.leave();
             const op = try p.next(.operand);
             const e = try p.notExpr();
@@ -1660,7 +1664,7 @@ const Parser = struct {
         const l = try p.unary();
         if (try p.atKind(.caret, .operator)) {
             const t = try p.peek(.operator);
-            try p.enter(t.start);
+            try p.enter(t);
             defer p.leave();
             const op = try p.next(.operator);
             return p.binary(op, .power, l, try p.power(), false);
@@ -1671,7 +1675,7 @@ const Parser = struct {
     fn unary(p: *Parser) Error!*Expr {
         const t = try p.peek(.operand);
         if (t.kind == .minus) {
-            try p.enter(t.start);
+            try p.enter(t);
             defer p.leave();
             const op = try p.next(.operand);
             const e = try p.unary();
@@ -1751,7 +1755,7 @@ const Parser = struct {
                 else => unreachable,
             }
             e.depth = @max(e.depth, d.depth + 1);
-            if (e.depth > max_depth) return p.failCode(.source_nesting_too_deep, p.tokens.items[delimited].start);
+            if (e.depth > max_depth) return p.failCode(.source_nesting_too_deep, p.tokens.items[delimited]);
         }
         return e;
     }
@@ -1803,7 +1807,7 @@ const Parser = struct {
         for (args) |arg| depth = @max(depth, arg.depth);
         const e = try p.mk(n, .{ .call = .{ .name = n, .args = args } }, &.{});
         e.depth = depth + 1;
-        if (e.depth > max_depth) return p.failCode(.source_nesting_too_deep, p.tokens.items[n].start);
+        if (e.depth > max_depth) return p.failCode(.source_nesting_too_deep, p.tokens.items[n]);
         return e;
     }
 
@@ -1819,7 +1823,7 @@ const Parser = struct {
 
     fn primary(p: *Parser) Error!*Expr {
         const t = try p.peek(.operand);
-        try p.enter(t.start);
+        try p.enter(t);
         defer p.leave();
         switch (t.kind) {
             .number => {
@@ -1915,7 +1919,7 @@ const Parser = struct {
         p.whose_key_at = saved_whose;
         const e = try p.mk(open, .{ .template = .{ .open = open, .holes = holes } }, &.{});
         e.depth = depth + 1;
-        if (e.depth > max_depth) return p.failCode(.source_nesting_too_deep, t.start);
+        if (e.depth > max_depth) return p.failCode(.source_nesting_too_deep, t);
         return e;
     }
 
@@ -2110,7 +2114,7 @@ const Parser = struct {
         _ = try p.expect(.right_bracket, .operator);
         const e = try p.mk(open, .{ .list = try p.list(ast.ListItem, &items) }, &.{});
         e.depth = depth + 1;
-        if (e.depth > max_depth) return p.failCode(.source_nesting_too_deep, p.tokens.items[open].start);
+        if (e.depth > max_depth) return p.failCode(.source_nesting_too_deep, p.tokens.items[open]);
         return e;
     }
 
@@ -2142,7 +2146,7 @@ const Parser = struct {
         _ = try p.expect(.right_brace, .operator);
         const e = try p.mk(open, .{ .map = try p.list(ast.MapEntry, &entries) }, &.{});
         e.depth = depth + 1;
-        if (e.depth > max_depth) return p.failCode(.source_nesting_too_deep, p.tokens.items[open].start);
+        if (e.depth > max_depth) return p.failCode(.source_nesting_too_deep, p.tokens.items[open]);
         return e;
     }
 
@@ -2150,7 +2154,7 @@ const Parser = struct {
 
     fn pattern(p: *Parser) Error!*Pattern {
         const t = try p.peek(.operand);
-        try p.enter(t.start);
+        try p.enter(t);
         defer p.leave();
         const pat = try p.patternPrimary();
         if (try p.atWord("as", .operator)) {
@@ -2301,7 +2305,7 @@ const Parser = struct {
 
     fn atom(p: *Parser) Error!*ast.PatternElement {
         const t = try p.peek(.pattern);
-        try p.enter(t.start);
+        try p.enter(t);
         defer p.leave();
         switch (t.kind) {
             .text => {
@@ -2476,7 +2480,7 @@ const Parser = struct {
         _ = try p.expect(.binary_close, .operator);
         const e = try p.mk(open, .{ .build = try p.list(ast.BuildField, &fields) }, &.{});
         e.depth = depth + 1;
-        if (e.depth > max_depth) return p.failCode(.source_nesting_too_deep, p.tokens.items[open].start);
+        if (e.depth > max_depth) return p.failCode(.source_nesting_too_deep, p.tokens.items[open]);
         return e;
     }
 
@@ -2535,6 +2539,38 @@ fn outcome(a: Allocator, source: []const u8) ![]const u8 {
             return std.fmt.allocPrint(a, "{s} at {d}:{d}", .{ d.code.spelling(), pos.line, pos.column });
         },
     }
+}
+
+/// The first syntax error of `source` with its range, `code at L:C-L:C`.
+fn expectRange(source: []const u8, expected: []const u8) !void {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const d = switch (try parse(a, source)) {
+        .failure => |d| d,
+        .tree => return error.TestExpectedFailure,
+    };
+    var lines: lexer.Lines = try .init(a, source);
+    const p = lines.position(d.offset);
+    const e = lines.position(d.end);
+    try testing.expectEqualStrings(expected, try std.fmt.allocPrint(a, "{s} at {d}:{d}-{d}:{d}", .{ d.code.spelling(), p.line, p.column, e.line, e.column }));
+}
+
+test "a syntax error's range is the token it is reported at, its end exclusive" {
+    // A word, and a text literal with an astral character before its end:
+    // columns count Unicode scalars, not bytes or UTF-16 code units.
+    try expectRange("on t\n  put 1 into replace\nend t\n", "reserved word at 2:14-2:21");
+    try expectRange("on t\n  put 1 into \"\u{1F600}x\"\nend t\n", "not a container at 2:14-2:18");
+    try expectRange("on t\n  put \"\u{1F600}\" into \"ab\"\nend t\n", "not a container at 2:16-2:20");
+    // A line end has no characters, LF or CRLF, nor has the end of input.
+    try expectRange("on t\n  put 5 into\nend t\n", "unexpected token at 2:13-2:13");
+    try expectRange("on t\r\n  put 5 into\r\nend t\r\n", "unexpected token at 2:13-2:13");
+    try expectRange("on t\n  put 5 into", "unexpected token at 2:13-2:13");
+    // A multi-line text literal's range crosses its lines.
+    try expectRange("on t\n  put \"\"\"\n    a\u{1F600}\n    \"\"\" into 3\nend t\n", "not a container at 4:14-4:15");
+    try expectRange("on t\n  put 1 into \"\"\"\n    a\u{1F600}\n    \"\"\"\nend t\n", "not a container at 2:14-4:8");
+    // A lexical error's range is the one character there.
+    try expectRange("on t\n  put \u{1F600} into x\nend t\n", "bad character at 2:7-2:8");
 }
 
 fn expectOutcome(source: []const u8, expected: []const u8) !void {
@@ -2834,9 +2870,11 @@ test "every corpus source parses losslessly, or fails as its case expects" {
         defer gpa.free(trace_path);
         const trace = dir.readFileAlloc(io, trace_path, gpa, .unlimited) catch "";
         defer if (trace.len > 0) gpa.free(trace);
-        const line = try std.fmt.allocPrint(gpa, "diag {s} code=\"{s}\" pos={s}\n", .{ entry.basename[0 .. entry.basename.len - 5], got[0..at], got[at + 4 ..] });
+        // Its range, ` end=L:C`, is checked by the corpus replay.
+        const line = try std.fmt.allocPrint(gpa, "diag {s} code=\"{s}\" pos={s}", .{ entry.basename[0 .. entry.basename.len - 5], got[0..at], got[at + 4 ..] });
         defer gpa.free(line);
-        if (std.mem.indexOf(u8, trace, line) == null) {
+        const found = if (std.mem.indexOf(u8, trace, line)) |i| i + line.len < trace.len and (trace[i + line.len] == '\n' or trace[i + line.len] == ' ') else false;
+        if (!found) {
             std.debug.print("{s}: {s}\n", .{ entry.path, got });
             failures += 1;
         }

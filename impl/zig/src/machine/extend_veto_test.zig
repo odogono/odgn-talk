@@ -25,9 +25,9 @@ test "Extend rejects inherited vetoes through command and function-style calls" 
             try testing.expectEqual(identity, s.identity);
             try testing.expectEqual(extensions, s.extensions.items.len);
             const expected = if (in_extension)
-                "diag s+2 code=\"veto outside a decision\" pos=2:2\n"
+                "diag s+2 code=\"veto outside a decision\" pos=2:2 end=2:6\n"
             else
-                "diag s+1 code=\"veto outside a decision\" pos=2:2\n";
+                "diag s+1 code=\"veto outside a decision\" pos=2:2 end=2:6\n";
             try testing.expect(std.mem.endsWith(u8, trace.written(), expected));
             try testing.expectEqual(.extended, try g.extend(s, "on safe\n return 7\nend safe"));
         }
