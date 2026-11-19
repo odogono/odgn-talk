@@ -502,7 +502,7 @@ pub const Lexer = struct {
                 else => i += 1,
             }
         }
-        return self.fail(.unterminated_interpolation, dollar);
+        return self.failRange(.unterminated_interpolation, dollar, dollar + 2);
     }
 
     const Piece = struct { start: usize, end: usize };

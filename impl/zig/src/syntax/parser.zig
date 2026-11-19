@@ -2575,6 +2575,7 @@ test "a syntax error's range is the token it is reported at, its end exclusive" 
     try expectRange("on t\n  return 5 m*ft\nend t\n", "bad unit at 2:12-2:16");
     try expectRange("on t\n  put \"\u{1F600}bc into x\r\nend t\n", "unterminated text at 2:7-2:18");
     try expectRange("on t\n  return `${}`\nend t\n", "empty interpolation at 2:11-2:13");
+    try expectRange("constant x = `hello ${1 +\n", "unterminated interpolation at 1:21-1:23");
 }
 
 fn expectOutcome(source: []const u8, expected: []const u8) !void {
