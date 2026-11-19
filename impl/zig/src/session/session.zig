@@ -457,18 +457,35 @@ pub const Session = struct {
 
     /// Ends a Host call: its lines, in order.
     fn flush(s: *Session) void {
-        for (s.out.items) |line| s.driver.output(s.driver.context, line);
-        s.out.clearRetainingCapacity();
-        for (s.trace_out.items) |line| s.driver.output(s.driver.context, line);
-        s.trace_out.clearRetainingCapacity();
-        // Fuel rows: once after the Host call that started a measurement,
-        // and again when one settles later.
+        s.flushLines();
+        // Fuel rows: once after the Host call that started a measurement
+        // yields or completes, and again when one settles later.
         for (s.observing.measurements.items) |*m| {
             if (m.started or (m.settled and !m.final)) {
                 s.driver.output(s.driver.context, s.fuelRow(m));
                 if (m.settled) m.final = true;
             }
             m.started = false;
+        }
+    }
+
+    fn flushLines(s: *Session) void {
+        for (s.out.items) |line| s.driver.output(s.driver.context, line);
+        s.out.clearRetainingCapacity();
+        for (s.trace_out.items) |line| s.driver.output(s.driver.context, line);
+        s.trace_out.clearRetainingCapacity();
+    }
+
+    /// The Host call yields to a wait of its foreground: its lines so far,
+    /// then the pending row of each measurement it started (session
+    /// observation, Fuel measurements).
+    fn yieldRows(s: *Session) void {
+        s.flushLines();
+        for (s.observing.measurements.items) |*m| {
+            if (!m.started) continue;
+            m.started = false;
+            s.driver.output(s.driver.context, s.fuelRow(m));
+            if (m.settled) m.final = true;
         }
     }
 
@@ -1109,7 +1126,6 @@ pub const Session = struct {
                 s.valueRows(x.result);
                 var o: ?*c.talk_object = null;
                 if (c.talk_value_as_object(s.group, x.result, &o)) {
-                    s.objectRows(x.result);
                     c.talk_value_retain(x.result);
                     s.reader = x.result;
                 }
@@ -1137,6 +1153,8 @@ pub const Session = struct {
             if (f.ended) return;
             const run = f.run orelse return;
             const asked = s.pendingOf(run);
+            const deadline_wait = s.clock == .real and if (s.waits.get(run)) |w| w.until or asked != null else false;
+            if (asked != null or deadline_wait) s.yieldRows();
             if (asked) |i| {
                 const p = s.pending.items[i];
                 switch (p.kind) {
@@ -1158,7 +1176,6 @@ pub const Session = struct {
                     .mock => return,
                 }
             }
-            const deadline_wait = s.clock == .real and if (s.waits.get(run)) |w| w.until or asked != null else false;
             // A suspending driver doesn't block: the call stays open for
             // its line, its answer or its deadline, and is woken to Pump,
             // or abandoned when something else is typed.
@@ -1911,7 +1928,8 @@ pub const Session = struct {
     }
 
     /// An exact, non-negative duration in microseconds, from a Quantity in
-    /// the display form.
+    /// the display form, rounded half-even to whole microseconds (chapter 3,
+    /// Exact durations). A negative duration is refused before rounding.
     fn exactDuration(shown: []const u8) ?i128 {
         var v: ?*c.talk_value = null;
         if (c.talk_parse_display(shown.ptr, shown.len, &v) != c.TALK_OK) return null;
@@ -1928,9 +1946,12 @@ pub const Session = struct {
         var n: i128 = std.math.cast(i128, base.coefficient) orelse return null;
         var e: i32 = base.exponent + 6;
         while (e > 0) : (e -= 1) n = std.math.mul(i128, n, 10) catch return null;
-        while (e < 0) : (e += 1) {
-            if (@mod(n, 10) != 0) return null;
-            n = @divExact(n, 10);
+        if (e < -34) return 0;
+        if (e < 0) {
+            const divisor = std.math.powi(i128, 10, -e) catch return 0;
+            const whole = @divTrunc(n, divisor);
+            const twice = 2 * @rem(n, divisor);
+            n = whole + @intFromBool(twice > divisor or (twice == divisor and @rem(whole, 2) == 1));
         }
         return n;
     }
@@ -2155,6 +2176,9 @@ pub const Session = struct {
     /// `:store [<store>]`, `:store load [<store>]` with the file's lines,
     /// `:store save <path> [<store>]` and `:store clear [<store>]`.
     fn storeCommand(s: *Session, args: []const []const u8, lines: []const []const u8) !void {
+        const load = args.len > 0 and std.mem.eql(u8, args[0], "load");
+        // Only `:store load` takes `|` lines.
+        if (!load and lines.len > 0) return s.say("! bad arguments");
         if (args.len == 0 or (args.len == 1 and !isOneOf(args[0], &.{ "load", "save", "clear" }))) {
             const name = if (args.len == 1) args[0] else "default";
             for (try s.stores.sorted(name)) |k| {
@@ -2167,7 +2191,7 @@ pub const Session = struct {
             }
             return;
         }
-        if (std.mem.eql(u8, args[0], "load")) {
+        if (load) {
             if (args.len > 2 or lines.len == 0) return s.say("! bad arguments");
             const name = if (args.len == 2) args[1] else "default";
             s.admitted = false;
@@ -2185,7 +2209,7 @@ pub const Session = struct {
         }
         // `:store save <path> [<store>]`: the contents as one JSON object,
         // in key order, with no white space.
-        if (args.len < 2 or args.len > 3) return s.say("! bad arguments");
+        if (!std.mem.eql(u8, args[0], "save") or args.len < 2 or args.len > 3) return s.say("! bad arguments");
         const name = if (args.len == 3) args[2] else "default";
         var json: std.ArrayList(u8) = .empty;
         try json.append(s.alloc(), '{');
@@ -2262,7 +2286,8 @@ pub const Session = struct {
         const src: c.talk_library_source = .{ .name = name.ptr, .name_len = name.len, .version = "1", .version_len = 1, .source = source.ptr, .source_len = source.len };
         var library: ?*c.talk_library = null;
         var refused: ?*c.talk_load_error = null;
-        const code = c.talk_compile_library(s.core, &src, @ptrCast(imports.items.ptr), imports.items.len, null, 0, &library, &refused);
+        const declarations = try s.libraryDeclarations();
+        const code = c.talk_compile_library(s.core, &src, @ptrCast(imports.items.ptr), imports.items.len, declarations.ptr, declarations.len, &library, &refused);
         if (code != c.TALK_OK) {
             defer c.talk_load_error_release(refused);
             // Each diagnostic as `<library>:<line>:<column>`.
@@ -2283,6 +2308,23 @@ pub const Session = struct {
         try s.libraries.put(s.alloc(), s.dupe(name), .{ .source = source, .library = library.? });
         s.harvestLibrary(library, name, source);
         s.harvest();
+    }
+
+    /// The Operation Declarations a Library is checked against: `console`,
+    /// so `say` is `console.write`, and each Capability granted or mocked,
+    /// by its Capability name (chapter 7, `needs`).
+    fn libraryDeclarations(s: *Session) ![]const c.talk_grant_decls {
+        var out: std.ArrayList(c.talk_grant_decls) = .empty;
+        try s.appendDeclarations(&out, "console", s.console_def);
+        var it = s.defs.iterator();
+        while (it.next()) |e| try s.appendDeclarations(&out, e.key_ptr.*, e.value_ptr.*);
+        return out.items;
+    }
+
+    fn appendDeclarations(s: *Session, out: *std.ArrayList(c.talk_grant_decls), name: []const u8, def: ?*c.talk_capability_def) !void {
+        const checks = try s.alloc().alloc(c.talk_operation_check, c.talk_capability_def_checks(def, null, 0));
+        _ = c.talk_capability_def_checks(def, checks.ptr, checks.len);
+        try out.append(s.alloc(), .{ .name = name.ptr, .name_len = name.len, .operations = checks.ptr, .operations_len = checks.len });
     }
 
     /// `:script add <name>`, with the Script's source on the lines after it
@@ -2519,6 +2561,8 @@ pub const Session = struct {
             };
             s.sayf("doc {s}", .{s.textShown(doc)});
         }
+        // A Host Object's rows, for `:inspect` and passive describe alike.
+        if (value.data == .object) s.objectRows(v);
     }
 
     // ------------------------------------------------------------ :describe
@@ -2763,22 +2807,75 @@ pub const Session = struct {
         return out.items;
     }
 
-    /// A value's display form, an error map's Core-written `message` left
-    /// out, since its wording is outside parity.
+    /// A value's display form, with every Core-written error `message` left
+    /// out at any depth, since its wording is outside parity (chapter 11,
+    /// Errors).
     fn withoutCoreMessage(s: *Session, v: ?*const c.talk_value) []const u8 {
         const value: *const northtalk.value.Value = @ptrCast(@alignCast(v.?));
-        if (value.data != .map or !value.core_message) return s.display(v);
-        var pairs: std.ArrayList(c.talk_pair) = .empty;
-        var i: usize = 0;
-        var pair: c.talk_pair = undefined;
-        while (c.talk_value_entries(v, i, &pair)) : (i += 1) {
-            if (std.mem.eql(u8, pair.key[0..pair.key_len], "message")) continue;
-            pairs.append(s.alloc(), pair) catch {};
+        const shown = s.stripCoreMessages(value, 0) catch return s.display(v);
+        const out = shown orelse return s.display(v);
+        defer out.release();
+        return s.display(@ptrCast(out));
+    }
+
+    /// Nesting past this depth is shown as it is.
+    const strip_depth = 256;
+
+    /// A copy of `v` without Core-written `message` keys, or null when it
+    /// holds none.
+    fn stripCoreMessages(s: *Session, v: *const northtalk.value.Value, depth: usize) northtalk.value.Error!?*northtalk.value.Value {
+        if (depth >= strip_depth) return null;
+        const V = northtalk.value;
+        switch (v.data) {
+            .list => |items| {
+                var copy: ?[]*V.Value = null;
+                defer if (copy) |xs| {
+                    for (xs) |x| x.release();
+                    s.gpa.free(xs);
+                };
+                for (items, 0..) |item, i| {
+                    const stripped = try s.stripCoreMessages(item, depth + 1) orelse {
+                        if (copy) |xs| xs[i] = item.retain();
+                        continue;
+                    };
+                    if (copy == null) {
+                        const xs = s.gpa.alloc(*V.Value, items.len) catch |e| {
+                            stripped.release();
+                            return e;
+                        };
+                        for (items[0..i], xs[0..i]) |x, *y| y.* = x.retain();
+                        copy = xs;
+                    }
+                    copy.?[i] = stripped;
+                }
+                const xs = copy orelse return null;
+                return try V.list(s.gpa, xs);
+            },
+            .map => |m| {
+                var pairs: std.ArrayList(V.Pair) = .empty;
+                defer {
+                    for (pairs.items) |p| p.value.release();
+                    pairs.deinit(s.gpa);
+                }
+                var changed = false;
+                for (0..m.len) |i| {
+                    const p = m.at(i);
+                    if (v.core_message and std.mem.eql(u8, p.key, "message")) {
+                        changed = true;
+                        continue;
+                    }
+                    const stripped = try s.stripCoreMessages(p.value, depth + 1);
+                    changed = changed or stripped != null;
+                    pairs.append(s.gpa, .{ .key = p.key, .value = stripped orelse p.value.retain() }) catch |e| {
+                        (stripped orelse p.value).release();
+                        return e;
+                    };
+                }
+                if (!changed) return null;
+                return try V.map(s.gpa, pairs.items);
+            },
+            else => return null,
         }
-        var shown: ?*c.talk_value = null;
-        if (c.talk_map(pairs.items.ptr, pairs.items.len, &shown) != c.TALK_OK) return s.display(v);
-        defer c.talk_value_release(shown);
-        return s.display(shown);
     }
 
     /// At dispatch, a Run whose message's Selector a filter names is latched.
@@ -2795,7 +2892,7 @@ pub const Session = struct {
         const kv = s.observing.latched.fetchOrderedRemove(run) orelse return;
         const head = s.print("trace end {{script: {s}, run: {s}, selector: {s}, outcome: ", .{ s.textShown(x.script[0..x.script_len]), s.textShown(run), s.textShown(kv.value) });
         const tail = switch (x.outcome) {
-            c.TALK_COMPLETED => s.print("\"completed\", result: {s}}}", .{s.display(x.result)}),
+            c.TALK_COMPLETED => s.print("\"completed\", result: {s}}}", .{s.withoutCoreMessage(x.result)}),
             c.TALK_ERRORED => s.print("\"errored\", error: {s}}}", .{s.errorShown(x.@"error".*.data)}),
             c.TALK_LIMIT_FAULT => s.print("\"limit fault\", limit: {s}}}", .{s.textShown(x.limit[0..x.limit_len])}),
             c.TALK_CANCELLED => "\"cancelled\"}",

@@ -210,6 +210,7 @@ pub fn build(b: *std.Build) void {
         // peer_kit.zig reads corpus/peer-kit/ from impl/zig.
         run_runner_tests.setCwd(b.path("."));
         test_step.dependOn(&run_runner_tests.step);
+        test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = repl_module })).step);
         test_step.dependOn(&run_smoke.step);
         test_step.dependOn(&run_kit.step);
     }
