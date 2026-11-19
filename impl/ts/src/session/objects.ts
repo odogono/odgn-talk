@@ -672,10 +672,8 @@ export class SessionObjects {
   }
   preload(): Record<string, HostObject> {
     this.registrations();
+    // A Transcript records `setup` only when it binds objects.
     if (this.nextType() !== 'setup') {
-      if (this.replay?.length) {
-        malformed('missing setup');
-      }
       return {};
     }
     const e = this.consume('setup');
@@ -690,8 +688,8 @@ export class SessionObjects {
     if (this.replay) {
       return;
     }
-    // An empty legacy Session needs no envelopes.
-    if (!this.enabled) {
+    // An empty setup is the default, so it isn't recorded.
+    if (!this.enabled || Object.keys(bindings).length === 0) {
       return;
     }
     this.emit({

@@ -1551,12 +1551,18 @@ export class SessionHost {
         refuse('clock is real');
       }
       let us: bigint;
+      let negative: boolean;
       try {
-        us = waitUs(display(arg));
+        const duration = display(arg);
+        us = waitUs(duration);
+        // The sign is the duration's own, before it rounds to microseconds.
+        const amount = duration.asQuantityRef()!.number.toString();
+        negative =
+          amount.startsWith('-') && /[1-9]/.test(amount.split('e')[0]!);
       } catch {
         return refuse('bad arguments');
       }
-      if (us < 0n) {
+      if (negative) {
         refuse('bad arguments');
       }
       this.virtual! += us;

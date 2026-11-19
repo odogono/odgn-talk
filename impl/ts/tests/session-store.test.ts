@@ -152,7 +152,6 @@ describe('The Session Store', () => {
         '|   "best": 9',
         '| }',
         'loaded 1 keys',
-        '% {"objects":{},"type":"setup"}',
         '> on best',
         '|   ask s to get "best"',
         '|   say it',
