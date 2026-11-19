@@ -5,6 +5,22 @@ export type RunAncestry = {
   parentRun?: string;
   rootDelivery: string;
 };
+/**
+ * Copies `a` onto `into` in `RunAncestry` key order. Run reports are built
+ * once per turn, so they assign fields rather than spread them (#2235).
+ */
+export const putAncestry = (
+  into: Partial<RunAncestry>,
+  a: RunAncestry,
+): void => {
+  into.rootDelivery = a.rootDelivery;
+  if (a.parentRun !== undefined) {
+    into.parentRun = a.parentRun;
+  }
+  if (a.parentCall !== undefined) {
+    into.parentCall = a.parentCall;
+  }
+};
 export type RunStarted = RunAncestry & {
   args: Value[];
   delivery?: string;
@@ -26,6 +42,21 @@ export type RunAccounting = RunAncestry & {
   run: string;
   script: string;
   state: 'live' | 'terminal' | 'discarded';
+};
+/** A new live Run's accounting row report, which the Group owns. */
+export const accountingReport = (
+  a: RunAncestry,
+  script: string,
+  run: string,
+  fuel: number,
+): RunAccounting => {
+  const r: Partial<RunAccounting> = { kind: 'run accounting' };
+  putAncestry(r, a);
+  r.script = script;
+  r.run = run;
+  r.fuel = fuel;
+  r.state = 'live';
+  return r as RunAccounting;
 };
 export type CausalWork = {
   discardedMessages: number;
@@ -69,17 +100,20 @@ export const accountingTail = (
     (a, b) => a[1].order - b[1].order,
   )) {
     const r = row.report;
-    if (r.state === 'live') {
-      live.set(r.rootDelivery, (live.get(r.rootDelivery) ?? 0) + 1);
+    if (r.state !== 'live') {
+      // The row goes now and is never written again, so the Host can own
+      // its report without a copy.
+      reports.push(r);
+      changed.add(r.rootDelivery);
+      state.runs.delete(id);
+      continue;
     }
-    if (row.reportedFuel !== r.fuel || r.state !== 'live') {
+    live.set(r.rootDelivery, (live.get(r.rootDelivery) ?? 0) + 1);
+    if (row.reportedFuel !== r.fuel) {
       reports.push({ ...r });
       changed.add(r.rootDelivery);
     }
     row.reportedFuel = r.fuel;
-    if (r.state !== 'live') {
-      state.runs.delete(id);
-    }
   }
   for (const [root, row] of [...state.roots].sort(
     (a, b) => Number(a[0].slice(1)) - Number(b[0].slice(1)),
