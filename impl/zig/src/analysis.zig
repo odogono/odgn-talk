@@ -29,6 +29,9 @@ pub const Problem = struct {
     code: []const u8,
     line: usize,
     column: usize,
+    /// The exclusive end of its range (chapter 2, Syntax errors).
+    end_line: usize,
+    end_column: usize,
     /// More lines could complete the Entry at a Session prompt.
     incomplete: bool,
     /// A whole statement or expression was followed by more input.
@@ -157,7 +160,8 @@ pub fn executable(arena: Allocator, text: []const u8, expression: bool, bound: [
 fn problem(arena: Allocator, text: []const u8, d: parser.Diagnostic, trailing: bool) Allocator.Error!Problem {
     var lines = try lexer.Lines.init(arena, text);
     const at = lines.position(d.offset);
-    return .{ .code = d.code.spelling(), .line = at.line, .column = at.column, .incomplete = !ended(text, d, trailing), .trailing = trailing };
+    const end = lines.position(d.end);
+    return .{ .code = d.code.spelling(), .line = at.line, .column = at.column, .end_line = end.line, .end_column = end.column, .incomplete = !ended(text, d, trailing), .trailing = trailing };
 }
 
 /// Whether a failed parse leaves nothing to wait for: it failed after the

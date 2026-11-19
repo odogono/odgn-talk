@@ -115,7 +115,7 @@ static int group_test(void) {
     talk_load_options broken = {"broken", 6, "on t\n  put 1 into 3\nend t\n", 26, NULL, 0, false, NULL, NULL, 0, NULL, false};
     talk_script *refused = NULL;
     bad |= talk_load(group, &broken, &refused) != TALK_LOAD_REFUSED || refused != NULL;
-    bad |= strstr(trace, "diag broken code=\"not a container\" pos=2:14\n") == NULL;
+    bad |= strstr(trace, "diag broken code=\"not a container\" pos=2:14 end=2:15\n") == NULL;
     /* Public Loads always check their Grant environment, even when empty. */
     const char *ungranted_source = "on go\n ask api to read \"x\"\nend go\n";
     talk_load_options ungranted = {"ungranted", 9, ungranted_source, strlen(ungranted_source), NULL, 0, false, NULL, NULL, 0, NULL, false};
@@ -534,7 +534,7 @@ static int capability_test(void) {
     talk_load_options wrong = {"wrong", 5, wrong_source, strlen(wrong_source), grants, 1, false, NULL, NULL, 0, NULL, false};
     talk_script *refused = NULL;
     bad |= talk_load(group, &wrong, &refused) != TALK_LOAD_REFUSED;
-    bad |= strstr(trace, "diag wrong code=\"wrong argument\" pos=2:21\n") == NULL;
+    bad |= strstr(trace, "diag wrong code=\"wrong argument\" pos=2:21 end=2:22\n") == NULL;
     /* A Library is checked against declarations, not a Grant: here those
      * the definition gives, and a hand-written pair. */
     talk_operation_check checks[2];
@@ -606,7 +606,7 @@ static int host_command_test(void) {
     talk_load_options wrong = {"wrong", 5, wrong_source, strlen(wrong_source), grants, 1, false, NULL, NULL, 0, NULL, false};
     talk_script *refused = NULL;
     bad |= talk_load(group, &wrong, &refused) != TALK_LOAD_REFUSED;
-    bad |= strstr(trace, "diag wrong code=\"wrong argument\" pos=2:9\n") == NULL;
+    bad |= strstr(trace, "diag wrong code=\"wrong argument\" pos=2:9 end=2:10\n") == NULL;
     /* A Library resolves it against its declarations, and needs it. */
     talk_operation_check checks[1];
     bad |= talk_capability_def_checks(def, checks, 1) != 1 || !checks[0].command;
@@ -692,7 +692,7 @@ static int labels_test(void) {
     talk_load_options wrong = {"wrong", 5, wrong_source, strlen(wrong_source), grants, 1, false, NULL, NULL, 0, NULL, false};
     talk_script *refused = NULL;
     bad |= talk_load(group, &wrong, &refused) != TALK_LOAD_REFUSED;
-    bad |= strstr(trace, "diag wrong code=\"wrong labels\" pos=2:25\n") == NULL;
+    bad |= strstr(trace, "diag wrong code=\"wrong labels\" pos=2:25 end=2:27\n") == NULL;
     /* The checks lend the labels, and a Library is checked against them. */
     talk_operation_check checks[1];
     bad |= talk_capability_def_checks(def, checks, 1) != 1 || checks[0].labels_len != 1 || checks[0].labels_lens[0] != 2 || memcmp(checks[0].labels[0], "to", 2) != 0;
@@ -3174,6 +3174,8 @@ static int library_test(void) {
     if (!bad) {
         const talk_diagnostic *d = &refused->diagnostics[0];
         bad |= d->unit_len != 6 || memcmp(d->unit, "broken", 6) != 0 || d->line != 2 || d->code_len == 0;
+        /* Its range is the token `3`, its end exclusive. */
+        bad |= d->col != 14 || d->end_line != 2 || d->end_col != 15;
         talk_owned_bytes said = {0};
         bad |= talk_load_error_error(refused, &said) != TALK_OK || said.len < 9 || memcmp(said.data, "broken:2:", 9) != 0;
         talk_owned_bytes_release(&said);
@@ -3181,7 +3183,15 @@ static int library_test(void) {
     talk_load_error_release(refused);
     /* A Constant whose initialiser raises refuses the Library too. */
     talk_library_source failing_src = {"failing", 7, "1", 1, "constant x = 1 / 0\n", 19};
-    bad |= talk_compile_library(core, &failing_src, NULL, 0, NULL, 0, &broken, NULL) != TALK_LOAD_REFUSED;
+    refused = NULL;
+    bad |= talk_compile_library(core, &failing_src, NULL, 0, NULL, 0, &broken, &refused) != TALK_LOAD_REFUSED;
+    /* At the raising `/`, its range the token there. */
+    bad |= refused == NULL || refused->diagnostics_len != 1;
+    if (!bad) {
+        const talk_diagnostic *d = &refused->diagnostics[0];
+        bad |= d->line != 1 || d->col != 16 || d->end_line != 1 || d->end_col != 17;
+    }
+    talk_load_error_release(refused);
     /* Imports first, one per name, and never a stdlib name. */
     bad |= talk_add_library(group, top) != TALK_LIBRARY_MISMATCH;
     bad |= talk_add_library(group, base) != TALK_OK;

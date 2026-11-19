@@ -4332,7 +4332,7 @@ export fn talk_compile_library(c: *Core, src: *const LibrarySource, imports: ?[*
     }
 }
 
-pub const Diagnostic = extern struct { code: [*]const u8, code_len: usize, message: [*]const u8 = "", message_len: usize = 0, unit: [*]const u8, unit_len: usize, line: i64, col: i64 };
+pub const Diagnostic = extern struct { code: [*]const u8, code_len: usize, message: [*]const u8 = "", message_len: usize = 0, unit: [*]const u8, unit_len: usize, line: i64, col: i64, end_line: i64, end_col: i64 };
 pub const LoadError = extern struct { diagnostics: [*]const Diagnostic, diagnostics_len: usize };
 
 /// A refusal's diagnostics, in an arena the LoadError heads.
@@ -4346,7 +4346,7 @@ fn loadError(unit: []const u8, diags: []const machine.Diagnostic) ?*LoadError {
     const out = a.alloc(Diagnostic, diags.len) catch return null;
     for (diags, out) |d, *o| {
         const code = a.dupe(u8, d.code) catch return null;
-        o.* = .{ .code = code.ptr, .code_len = code.len, .unit = name.ptr, .unit_len = name.len, .line = d.line, .col = d.column };
+        o.* = .{ .code = code.ptr, .code_len = code.len, .unit = name.ptr, .unit_len = name.len, .line = d.line, .col = d.column, .end_line = d.end_line, .end_col = d.end_column };
     }
     held.view = .{ .diagnostics = out.ptr, .diagnostics_len = out.len };
     return &held.view;

@@ -894,8 +894,21 @@ pub const Compiled = union(enum) {
     refused: []const Diagnostic,
 };
 
-/// A diagnostic with its position, as a `diag` record writes it.
-pub const Diagnostic = struct { code: []const u8, line: u32, column: u32 };
+/// A diagnostic with its position and the exclusive end of its range, as a
+/// `diag` record writes them.
+pub const Diagnostic = struct { code: []const u8, line: u32, column: u32, end_line: u32, end_column: u32 };
+
+/// A diagnostic at a raising instruction's position in the source map, which
+/// keeps only its start: its range is the token that starts there, lexed
+/// afresh, or empty where none does, as at a synthetic 1:1 (chapter 2).
+fn rangeAtPosition(a: Allocator, source: []const u8, at: ?lower.Position, mode: lexer.Mode) !struct { start: lower.Position, end: lower.Position } {
+    const p = at orelse return .{ .start = .{ .line = 1, .column = 1 }, .end = .{ .line = 1, .column = 1 } };
+    var lines: lexer.Lines = try .init(a, source);
+    defer lines.deinit(a);
+    const offset = lines.offsetOf(.{ .line = p.line, .column = p.column });
+    const e = lines.position(try lexer.tokenEndAt(a, source, offset, mode));
+    return .{ .start = p, .end = .{ .line = @intCast(e.line), .column = @intCast(e.column) } };
+}
 
 /// Compiles a Library against the Libraries it imports, which must hold
 /// every one its `use` lines name besides the stdlib's.
@@ -910,16 +923,17 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
     const src = try kept.dupe(u8, source);
     var lines: lexer.Lines = try .init(a, src);
     const refused = struct {
-        fn one(al: Allocator, ls: *lexer.Lines, code: []const u8, offset: usize) ![]const Diagnostic {
+        fn one(al: Allocator, ls: *lexer.Lines, code: []const u8, offset: usize, end: usize) ![]const Diagnostic {
             const p = ls.position(offset);
+            const e = ls.position(end);
             const out = try al.alloc(Diagnostic, 1);
-            out[0] = .{ .code = code, .line = @intCast(p.line), .column = @intCast(p.column) };
+            out[0] = .{ .code = code, .line = @intCast(p.line), .column = @intCast(p.column), .end_line = @intCast(e.line), .end_column = @intCast(e.column) };
             return out;
         }
     };
     const tree = switch (try parser.parseWithScratch(a, gpa, src)) {
         .failure => |d| {
-            const diags = try refused.one(gpa, &lines, d.code.spelling(), d.offset);
+            const diags = try refused.one(gpa, &lines, d.code.spelling(), d.offset, d.end);
             return .{ .refused = diags };
         },
         .tree => |t| t,
@@ -962,8 +976,9 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
     if (checked.diagnostics.len > 0) {
         const diags = try gpa.alloc(Diagnostic, checked.diagnostics.len);
         for (checked.diagnostics, diags) |d, *x| {
-            const p = lines.position(d.offset);
-            x.* = .{ .code = d.code.spelling(), .line = @intCast(p.line), .column = @intCast(p.column) };
+            const p = d.position(&lines);
+            const e = d.endPosition(&lines);
+            x.* = .{ .code = d.code.spelling(), .line = @intCast(p.line), .column = @intCast(p.column), .end_line = @intCast(e.line), .end_column = @intCast(e.column) };
         }
         return .{ .refused = diags };
     }
@@ -1041,9 +1056,9 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
         .errored => |v| {
             // `initialiser failed`, at the raising instruction.
             v.release();
-            const at = run.raised_at orelse lower.Position{ .line = 1, .column = 1 };
+            const at = try rangeAtPosition(a, src, run.raised_at, .operator);
             const diags = try gpa.alloc(Diagnostic, 1);
-            diags[0] = .{ .code = "initialiser failed", .line = at.line, .column = at.column };
+            diags[0] = .{ .code = "initialiser failed", .line = at.start.line, .column = at.start.column, .end_line = at.end.line, .end_column = at.end.column };
             l.destroy();
             return .{ .refused = diags };
         },
@@ -2300,7 +2315,8 @@ pub const Group = struct {
         const tree = switch (parsed.result) {
             .failure => |d| {
                 const p = lines.position(d.offset);
-                g.write("diag {s} code=\"{s}\" pos={d}:{d}\n", .{ label, d.code.spelling(), p.line, p.column });
+                const e = lines.position(d.end);
+                g.write("diag {s} code=\"{s}\" pos={d}:{d} end={d}:{d}\n", .{ label, d.code.spelling(), p.line, p.column, e.line, e.column });
                 refused.* = 1;
                 return null;
             },
@@ -2317,7 +2333,8 @@ pub const Group = struct {
         if (diagnostics.items.len > 0) {
             for (diagnostics.items) |d| {
                 const p = d.position(&lines);
-                g.write("diag {s} code=\"{s}\" pos={d}:{d}\n", .{ label, d.code.spelling(), p.line, p.column });
+                const e = d.endPosition(&lines);
+                g.write("diag {s} code=\"{s}\" pos={d}:{d} end={d}:{d}\n", .{ label, d.code.spelling(), p.line, p.column, e.line, e.column });
                 if (d.whose_name) |n| try g.addWhoseHint(label, p.line, p.column, t.text(n));
             }
             refused.* = diagnostics.items.len;
@@ -2331,7 +2348,11 @@ pub const Group = struct {
         // error, at its opening `<`.
         const oversized = try oversizedPatterns(scratch, &unit, pattern_size);
         if (oversized.len > 0) {
-            for (oversized) |p| g.write("diag {s} code=\"pattern too large\" pos={d}:{d}\n", .{ label, p.line, p.column });
+            for (oversized) |p| {
+                // At the literal's opening `<`.
+                const at = try rangeAtPosition(scratch, lines.source, p, .operand);
+                g.write("diag {s} code=\"pattern too large\" pos={d}:{d} end={d}:{d}\n", .{ label, p.line, p.column, at.end.line, at.end.column });
+            }
             for (unit.values) |v| if (v == .value) v.value.release();
             refused.* = oversized.len;
             return null;
@@ -2361,6 +2382,7 @@ pub const Group = struct {
     /// Runs a unit's initialiser once, uncharged: false, with its
     /// `initialiser failed` diagnostic under `label`, when it raises.
     fn initialise(g: *Group, s: *Script, library: ?*Library, label: []const u8) !bool {
+        const source = if (library) |l| l.source else s.source;
         const definitions = if (library) |l| l.definitions else s.definitions;
         for (definitions) |*v| {
             const bound = try g.bindLibraryValue(s, library, v.*);
@@ -2387,8 +2409,8 @@ pub const Group = struct {
             .errored => |v| {
                 // `initialiser failed`, at the raising instruction.
                 v.release();
-                const at = run.raised_at orelse lower.Position{ .line = 1, .column = 1 };
-                g.write("diag {s} code=\"initialiser failed\" pos={d}:{d}\n", .{ label, at.line, at.column });
+                const at = try rangeAtPosition(g.gpa, source, run.raised_at, .operator);
+                g.write("diag {s} code=\"initialiser failed\" pos={d}:{d} end={d}:{d}\n", .{ label, at.start.line, at.start.column, at.end.line, at.end.column });
                 return false;
             },
             else => {},
@@ -2892,7 +2914,7 @@ pub const Group = struct {
                 },
                 .refused => |diags| {
                     defer compiler.free(diags);
-                    for (diags) |d| g.write("diag {s} code=\"{s}\" pos={d}:{d}\n", .{ x.name, d.code, d.line, d.column });
+                    for (diags) |d| g.write("diag {s} code=\"{s}\" pos={d}:{d} end={d}:{d}\n", .{ x.name, d.code, d.line, d.column, d.end_line, d.end_column });
                     failed = true;
                 },
             }
@@ -3080,7 +3102,7 @@ pub const Group = struct {
                     if (seen) continue;
                     try missing.append(a, n);
                 }
-                try out.append(a, .{ .code = code, .offset = offset });
+                try out.append(a, .{ .code = code, .offset = offset, .end = lexer.rangeEnd(t.tokens[u.keyword]) });
             }
         };
     }
