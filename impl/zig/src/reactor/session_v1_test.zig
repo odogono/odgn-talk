@@ -255,7 +255,8 @@ fn runCase(gpa: std.mem.Allocator, text: []const u8, expected_trace: []const u8,
         next += 1;
         if (x == null and y == null) break;
         n += 1;
-        if (x == null or y == null or !try northtalk.corpus_trace.matches(a, x.?, y.?)) {
+        const following: ?[]const u8 = if (next < g.trace.items.len) g.trace.items[next] else null;
+        if (x == null or y == null or !try northtalk.corpus_trace.matches(a, x.?, y.?, following)) {
             std.debug.print("{s}: case.trace line {d}\n  expected: {s}\n  actual:   {s}\n", .{ name, n, x orelse "<end>", y orelse "<end>" });
             return error.CaseFailed;
         }

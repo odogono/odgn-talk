@@ -222,7 +222,8 @@ fn traceCaseOnce(init: std.process.Init, detail: *std.Io.Writer, name: []const u
         const y = nextRecord(&got);
         if (x == null and y == null) return count;
         count += 1;
-        if (x == null or y == null or !try trace.matches(init.gpa, x.?, y.?)) {
+        var peek = got;
+        if (x == null or y == null or !try trace.matches(init.gpa, x.?, y.?, nextRecord(&peek))) {
             try detail.print("{s}: line {d}\n  expected: {s}\n  actual:   {s}", .{ name, count, x orelse "<end>", y orelse "<end>" });
             return error.CaseFailed;
         }

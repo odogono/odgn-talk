@@ -112,7 +112,8 @@ test "replayed Trace Cases give their Traces" {
             const x = nextRecord(&want);
             const y = nextRecord(&got);
             if (x == null and y == null) break;
-            if (x == null or y == null or !try trace.matches(a, x.?, y.?)) {
+            var peek = got;
+            if (x == null or y == null or !try trace.matches(a, x.?, y.?, nextRecord(&peek))) {
                 failures += 1;
                 std.debug.print("{s}:\n  expected: {s}\n  actual:   {s}\n", .{ name, x orelse "<end>", y orelse "<end>" });
                 break;

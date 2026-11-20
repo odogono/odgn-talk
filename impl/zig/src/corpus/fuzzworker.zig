@@ -216,7 +216,8 @@ const Refs = struct {
         var it = std.mem.splitScalar(u8, lines, '\n');
         while (it.next()) |line| {
             if (line.len == 0) continue;
-            const r = (trace.parseWritten(a, line) catch return error.MalformedTrace) orelse continue;
+            const following = it.peek();
+            const r = (trace.parseWritten(a, line, following) catch return error.MalformedTrace) orelse continue;
             const name = try std.fmt.allocPrint(a, "{s}{s}", .{ if (r.input) ">" else "", r.name });
             const counted = try refs.records.getOrPut(a, name);
             if (!counted.found_existing) counted.value_ptr.* = 0;
@@ -254,7 +255,8 @@ const Refs = struct {
             }
             if (r.input and is(r.name, &.{ "deliver", "request", "decide", "broadcast", "decide-broadcast" }) and r.ids.len > 0) try refs.deliveries.add(a, first);
             if (!r.input and is(r.name, &.{ "seg", "preempt", "run" })) if (field(r, "delivery")) |d| refs.deliveries.delete(d);
-            if (r.input and std.mem.eql(u8, r.name, "restore")) {
+            // A refused restore changed nothing, so the refs stay as they were.
+            if (r.input and std.mem.eql(u8, r.name, "restore") and !trace.refusedBy(following)) {
                 refs.runs.clear();
                 refs.pending.clear();
                 refs.settlements.clear();

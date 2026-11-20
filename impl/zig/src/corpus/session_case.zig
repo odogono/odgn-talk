@@ -133,7 +133,8 @@ fn runText(gpa: std.mem.Allocator, text: []const u8, expected_trace: ?[]const u8
         const y = nextRecord(&got_trace);
         if (x == null and y == null) break;
         n += 1;
-        if (x == null or y == null or !try trace.matches(a, x.?, y.?)) {
+        var peek = got_trace;
+        if (x == null or y == null or !try trace.matches(a, x.?, y.?, nextRecord(&peek))) {
             try detail.print("{s}: case.trace line {d}\n  expected: {s}\n  actual:   {s}", .{ name, n, x orelse "<end>", y orelse "<end>" });
             return error.CaseFailed;
         }
