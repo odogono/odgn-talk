@@ -515,6 +515,7 @@ static int capability_test(void) {
     talk_load_options load = {"caller", 6, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL, false};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
+    bad |= script == NULL || strstr(trace, "diag ") != NULL;
     const char *inputs[] = {"ab", ""};
     for (int i = 0; i < 2; i++) {
         talk_value *text = NULL;
@@ -2305,7 +2306,7 @@ static int libraries_test(void) {
     bad |= talk_add_library(group, base) != TALK_OK;
     bad |= talk_add_library(group, wrapper) != TALK_OK;
     bad |= talk_libraries(group, &held) != 2 || held[0] != base || held[1] != wrapper;
-    const char *source = "use g from wrapper\nscript variable n = g()\n";
+    const char *source = "use g from wrapper\non go\n  return g()\nend go\n";
     talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL, false};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
@@ -2327,6 +2328,12 @@ static int libraries_test(void) {
         bad |= memcmp(was, now, 32) == 0;
         talk_library *const *imports = NULL;
         bad |= talk_library_imports(current[1], &imports) != 1 || imports[0] != next;
+    }
+    if (bad) {
+        fprintf(stderr, "%s", trace);
+        talk_group_release(group);
+        talk_core_release(core);
+        return 1;
     }
     talk_owned_bytes saved = {0};
     bad |= talk_save(group, &saved) != TALK_OK;
