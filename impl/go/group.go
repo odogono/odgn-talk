@@ -20,10 +20,13 @@ type Group struct {
 	traceQueue []string
 	recording  bool
 
-	mu             sync.Mutex
-	core           *Core
-	options        GroupOptions
-	libraries      map[string]*Library
+	mu        sync.Mutex
+	core      *Core
+	options   GroupOptions
+	libraries map[string]*Library
+	// libraryOrder is the user Libraries' names in the order the Group added
+	// them; a replacement keeps its place.
+	libraryOrder   []string
 	objects        map[objectKey]*Object
 	scripts        []*Script
 	inputs         []delivery
@@ -105,9 +108,29 @@ func (g *Group) ScriptNames() []string {
 	return names
 }
 
-// Libraries gives the user Libraries the Group holds now (spec chapter 9).
-// It returns nil until the reactor answers the libraries message (#2350).
-func (g *Group) Libraries() []*Library { return nil }
+// Libraries gives the user Libraries the Group holds now, in the order it
+// added them, with every Library ReplaceLibrary recompiled in place of the one
+// it replaced, and no stdlib Library (spec chapter 9). It is what Restore
+// takes. Like ScriptNames it is Host inspection: it charges nothing, records
+// nothing in the Trace, and may be called inside a Pump.
+func (g *Group) Libraries() []*Library {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	out := make([]*Library, 0, len(g.libraryOrder))
+	for _, name := range g.libraryOrder {
+		if l := g.libraries[name]; l != nil {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// holdLibraries sets the Libraries the Group holds, by name, in add order.
+func (g *Group) holdLibraries(byName map[string]*Library, order []string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.libraries, g.libraryOrder = byName, order
+}
 
 func (g *Group) script(name string) *Script {
 	for _, s := range g.scripts {

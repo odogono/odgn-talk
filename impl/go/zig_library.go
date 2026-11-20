@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"maps"
+	"slices"
 )
 
 // zigCompileLibrary checks a Library in a Core-owned guest, so neither the
@@ -150,7 +151,10 @@ func (b *zigGroup) addLibrary(l *Library) error {
 	}
 	_, err = b.send("add-library", map[string]any{"identity": zigIdentity(l.id)})
 	if err == nil {
-		b.group.libraries[l.Name()] = l
+		g := b.group
+		next := maps.Clone(g.libraries)
+		next[l.Name()] = l
+		g.holdLibraries(next, append(slices.Clone(g.libraryOrder), l.Name()))
 	}
 	return err
 }
@@ -224,6 +228,30 @@ func (b *zigGroup) commitReplacement(l *Library) error {
 			return err
 		}
 	}
-	b.group.libraries = next
+	b.group.holdLibraries(next, b.group.libraryOrder)
+	return nil
+}
+
+// holdGuestLibraries sets the Group's Libraries to the ones its guest holds,
+// in its order, from the handles offered: after a Restore, only the guest
+// knows which offered Libraries the save used.
+func (b *zigGroup) holdGuestLibraries(offered map[string]*Library) error {
+	reply, err := b.send("libraries", map[string]any{})
+	if err != nil {
+		return err
+	}
+	held := map[string]*Library{}
+	var order []string
+	for _, item := range reply.get("libraries").items() {
+		name, _ := item.get("name").text()
+		raw, _ := zigBytes(item.get("identity"))
+		l := offered[name]
+		if l == nil || hex.EncodeToString(raw) != hex.EncodeToString(l.id[:]) {
+			return fmt.Errorf("Zig guest holds a Library %q the Host didn't offer", name)
+		}
+		held[name] = l
+		order = append(order, name)
+	}
+	b.group.holdLibraries(held, order)
 	return nil
 }

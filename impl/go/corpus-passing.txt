@@ -417,6 +417,7 @@ sessions/store-notify-host-changes
 sessions/store-notify-lifecycle
 sessions/store-notify-own-writes
 sessions/trace-core-messages
+sessions/transitive-library-restore
 sessions/user-prompts
 sessions/virtual-clock
 stdlib/calls

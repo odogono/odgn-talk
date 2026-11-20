@@ -226,7 +226,14 @@ func TestLibraryHandlersAndTransitiveReplacement(t *testing.T) {
 	if out := h.Input("g()"); !reflect.DeepEqual(out, []string{"2"}) {
 		t.Fatal(out)
 	}
-	// TS and Zig refuse the restore as `save mismatch` (#2341).
+	h.Input(":save")
+	if out := h.Input(":restore"); !reflect.DeepEqual(out, []string{"restored default"}) {
+		t.Fatal(out)
+	}
+	h.Input(":library replace base\nfunction f\nreturn 3\nend f\non greet n\nsay n\nend greet")
+	if out := h.Input(":restore"); !reflect.DeepEqual(out, []string{"! save mismatch"}) {
+		t.Fatal(out)
+	}
 }
 func TestReadsKeepCallOrderAndReleaseAbandonedCalls(t *testing.T) {
 	h := New(Environment{})

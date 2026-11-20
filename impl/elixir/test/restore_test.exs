@@ -219,6 +219,35 @@ defmodule NorthTalk.RestoreTest do
     assert peek(group) == ""
   end
 
+  test "libraries gives a replacement's recompiled dependant, and a restore with them is full" do
+    {owner, _grant} = owner()
+    group = NorthTalk.new_group!(owner, "g", [])
+    assert NorthTalk.libraries!(group) == []
+    base = NorthTalk.compile_library!(owner, "base", "1", "function f\n  return 1\nend f\n", [])
+
+    wrapper =
+      NorthTalk.compile_library!(owner, "wrapper", "1", "use f from base\nfunction g\n  return f()\nend g\n",
+        imports: [base]
+      )
+
+    next = NorthTalk.compile_library!(owner, "base", "2", "function f\n  return 2\nend f\n", [])
+    :ok = NorthTalk.add_library!(group, base)
+    :ok = NorthTalk.add_library!(group, wrapper)
+    assert [%{name: "base"}, %{name: "wrapper"}] = NorthTalk.libraries!(group)
+    NorthTalk.load!(group, "s", "use g from wrapper\non go\n  return g()\nend go\n", [])
+    {:ok, _reports} = NorthTalk.replace_library(group, next)
+    current = NorthTalk.libraries!(group)
+    assert [%{name: "base", identity: base_id}, %{name: "wrapper", identity: wrapper_id}] = current
+    assert base_id == next.identity
+    refute wrapper_id == wrapper.identity
+    save = NorthTalk.save!(group)
+
+    assert {:ok, %Restored{variables_only: false}} = NorthTalk.restore(owner, "copy", save, libraries: current)
+
+    assert {:error, %HostError{code: "save mismatch"}} =
+             NorthTalk.restore(owner, "stale", save, libraries: [next, wrapper])
+  end
+
   test "a changed Library is a save mismatch without reload changed" do
     {owner, new, _note, save, _group} = saved_with_queued_note()
     assert {:error, %HostError{code: "save mismatch"}} = NorthTalk.restore(owner, "copy", save, libraries: [new])

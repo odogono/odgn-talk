@@ -19,10 +19,8 @@ func init() {
 	replay.Libraries = func(group any) []any {
 		g := group.(*Group)
 		out := []any{}
-		for name, l := range g.libraries {
-			if !isStandardLibrary(name) {
-				out = append(out, l)
-			}
+		for _, l := range g.Libraries() {
+			out = append(out, l)
 		}
 		return out
 	}

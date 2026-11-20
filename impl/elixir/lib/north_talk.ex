@@ -392,6 +392,15 @@ defmodule NorthTalk do
     do: GenServer.call(owner, {:replace_library, group, library, opts})
 
   @doc """
+  The user Libraries a Group holds now, in the order it added them, with
+  every Library `replace_library/3` recompiled in place of the one it
+  replaced, and no stdlib Library: what `restore/4`'s `:libraries` takes.
+  Each carries its `name` and `identity`. It charges nothing and writes
+  nothing to the Trace.
+  """
+  def libraries(%Group{owner: owner} = group), do: GenServer.call(owner, {:libraries, group})
+
+  @doc """
   Saves a Group, as bytes only a Zig Core reads. A save holds no Grant
   bindings, callbacks or waiting requests, and is refused with
   `effects pending` while a Capability Scope or Segment participant is live.
@@ -472,6 +481,7 @@ defmodule NorthTalk do
         reload: 4,
         extend: 3,
         replace_library: 3,
+        libraries: 1,
         save: 1,
         restore: 4,
         settle: 3,

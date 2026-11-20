@@ -70,6 +70,9 @@ func zigRestore(c *Core, save []byte, o RestoreOptions, options []GroupOption) (
 		}
 		return b.restoreReceipt(reply, &result)
 	})
+	if err == nil {
+		err = b.holdGuestLibraries(g.libraries)
+	}
 	if err != nil {
 		return nil, RestoreResult{}, err
 	}
