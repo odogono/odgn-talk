@@ -431,6 +431,52 @@ describe('restore compatibility and durable values', () => {
     expect(operationalReports(copy.pump(1n).reports)).toEqual([]);
   });
 
+  test("the Group's Libraries restore in full after a transitive replace (#2341)", () => {
+    const base = (n: number) =>
+      compileLibrary({
+        name: 'base',
+        version: '1',
+        source: `function f\n  return ${n}\nend f`,
+      });
+    const base1 = base(1);
+    const wrapper = compileLibrary(
+      {
+        name: 'wrapper',
+        version: '1',
+        source: 'use f from base\nfunction g\n  return f()\nend g',
+      },
+      [base1],
+    );
+    const trace: string[] = [];
+    const g = newGroup({ name: 'g', trace: line => trace.push(line) });
+    g.addLibrary(base1);
+    g.addLibrary(wrapper);
+    g.load({
+      name: 's',
+      source: 'use g from wrapper\non go\n  return g()\nend go',
+    });
+    g.replaceLibrary(base(2), 'carry variables');
+    const traced = trace.length;
+    const libraries = g.libraries();
+    expect(trace.length).toBe(traced);
+    expect(libraries.map(l => l.name)).toEqual(['base', 'wrapper']);
+    expect(libraries[1]).not.toBe(wrapper);
+    const saved = g.save();
+    // The Libraries the Host compiled itself are stale.
+    expect(() =>
+      restore(saved, { ...options([]), libraries: [base(2), wrapper] }),
+    ).toThrow('save mismatch');
+    const { group: copy, result } = restore(saved, {
+      ...options([]),
+      libraries,
+    });
+    expect(result.variablesOnly).toBe(false);
+    expect(copy.fingerprint()).toEqual(g.fingerprint());
+    copy.script('s')!.deliver({ name: 'go' });
+    const report = operationalReports(copy.pump(0n).reports)[0]!;
+    expect('result' in report && report.result!.toString()).toBe('2');
+  });
+
   test('unbound Grants keep their declarations and unresolved objects become disposed', () => {
     const capability = defineCapability('log', {
       write: {

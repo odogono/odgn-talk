@@ -1825,7 +1825,16 @@ export class SessionHost {
       this.deadline = undefined;
       return this.discarded(reports);
     }
-    this.libraries.set(name!, { library });
+    if (how === 'replace') {
+      // The replace recompiled every Library that imports this one, so the
+      // Group's Libraries are the ones a restore needs (chapter 10).
+      this.libraries.clear();
+      for (const held of this.group!.libraries()) {
+        this.libraries.set(held.name, { library: held });
+      }
+    } else {
+      this.libraries.set(name!, { library });
+    }
     if (how === 'add') {
       this.setup0 = immutableSetup({
         ...this.setup0,
