@@ -632,6 +632,57 @@ describe.skipIf(!built)('@northtalk/ts/wasm', () => {
     },
   );
 
+  both(
+    "Libraries gives a replacement's recompiled dependant, and a restore takes it",
+    async core => {
+      const base = (n: number) =>
+        core.compileLibrary({
+          name: 'base',
+          version: '1',
+          source: `function f\n  return ${n}\nend f`,
+        });
+      const first = base(1);
+      const wrapper = core.compileLibrary(
+        {
+          name: 'wrapper',
+          version: '1',
+          source: 'use f from base\nfunction g\n  return f()\nend g',
+        },
+        [first],
+      );
+      const g = core.newGroup({ name: 'g' });
+      g.addLibrary(first);
+      g.addLibrary(wrapper);
+      g.load({
+        name: 's',
+        source: 'use g from wrapper\non go\n  return g()\nend go',
+      });
+      const before = g.libraries().map(l => l.name);
+      g.replaceLibrary(base(2), 'carry variables');
+      const held = g.libraries();
+      const { group: copy, result } = core.restore(g.save(), {
+        name: 'copy',
+        libraries: held,
+        grants: () => undefined,
+        resolve: () => undefined,
+        onMismatch: 'reject',
+      });
+      const r = copy.script('s')!.request({ name: 'go' });
+      copy.pump(second);
+      return {
+        before,
+        after: held.map(l => l.name),
+        recompiled: held[1] !== wrapper && held[1]!.imports[0] === held[0],
+        identities: held.map(l => Buffer.from(l.identity).toString('hex')),
+        variablesOnly: result.variablesOnly,
+        result: (await r.result).toString(),
+        again: copy
+          .libraries()
+          .map(l => Buffer.from(l.identity).toString('hex')),
+      };
+    },
+  );
+
   both('Host Command Result Targets survive restore rebinding', (core, nt) => {
     const grant = core
       .defineCapability('api', {

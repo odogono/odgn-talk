@@ -3764,6 +3764,16 @@ pub const Group = struct {
         return null;
     }
 
+    /// Group.Libraries (chapter 9): the user Libraries the Group holds now,
+    /// in the order it added them, with every Library `replaceLibrary`
+    /// recompiled in place of the one it replaced, and no stdlib Library.
+    /// It is what a restore takes. Borrowed until the Group's next Library
+    /// change. It reads the Group without changing it: no charge and no
+    /// Trace line, so it is safe inside a Pump.
+    pub fn heldLibraries(g: *const Group) []const *Library {
+        return g.libraries.items;
+    }
+
     /// Queues a Delivery to the Script `to`. Takes the arguments.
     /// Queues a Host call of a Function Value (chapter 9, Function Values):
     /// a Request to its Home Script. Takes the arguments.

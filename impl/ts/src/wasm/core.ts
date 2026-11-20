@@ -114,6 +114,8 @@ export class WasmCore implements Core {
     this.#groupCore = {
       session: () => this.#session(),
       install: (session, library) => this.#install(session, library),
+      recompile: (library, imports) =>
+        this.compileLibrary(library, imports, this.#declarations.get(library)),
       kind: name => this.#kinds.find(k => k.name === name),
     };
   }

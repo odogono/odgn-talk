@@ -2306,8 +2306,24 @@ pub const Session = struct {
             s.follow(reports);
         }
         try s.libraries.put(s.alloc(), s.dupe(name), .{ .source = source, .library = library.? });
+        // A replacement recompiles every Library that imports this one, so
+        // the session restores with the Group's Libraries (chapter 12).
+        if (!add) s.refreshLibraries();
         s.harvestLibrary(library, name, source);
         s.harvest();
+    }
+
+    /// Takes each held Library's handle from the Group, which the Core owns,
+    /// keeping its source, which a recompile doesn't change.
+    fn refreshLibraries(s: *Session) void {
+        var held: [*c]const ?*c.talk_library = null;
+        const n = c.talk_libraries(s.group, &held);
+        for (held[0..n]) |l| {
+            var name: [*c]const u8 = null;
+            var len: usize = 0;
+            c.talk_library_name(l, &name, &len);
+            if (s.libraries.getPtr(name[0..len])) |x| x.library = l.?;
+        }
     }
 
     /// The Operation Declarations a Library is checked against: `console`,
