@@ -1,0 +1,33 @@
+# Unblessed: restore after a transitive Library replacement (#2348); first blessing awaits human review.
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> add-library base identity=1935541958ca48f38789febd1343525fc7122075fb468aa04a6442cac48bc7a0
+> add-library wrapper identity=cd78efcbd56e9a9638dd148b8e4120afbb1ff8d1d5f87b399f6caf2b01fdd98a
+> extend session source="use g from wrapper" identity=ca381c687052047874e5e98dda4de9087caa9c171894c08f16d6e99ed9e24d94
+> replace-library base carry=yes source="function f" & newline & "  return 2" & newline & "end f" & newline & "on greet n" & newline & "  say n" & newline & "end greet" & newline identity=2f5f31f43562e8c11b4605ba593ecb682d841d9ee21edcb5e0637af1acfd37a9
+stopped session reason="reload"
+> extend session source="on entry1" & newline & "return g()" & newline & "end entry1" & newline identity=ee05c6d8357ca0ecbb757c5c1e341576334f548d818a2903ed040e7190addf10
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=27 alloc=0 state=0 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 value=2 fuel=27 alloc=0
+pumped state=idle fuel=27
+> save s1
+> restore from=s1 fingerprint=6082d89b22368d4be4e4174f7857385965607474277ae63f40978294fb28ef3e mode=full
+> extend session source="on entry2" & newline & "return g()" & newline & "end entry2" & newline identity=9f119aa81d26e7170381b26c98703543edff1614a590ee3118129f4996282639
+> request d2 to=session message=entry2
+> pump clock=2026-09-30T10:00:00Z
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=27 alloc=0 state=0 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 value=2 fuel=27 alloc=0
+pumped state=idle fuel=27
+> replace-library base carry=yes source="function f" & newline & "  return 3" & newline & "end f" & newline & "on greet n" & newline & "  say n" & newline & "end greet" & newline identity=6a032fbe6e691a05df5cefa268f02b0519d83089e2a94d1eb9d9243516ba299c
+stopped session reason="reload"
+> extend session source="on entry3" & newline & "return g()" & newline & "end entry3" & newline identity=6e899d4cc5ad7379f51bbe0072d777c8574832447a0a2520a54ea2d40bb4d8ce
+> request d3 to=session message=entry3
+> pump clock=2026-09-30T10:00:00Z
+seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=27 alloc=0 state=0 end=return
+run session/r3 outcome=completed delivery=d3 handler=entry3 value=3 fuel=27 alloc=0
+pumped state=idle fuel=27
+> restore from=s1 fingerprint=6082d89b22368d4be4e4174f7857385965607474277ae63f40978294fb28ef3e
+refused code="save mismatch"
+> vars
+vars session
