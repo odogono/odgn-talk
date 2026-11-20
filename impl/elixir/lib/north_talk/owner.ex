@@ -493,6 +493,16 @@ defmodule NorthTalk.Owner do
     {:reply, reply, state}
   end
 
+  def handle_call({:libraries, %Group{name: g}}, _from, state) do
+    {reply, state} = exchange(state, "libraries", %{"group" => g})
+
+    held = fn ok ->
+      Enum.map(ok["libraries"], fn l -> %Library{name: l["name"], identity: l["identity"]["$bytes"]} end)
+    end
+
+    {:reply, ok(reply, held), state}
+  end
+
   def handle_call({:reload, %Group{name: g}, script, source, opts}, _from, state) do
     fields = %{
       "group" => g,
