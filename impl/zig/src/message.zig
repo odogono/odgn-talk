@@ -4511,6 +4511,27 @@ fn scriptUnitsReply(s: *Session, msg: Json, ref: i64) []u8 {
     return finishOk(s, &o, null);
 }
 
+/// `libraries`: the user Libraries the Group holds now, as `[{name,
+/// identity}]` in the order it added them, including those a replacement
+/// recompiled. It reads the Group without changing it: no Trace line.
+fn librariesReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    o.raw("\"libraries\":[") catch return oomReply();
+    for (entry.group.group.heldLibraries(), 0..) |l, i| {
+        if (i > 0) o.raw(",") catch return oomReply();
+        o.raw("{\"name\":") catch return oomReply();
+        o.text(l.name) catch return oomReply();
+        o.raw(",\"identity\":") catch return oomReply();
+        o.bytesTag(s.gpa, &l.identity) catch return oomReply();
+        o.raw("}") catch return oomReply();
+    }
+    o.raw("]") catch return oomReply();
+    return finishOk(s, &o, null);
+}
+
 fn writeSourceUnit(o: *Out, gpa: Allocator, name: []const u8, source: []const u8, identity: [32]u8) Allocator.Error!void {
     try o.raw("{\"name\":");
     try o.text(name);
@@ -4840,6 +4861,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
         return scriptUnitsReply(s, msg, ref);
     } else if (s.queued_inputs and std.mem.eql(u8, m, "queued-inputs")) {
         return queuedInputsReply(s, msg, ref);
+    } else if (std.mem.eql(u8, m, "libraries")) {
+        return librariesReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "inspect")) {
         return inspectReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "grants")) {
@@ -4920,7 +4943,7 @@ fn pausedAdmission(s: *Session, msg: Json, ref: i64, m: []const u8, paused: Paus
     // admitted.
     const input: exchange.Input = if (messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "state-fingerprint", "inspect", "grants", "counters" }))
         .worker
-    else if (messageIn(m, &.{ "deliver", "request", "broadcast", "decide", "call", "set-parent", "dispose", "stop", "cancel-run", "rewind-run", "revoke", "answer", "fail", "cancel-delivery", "cancel-correlated", "queued-inputs", "request-charge", "settle", "object" }))
+    else if (messageIn(m, &.{ "deliver", "request", "broadcast", "decide", "call", "set-parent", "dispose", "stop", "cancel-run", "rewind-run", "revoke", "answer", "fail", "cancel-delivery", "cancel-correlated", "queued-inputs", "request-charge", "settle", "object", "libraries" }))
         .admitted
     else
         .other;
@@ -7278,6 +7301,41 @@ test "compile-library gives identity and needs, add-library serves a load, and r
     try std.testing.expect(replaced.object.get("reports").? == .array);
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{12}));
     try std.testing.expectEqual(@as(i64, 15), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{13}))).object.get("result").?.integer);
+}
+
+test "libraries lists the Group's Libraries in add order, with a replacement's recompiled dependant" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const base = (try okOf(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"base\",\"version\":\"1\",\"source\":\"function f\\n  return 1\\nend f\\n\"}}", .{1}))).object.get("identity").?.object.get("$bytes").?.string;
+    const next = (try okOf(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"base\",\"version\":\"1\",\"source\":\"function f\\n  return 2\\nend f\\n\"}}", .{2}))).object.get("identity").?.object.get("$bytes").?.string;
+    const wrapper = (try okOf(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"wrapper\",\"version\":\"1\",\"imports\":[{{\"$bytes\":\"{s}\"}}],\"source\":\"use f from base\\nfunction g\\n  return f()\\nend g\\n\"}}", .{ 3, base }))).object.get("identity").?.object.get("$bytes").?.string;
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{4}));
+    try std.testing.expectEqual(@as(usize, 0), (try okOf(try c.send("{{\"m\":\"libraries\",\"ref\":{d},\"group\":\"g\"}}", .{5}))).object.get("libraries").?.array.items.len);
+    _ = try okOf(try c.send("{{\"m\":\"add-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}}}}", .{ 6, base }));
+    _ = try okOf(try c.send("{{\"m\":\"add-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}}}}", .{ 7, wrapper }));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"use g from wrapper\\non go\\n  return g()\\nend go\\n\"}}", .{8}));
+    const before = try okOf(try c.send("{{\"m\":\"libraries\",\"ref\":{d},\"group\":\"g\"}}", .{9}));
+    try std.testing.expect(before.object.get("trace") == null);
+    const held = before.object.get("libraries").?.array.items;
+    try std.testing.expectEqual(@as(usize, 2), held.len);
+    try std.testing.expectEqualStrings("base", held[0].object.get("name").?.string);
+    try std.testing.expectEqualStrings(base, held[0].object.get("identity").?.object.get("$bytes").?.string);
+    try std.testing.expectEqualStrings("wrapper", held[1].object.get("name").?.string);
+    try std.testing.expectEqualStrings(wrapper, held[1].object.get("identity").?.object.get("$bytes").?.string);
+    _ = try okOf(try c.send("{{\"m\":\"replace-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}},\"carry\":\"carry variables\"}}", .{ 10, next }));
+    const after = (try okOf(try c.send("{{\"m\":\"libraries\",\"ref\":{d},\"group\":\"g\"}}", .{11}))).object.get("libraries").?.array.items;
+    try std.testing.expectEqual(@as(usize, 2), after.len);
+    try std.testing.expectEqualStrings(next, after[0].object.get("identity").?.object.get("$bytes").?.string);
+    try std.testing.expectEqualStrings("wrapper", after[1].object.get("name").?.string);
+    const recompiled = after[1].object.get("identity").?.object.get("$bytes").?.string;
+    try std.testing.expect(!std.mem.eql(u8, wrapper, recompiled));
+    // A restore names the recompiled one by its identity.
+    const saved = (try okOf(try c.send("{{\"m\":\"save\",\"ref\":{d},\"group\":\"g\"}}", .{12}))).object.get("save").?.object.get("$bytes").?.string;
+    _ = try okOf(try c.send("{{\"m\":\"restore\",\"ref\":{d},\"group\":\"r\",\"name\":\"r\",\"save\":{{\"$bytes\":\"{s}\"}},\"libraries\":[{{\"$bytes\":\"{s}\"}},{{\"$bytes\":\"{s}\"}}]}}", .{ 13, saved, next, recompiled }));
+    try std.testing.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"libraries\",\"ref\":{d},\"group\":\"nope\"}}", .{14})));
 }
 
 test "inspect shows variables, a suspended Run and the mailbox, and grants lists kept Operations" {

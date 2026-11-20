@@ -1868,8 +1868,9 @@ size_t talk_script_names(talk_group *g, const talk_id **out);
 /* Group.Libraries: the user Libraries the Group holds now, in the order it
  * added them, in *out, borrowed from the Group until the next call of this
  * function. They include every Library ReplaceLibrary recompiled, so a Host
- * restores with them. Safe inside a Pump, it is no Host Input and writes
- * nothing to the Trace. Implemented in #2349. */
+ * restores with them, and no stdlib Library. The Core owns each one, as it
+ * owns a compiled Library. Safe inside a Pump, it charges nothing, is no
+ * Host Input and writes nothing to the Trace. */
 size_t talk_libraries(talk_group *g, talk_library *const **out);
 
 /* The Group Fingerprint, which covers the Group's Libraries and each

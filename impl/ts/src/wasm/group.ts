@@ -84,6 +84,11 @@ export type GroupCore = {
   /** Compiles a Library and its imports into a guest, once each. */
   install(session: Session, library: Library): void;
   kind(name: string): ObjectKind | undefined;
+  /**
+   * Compiles a Library again against other imports, with the declarations
+   * it was compiled with, as a Library replacement recompiles a dependant.
+   */
+  recompile(library: Library, imports: Library[]): Library;
   /** A guest with every definition the Core knows available to declare. */
   session(): Session;
 };
@@ -115,6 +120,8 @@ type Pending = {
 };
 
 const key = (kind: string, id: string) => `${kind}\u0000${id}`;
+const sameBytes = (a: Uint8Array, b: Uint8Array) =>
+  a.length === b.length && a.every((x, i) => x === b[i]);
 // LimitReached is the TS Core's class; its name is checked, as instanceof
 // is kept to Error classes here.
 const isLimitReached = (error: unknown) =>
@@ -248,6 +255,8 @@ export class WasmGroup implements Group {
   /** Calls a restore left pending, until the first Pump. */
   readonly #restored = new Map<string, Json>();
   #restoring: RestoreOptions | null = null;
+  /** The Libraries the Host gave or `libraries()` made, by name, latest last. */
+  readonly #libraries = new Map<string, Library>();
   #exchanging = 0;
   #combining = false;
   /** Answers given while their call was starting, sent once the exchange ends. */
@@ -1109,12 +1118,38 @@ export class WasmGroup implements Group {
     return [...this.#scripts.keys()];
   }
 
-  /** Not yet: the reactor's `libraries` message comes with #2349. */
+  /**
+   * The user Libraries the guest holds, in add order. One a Library
+   * replacement recompiled is compiled again here, against the Libraries
+   * before it, so a restore can install it.
+   */
   libraries(): Library[] {
-    throw new HostError(
-      'invalid value',
-      "This reactor can't list a Group's Libraries yet (#2349)",
-    );
+    const held: Library[] = [];
+    const now = new Map<string, Library>();
+    for (const item of listOf(field(this.send('libraries'), 'libraries'))) {
+      const name = textOf(field(item, 'name'))!;
+      const identity = bytesOfFrame(field(item, 'identity'));
+      let library = this.#libraries.get(name);
+      if (!library) {
+        throw new HostError('library mismatch', `${name} isn't known here`);
+      }
+      if (!sameBytes(library.identity, identity)) {
+        library = this.#core.recompile(
+          library,
+          library.imports.map(l => now.get(l.name) ?? l),
+        );
+        if (!sameBytes(library.identity, identity)) {
+          throw new HostError(
+            'library mismatch',
+            `${name} compiled differently`,
+          );
+        }
+        this.#libraries.set(name, library);
+      }
+      now.set(name, library);
+      held.push(library);
+    }
+    return held;
   }
 
   #grantHandles(grants: Readonly<Record<string, Grant<unknown>>>) {
@@ -1161,6 +1196,7 @@ export class WasmGroup implements Group {
   addLibrary(l: Library): void {
     this.#core.install(this.#session, l);
     this.worker('add-library', { identity: bytesFrame(l.identity) });
+    this.#libraries.set(l.name, l);
   }
 
   replaceLibrary(
@@ -1169,11 +1205,13 @@ export class WasmGroup implements Group {
     o?: { keepMailbox?: boolean },
   ): Report[] {
     this.#core.install(this.#session, l);
-    return this.lifecycle('replace-library', {
+    const reports = this.lifecycle('replace-library', {
       identity: bytesFrame(l.identity),
       carry,
       keepMailbox: o?.keepMailbox,
     });
+    this.#libraries.set(l.name, l);
+    return reports;
   }
 
   /** @internal Reload and Library replacement end Runs and settle their futures. */
@@ -1550,6 +1588,7 @@ export class WasmGroup implements Group {
   restore(save: Uint8Array, o: RestoreOptions): RestoreResult {
     for (const l of o.libraries) {
       this.#core.install(this.#session, l);
+      this.#libraries.set(l.name, l);
     }
     this.#session.syncKinds();
     this.#restoring = o;

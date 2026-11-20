@@ -515,6 +515,7 @@ static int capability_test(void) {
     talk_load_options load = {"caller", 6, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL, false};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
+    bad |= script == NULL || strstr(trace, "diag ") != NULL;
     const char *inputs[] = {"ab", ""};
     for (int i = 0; i < 2; i++) {
         talk_value *text = NULL;
@@ -2279,6 +2280,85 @@ static int reload_test(void) {
     return bad;
 }
 
+/* Group.Libraries: the user Libraries in add order, with the dependant a
+ * replacement recompiled, read without a Trace line; a restore straight
+ * after a save with them is full, and one with the stale dependant isn't. */
+static int libraries_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_library *const *held = NULL;
+    int bad = talk_libraries(group, &held) != 0;
+    const char *base_text = "function f\n  return 1\nend f\n", *next_text = "function f\n  return 2\nend f\n";
+    talk_library_source base_src = {"base", 4, "1", 1, base_text, strlen(base_text)};
+    talk_library_source next_src = {"base", 4, "1", 1, next_text, strlen(next_text)};
+    talk_library *base = NULL, *next = NULL, *wrapper = NULL;
+    bad |= talk_compile_library(core, &base_src, NULL, 0, NULL, 0, &base, NULL) != TALK_OK;
+    const char *wrapper_text = "use f from base\nfunction g\n  return f()\nend g\n";
+    talk_library_source wrapper_src = {"wrapper", 7, "1", 1, wrapper_text, strlen(wrapper_text)};
+    bad |= talk_compile_library(core, &wrapper_src, &base, 1, NULL, 0, &wrapper, NULL) != TALK_OK;
+    bad |= talk_compile_library(core, &next_src, NULL, 0, NULL, 0, &next, NULL) != TALK_OK;
+    if (bad) return 1;
+    bad |= talk_add_library(group, base) != TALK_OK;
+    bad |= talk_add_library(group, wrapper) != TALK_OK;
+    bad |= talk_libraries(group, &held) != 2 || held[0] != base || held[1] != wrapper;
+    const char *source = "use g from wrapper\non go\n  return g()\nend go\n";
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL, false};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    bad |= talk_replace_library(group, next, TALK_RESET_VARIABLES, NULL, NULL) != TALK_OK;
+    size_t traced = strlen(trace);
+    bad |= talk_libraries(group, &held) != 2 || held[0] != next || held[1] == wrapper;
+    bad |= strlen(trace) != traced;
+    talk_library *current[2] = {NULL, NULL};
+    if (!bad) {
+        current[0] = held[0];
+        current[1] = held[1];
+        const char *name = NULL;
+        size_t name_len = 0;
+        talk_library_name(current[1], &name, &name_len);
+        bad |= name_len != 7 || memcmp(name, "wrapper", 7) != 0;
+        unsigned char was[32], now[32];
+        talk_library_identity(wrapper, was);
+        talk_library_identity(current[1], now);
+        bad |= memcmp(was, now, 32) == 0;
+        talk_library *const *imports = NULL;
+        bad |= talk_library_imports(current[1], &imports) != 1 || imports[0] != next;
+    }
+    if (bad) {
+        fprintf(stderr, "%s", trace);
+        talk_group_release(group);
+        talk_core_release(core);
+        return 1;
+    }
+    talk_owned_bytes saved = {0};
+    bad |= talk_save(group, &saved) != TALK_OK;
+    talk_restore_options ro = {"r", 1, NULL, NULL, current, 2, NULL, NULL, NULL, NULL, TALK_REJECT_MISMATCH, false, NULL, 0};
+    talk_group *restored = NULL;
+    talk_restore_result *result = NULL;
+    bad |= talk_restore(core, saved.data, saved.len, &ro, &restored, &result) != TALK_OK;
+    talk_restore_result_release(result);
+    result = NULL;
+    if (restored != NULL) {
+        bad |= talk_libraries(restored, &held) != 2 || held[0] != next || held[1] != current[1];
+        talk_group_release(restored);
+        restored = NULL;
+    }
+    talk_library *stale[2] = {next, wrapper};
+    ro.libraries = stale;
+    bad |= talk_restore(core, saved.data, saved.len, &ro, &restored, &result) != TALK_SAVE_MISMATCH || restored != NULL;
+    talk_restore_result_release(result);
+    talk_owned_bytes_release(&saved);
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* Save and restore: a Run in its wait restores and wakes on time, a
  * corrupt save is refused, the first Pump can't go back in time, and a call
  * that isn't pending can't be settled. */
@@ -3728,6 +3808,7 @@ int main(void) {
     expect(stop_call_cancellation_test(false, true, true, NULL) == 0, "Stop leaves a consumed answer uncancelled");
     expect(stop_test() == 0, "a stopped Script discards its Runs with no finally and drops later Deliveries");
     expect(save_test() == 0, "a save restores a waiting Run, a corrupt save is refused, and the first Pump can't go back in time");
+    expect(libraries_test() == 0, "Libraries gives the Group's Libraries with a replacement's recompiled dependant, and a restore with them is full");
     expect(reload_test() == 0, "Extend adds new names, Reload carries Script Variables by name, and replacing a Library rebuilds its importer");
     expect(runaway_test() == 0, "the three runaway Scripts each end in their Limit Fault in a capped Group, and a Script beside them is untouched");
     expect(http_test() == 0, "http's serve hears its defaults, a bad answer is host error, and respond hears json as text");

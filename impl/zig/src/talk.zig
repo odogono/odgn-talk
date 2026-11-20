@@ -598,6 +598,8 @@ pub const Group = struct {
     name: []const u8 = "",
     /// The last ScriptNames, which the Host borrows.
     names: std.ArrayList(Id) = .empty,
+    /// The last Libraries, which the Host borrows.
+    held_libraries: std.ArrayList(*machine.Library) = .empty,
     /// The last Script.Grants, which the Host borrows, and the Operation
     /// names they point into.
     grants: std.ArrayList(ScriptGrant) = .empty,
@@ -1233,6 +1235,7 @@ export fn talk_group_release(g: ?*Group) void {
     }
     group.deciding.deinit(gpa);
     group.names.deinit(gpa);
+    group.held_libraries.deinit(gpa);
     group.grants.deinit(gpa);
     group.grant_operations.deinit(gpa);
     gpa.free(group.name);
@@ -2145,6 +2148,18 @@ pub export fn talk_script_names(g: *Group, out: *[*]const Id) usize {
     };
     out.* = g.names.items.ptr;
     return g.names.items.len;
+}
+
+/// Group.Libraries: the user Libraries the Group holds now, in the order it
+/// added them, including those a Library replacement recompiled, borrowed
+/// from the Group until the next call. The Core owns each Library. Safe
+/// inside a Pump; it charges nothing and writes nothing to the Trace. Empty
+/// if it can't allocate.
+pub export fn talk_libraries(g: *Group, out: *[*]const *machine.Library) usize {
+    g.held_libraries.clearRetainingCapacity();
+    g.held_libraries.appendSlice(g.core.gpa, g.group.heldLibraries()) catch {};
+    out.* = g.held_libraries.items.ptr;
+    return g.held_libraries.items.len;
 }
 
 pub export fn talk_group_script(g: *Group, name: ?[*]const u8, len: usize) ?*Script {
