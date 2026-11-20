@@ -1,5 +1,7 @@
 //! Trace records are read from the generated corpus.toml catalogue. Filled
-//! keys may be absent on authored inputs; outputs must carry them. Values
+//! keys may be absent on authored inputs; written inputs must carry them,
+//! unless a `refused` record follows, since a refused input changed nothing
+//! and a refused restore has no `mode`. Values
 //! use the display reader, which stops before a following key=value.
 const std = @import("std");
 const schema = @import("../generated/corpus.zig");
@@ -92,11 +94,12 @@ fn requiredIds(ids: []const []const u8) usize {
 }
 /// Whether a line may leave a key out: an optional one, a list of ids,
 /// which is written only when it isn't empty, or a filled input key in an
-/// authored line.
-fn omittable(k: schema.CorpusTableRecordEntryKeyEntry, input: bool, authored: bool) bool {
+/// authored line or one a `refused` record follows, such as a refused
+/// restore's `mode`.
+fn omittable(k: schema.CorpusTableRecordEntryKeyEntry, input: bool, unfilled: bool) bool {
     if (k.optional orelse false) return true;
     if (std.mem.eql(u8, k.type, "ids")) return true;
-    return input and authored and (k.filled orelse false);
+    return input and unfilled and (k.filled orelse false);
 }
 
 /// Reads an authored Trace line, which may leave filled input keys out.
@@ -104,7 +107,7 @@ fn omittable(k: schema.CorpusTableRecordEntryKeyEntry, input: bool, authored: bo
 pub fn parse(a: std.mem.Allocator, line: []const u8, resolver: display.Resolver) !?Record {
     return parseMode(a, line, resolver, true);
 }
-fn parseMode(a: std.mem.Allocator, line: []const u8, resolver: display.Resolver, authored: bool) !?Record {
+fn parseMode(a: std.mem.Allocator, line: []const u8, resolver: display.Resolver, unfilled: bool) !?Record {
     if (line.len == 0 or line[0] == '#') return null;
     if (line[line.len - 1] == ' ' or std.mem.indexOfAny(u8, line, "\r\n\t") != null) return error.InvalidValue;
     var r: display.Reader = .{ .allocator = a, .input = line, .resolver = resolver };
@@ -146,7 +149,7 @@ fn parseMode(a: std.mem.Allocator, line: []const u8, resolver: display.Resolver,
                     next += 1;
                     break;
                 }
-                if (!omittable(k, input, authored)) return error.InvalidValue;
+                if (!omittable(k, input, unfilled)) return error.InvalidValue;
             }
         }
         const k = chosen orelse return error.InvalidValue;
@@ -155,7 +158,7 @@ fn parseMode(a: std.mem.Allocator, line: []const u8, resolver: display.Resolver,
         try typed(&r, k);
         try fields.append(a, .{ .key = key, .value = line[value_start..r.pos] });
     }
-    for (keys[next..]) |k| if (!omittable(k, input, authored)) return error.InvalidValue;
+    for (keys[next..]) |k| if (!omittable(k, input, unfilled)) return error.InvalidValue;
     if (std.mem.eql(u8, name, "charge-request")) {
         const amount = try display.parse(a, fields.items[0].value, resolver);
         defer amount.release();
@@ -235,14 +238,23 @@ fn anyFunction(context: ?*anyopaque, shown: []const u8) model.Error!*model.Value
     return model.function(a.*, "", shown, 0, captures);
 }
 
-/// A line a Core wrote, with any Host Object or Function Value it shows.
-pub fn parseWritten(a: std.mem.Allocator, line: []const u8) !?Record {
-    var gpa = a;
-    const objects: display.Resolver = .{ .context = @ptrCast(&gpa), .object = anyObject, .function = anyFunction };
-    return parseMode(a, line, objects, false);
+/// Whether the line after a written one is a `refused` record, so the input
+/// it follows changed nothing.
+pub fn refusedBy(following: ?[]const u8) bool {
+    return if (following) |f| std.mem.startsWith(u8, f, "refused ") else false;
 }
 
-pub fn matches(a: std.mem.Allocator, expected: []const u8, actual: []const u8) !bool {
+/// A line a Core wrote, with any Host Object or Function Value it shows, and
+/// the line it wrote next, if any.
+pub fn parseWritten(a: std.mem.Allocator, line: []const u8, following: ?[]const u8) !?Record {
+    var gpa = a;
+    const objects: display.Resolver = .{ .context = @ptrCast(&gpa), .object = anyObject, .function = anyFunction };
+    return parseMode(a, line, objects, refusedBy(following));
+}
+
+/// Whether the line a Core wrote matches the expected one; `following` is
+/// the line the Core wrote after it, if any.
+pub fn matches(a: std.mem.Allocator, expected: []const u8, actual: []const u8, following: ?[]const u8) !bool {
     if (std.mem.eql(u8, expected, actual) and !std.mem.startsWith(u8, actual, "> ")) return true;
     // Host Objects are compared by their display form, kind and id, and
     // Function Values by their display form.
@@ -250,7 +262,7 @@ pub fn matches(a: std.mem.Allocator, expected: []const u8, actual: []const u8) !
     const objects: display.Resolver = .{ .context = @ptrCast(&gpa), .object = anyObject, .function = anyFunction };
     const x = (try parse(a, expected, objects)) orelse return false;
     defer x.deinit(a);
-    const y = (try parseMode(a, actual, objects, false)) orelse return false;
+    const y = (try parseMode(a, actual, objects, refusedBy(following))) orelse return false;
     defer y.deinit(a);
     if (x.input != y.input or !std.mem.eql(u8, x.name, y.name) or x.ids.len != y.ids.len) return false;
     for (x.ids, y.ids) |left, right| if (!std.mem.eql(u8, left, right)) return false;
@@ -273,9 +285,18 @@ pub fn matches(a: std.mem.Allocator, expected: []const u8, actual: []const u8) !
 }
 test "filled keys compare against actual output but never hide divergences" {
     const a = std.testing.allocator;
-    try std.testing.expect(try matches(a, "> load orders", "> load orders identity=abc012"));
-    try std.testing.expect(!try matches(a, "> load orders identity=abc012", "> load orders identity=abc013"));
-    try std.testing.expect(!try matches(a, "> pump clock=2026-09-27T00:00:00Z", "> pump clock=2026-09-28T00:00:00Z"));
+    try std.testing.expect(try matches(a, "> load orders", "> load orders identity=abc012", null));
+    try std.testing.expect(!try matches(a, "> load orders identity=abc012", "> load orders identity=abc013", null));
+    try std.testing.expect(!try matches(a, "> pump clock=2026-09-27T00:00:00Z", "> pump clock=2026-09-28T00:00:00Z", null));
+}
+
+test "a refused restore is written with no mode, and only a refused one" {
+    const a = std.testing.allocator;
+    const refused = "> restore from=s1 fingerprint=ab12";
+    try std.testing.expect(try matches(a, refused, refused, "refused code=\"save mismatch\""));
+    try std.testing.expectError(error.InvalidValue, matches(a, refused, refused, null));
+    try std.testing.expectError(error.InvalidValue, matches(a, refused, refused, "pumped state=idle fuel=0"));
+    try std.testing.expect(!try matches(a, "> restore from=s1 fingerprint=ab12 mode=full", refused, "refused code=\"save mismatch\""));
 }
 
 test "metering records validate ordered fields, normalized invalid amounts and latched refusal" {

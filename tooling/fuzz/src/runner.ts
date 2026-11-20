@@ -30,7 +30,8 @@ export const execute = (c: FuzzCase): Execution => {
   };
   const fingerprints: Execution['fingerprints'] = [];
   const update = () => {
-    for (const line of host.trace.slice(offset)) {
+    const lines = host.trace.slice(offset);
+    for (const [index, line] of lines.entries()) {
       const r = parseRecord(line);
       const name = `${r.input ? '>' : ''}${r.name}`;
       counts.records[name] = (counts.records[name] ?? 0) + 1;
@@ -95,7 +96,12 @@ export const execute = (c: FuzzCase): Execution => {
       if (!r.input && ['seg', 'preempt', 'run'].includes(r.name)) {
         deliveries.delete(r.fields.get('delivery')!);
       }
-      if (r.input && r.name === 'restore') {
+      // A refused restore changed nothing, so the refs stay as they were.
+      if (
+        r.input &&
+        r.name === 'restore' &&
+        !lines[index + 1]?.startsWith('refused ')
+      ) {
         runs.clear();
         pending.clear();
         settlements.clear();

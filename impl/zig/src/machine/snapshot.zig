@@ -2975,7 +2975,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     // Their sources. An External-source Snapshot can't be restored here: a
     // missing bundle, so a mismatch whatever the policy (chapter 10).
     const sources = header.bodies[@backingInt(Section.sources)] orelse {
-        if (g.trace) |w| w.print("> restore from=s{d} fingerprint={x} mode=variables-only\nrefused code=\"save mismatch\"\n", .{ g.saves, saved_print }) catch {};
+        if (g.trace) |w| w.print("> restore from=s{d} fingerprint={x}\nrefused code=\"save mismatch\"\n", .{ g.saves, saved_print }) catch {};
         return .mismatch;
     };
     r.i = .{ .bytes = sources, .names = names };
@@ -3014,7 +3014,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
             if (options.keep_mailbox) w.writeAll(" mailbox=keep") catch {};
             writeIds(w, "unbound", r.unbound.items);
             writeIds(w, "withheld", withheld.items);
-            w.print(" fingerprint={x} mode=variables-only\nrefused code=\"save mismatch\"\n", .{saved_print}) catch {};
+            w.print(" fingerprint={x}\nrefused code=\"save mismatch\"\n", .{saved_print}) catch {};
         }
         return .mismatch;
     }
