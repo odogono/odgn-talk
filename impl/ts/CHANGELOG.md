@@ -7,6 +7,20 @@ tracked separately in the Spec's Data Files.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-20
+
+### Added
+
+- **ts:** `group.libraries()` returns the Group's Libraries in the order they were added, including the dependants a `:library replace` recompiled, so a Host can save and restore with them (#2347).
+
+### Fixed
+
+- **ts:** A Session `:restore` straight after `:save` is now full when a `:library replace` recompiled the Libraries that import the replaced one, instead of refusing as `save mismatch` (#2348).
+
+### Performance
+
+- **ts:** Build the TS Group's Run reports by assigning fields instead of spreading objects, making `messaging/sends`, `messaging/parents` and `messaging/joins` about 10–12% faster on Bun (#2235).
+
 ## [0.10.0] - 2026-11-19
 
 ### Breaking
