@@ -104,6 +104,11 @@ func (g *Group) ScriptNames() []string {
 	}
 	return names
 }
+
+// Libraries gives the user Libraries the Group holds now (spec chapter 9).
+// It returns nil until the reactor answers the libraries message (#2350).
+func (g *Group) Libraries() []*Library { return nil }
+
 func (g *Group) script(name string) *Script {
 	for _, s := range g.scripts {
 		if s.name == name {

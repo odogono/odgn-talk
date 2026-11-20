@@ -959,6 +959,12 @@ func (g *Group) Script(name string) *Script // nil if none
 // Scripts' names in load order, and is neither a Host Input nor traced.
 func (g *Group) ScriptNames() []string
 
+// Libraries may be called at any time, inside a Pump too. It gives the user
+// Libraries the Group holds now, in the order it added them, as
+// RestoreOptions.Libraries takes them, including every Library ReplaceLibrary
+// recompiled. It is neither a Host Input nor traced.
+func (g *Group) Libraries() []*Library
+
 type LoadOptions struct {
 	Name   string
 	Source string

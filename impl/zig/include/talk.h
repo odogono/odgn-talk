@@ -1865,6 +1865,13 @@ bool talk_script_unit(talk_script *s, size_t index, talk_unit_info *out);
  * it is no Host Input and writes nothing to the Trace. */
 size_t talk_script_names(talk_group *g, const talk_id **out);
 
+/* Group.Libraries: the user Libraries the Group holds now, in the order it
+ * added them, in *out, borrowed from the Group until the next call of this
+ * function. They include every Library ReplaceLibrary recompiled, so a Host
+ * restores with them. Safe inside a Pump, it is no Host Input and writes
+ * nothing to the Trace. Implemented in #2349. */
+size_t talk_libraries(talk_group *g, talk_library *const **out);
+
 /* The Group Fingerprint, which covers the Group's Libraries and each
  * Script's code identity, Grants and limits, never its state. A worker call. */
 talk_host_error_code talk_fingerprint(talk_group *g, uint8_t out[32]);
