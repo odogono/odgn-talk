@@ -369,7 +369,7 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
       return formatting(analysis);
     }
     if (method === 'textDocument/codeAction') {
-      return codeActions(analysis, range(params.range));
+      return codeActions(analysis, range(params.range), manifest);
     }
     if (method === 'textDocument/inlayHint') {
       return suspensionHints(analysis, range(params.range));

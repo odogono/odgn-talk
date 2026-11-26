@@ -13,6 +13,7 @@ import {
   type Token,
 } from '@northtalk/ts';
 import { builtinDocs } from '@northtalk/ts/session';
+import { suggestionActions } from './suggest';
 import { formatSource } from '../format';
 import { idiomEdit } from '../lint';
 import {
@@ -1528,9 +1529,14 @@ const explicitEndActions = (analysis: Analysis, requested: Range) =>
         : [];
     });
 
-export const codeActions = (analysis: Analysis, requested: Range) => [
+export const codeActions = (
+  analysis: Analysis,
+  requested: Range,
+  manifest: HostManifest | null = null,
+) => [
   ...explicitEndActions(analysis, requested),
   ...idiomActions(analysis, requested),
+  ...suggestionActions(analysis, manifest, requested),
 ];
 
 /**
