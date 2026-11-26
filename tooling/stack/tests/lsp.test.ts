@@ -2455,6 +2455,77 @@ describe('did-you-mean quick fixes', () => {
       ['Change to move', ['move', 'move']],
     ]);
   });
+  test('renames any Clause of a labelled Handler', () => {
+    const host = {
+      ...manifest,
+      messages: [
+        { name: 'move:to:', args: ['any', 'any'], receivers: [] },
+        { name: 'mvoa', args: ['any'], receivers: [] },
+      ],
+    };
+    const source =
+      'on mvoe 1 to y\nsay y\nend mvoe\non mvoe x to y\nsay x\nend mvoe';
+    expect(fixes(source, 0, host)).toEqual([
+      ['Change to move', ['move', 'move']],
+    ]);
+    expect(fixes(source, 3, host)).toEqual([
+      ['Change to move', ['move', 'move']],
+    ]);
+  });
+  test('offers a Grant only for a call’s receiver', () => {
+    const host = {
+      ...manifest,
+      grants: [...manifest.grants, { ...manifest.grants[0]!, name: 'pay' }],
+    };
+    expect(fixes('on demo\nsay 1\nend demo', 1, host)).toEqual([]);
+    expect(
+      fixes('on demo\ntell htp\nfetch "x" and wait\nend tell\nend demo', 1),
+    ).toEqual([['Change to http', ['http']]]);
+  });
+  test('offers a call the locals and parameters that may hold a function', () => {
+    expect(
+      fixes(
+        'on demo\nput given x: x * 2 into double\nsay duoble(2)\nend demo',
+        2,
+      ),
+    ).toEqual([['Change to double', ['double']]]);
+    expect(fixes('function apply fn, x\n return fnn(x)\nend apply', 1)).toEqual(
+      [['Change to fn', ['fn']]],
+    );
+  });
+  test('offers a Constant’s initializer only the Constants declared before it', () => {
+    expect(fixes('constant first = limt\nconstant limit = 2', 0)).toEqual([]);
+    expect(fixes('constant limit = 2\nconstant first = limt', 1)).toEqual([
+      ['Change to limit', ['limit']],
+    ]);
+  });
+  test('replaces exactly the diagnostic’s range', () => {
+    const { request, sent } = setup(
+      'on demo\nput 1 into total\nsay totl\nend demo',
+    );
+    const diagnostic = (sent.at(-1)!.params as Published).diagnostics.find(
+      d => d.code === 'unknown name',
+    )!;
+    expect(
+      request('textDocument/codeAction', lineRange(2))[0]!.edit.changes[uri],
+    ).toEqual([{ range: diagnostic.range, newText: 'total' }]);
+  });
+  test('offers nothing for an Operation, message or property with no near name', () => {
+    expect(
+      fixes('on demo\nask http to zzzzz "x" and wait\nend demo', 1),
+    ).toEqual([]);
+    expect(fixes('on zzzz\nsay 1\nend zzzz', 0)).toEqual([]);
+    const owned = {
+      ...manifest,
+      objectKinds: [
+        { name: 'door', props: [{ name: 'portal', shape: 'text' }] },
+      ],
+      ownerKind: 'door',
+    };
+    expect(
+      fixes('on demo\nput the zzzz of me into p\nend demo', 1, owned),
+    ).toEqual([]);
+  });
   test('offers declared properties, and for a set only writable ones', () => {
     const owned = {
       ...manifest,

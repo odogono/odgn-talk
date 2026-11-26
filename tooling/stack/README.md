@@ -241,25 +241,30 @@ With a Host Manifest, the LSP also offers "did you mean" quick fixes, titled
 [`src/lsp/suggest.ts`](src/lsp/suggest.ts)). Each offers up to three names
 within `max(1, ⌊len/3⌋)` edits, where swapping two neighbouring characters is
 one edit: a case-only difference first, then the nearest, ties broken by name.
-None is preferred, since a near name is a guess. The names are only those that
-would load in that place:
+None is preferred, since a near name is a guess. The names are the ones that
+exist in that place:
 
 - **`unknown name`:** the names the checker can see there. A value leaves out
-  Handlers and Built-in functions, a call takes only functions, and a Binary
-  Pattern size takes only the fields bound before it in that pattern.
-- **`unknown operation`:** the Grants the Script holds, or the Operations its
-  Grant declares.
+  Handlers and Built-in functions, and a call takes the functions and the names
+  that may hold a Function Value. A Constant's initializer takes only the
+  Built-in Constants, the Constants declared before it and the Built-in
+  functions other than `random`. A Binary Pattern size takes only the fields
+  bound before it in that pattern.
+- **`unknown operation`:** a call's misspelt receiver gets the Grants the
+  Script holds, and its Operation the Operations that Grant declares, whatever
+  the verb's mode. Any other `unknown operation`, such as a Host Command the
+  Script holds no Grant for, gets no fix.
 - **`unknown-message`:** the Manifest's messages with the same Argument Labels.
   The fix renames the Handler's head word and its matching explicit `end`.
 - **`unknown-property`:** the properties of the kinds the object may be. A `set`
   leaves out those that every declaring kind marks read-only.
 
-The diagnostics' text stays the Core's, and a Library's diagnostics shown again
-at an importer's `use` get no fix.
+The diagnostics' and Lints' text is unchanged, and a Library's diagnostics shown
+again at an importer's `use` get no fix.
 
 When completing the property in `the label of button1`, the Manifest's kind
-for `button1` supplies its properties. The Manifest does not identify `me`'s
-kind, so this completion does not infer properties for `me`.
+for `button1` supplies its properties, and the Manifest's Owner Kind, when it
+names one, supplies `me`'s.
 
 The Manifest reader retains an Object Kind's optional `elements` declaration,
 including its member Shape and count, positional and name lookup costs. Hover

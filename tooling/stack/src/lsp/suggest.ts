@@ -1,4 +1,5 @@
 import {
+  type Binding,
   type BindingKind,
   type SemanticElement,
   type SemanticName,
@@ -7,7 +8,9 @@ import {
   type Token,
 } from '@northtalk/ts';
 import { builtins } from '../generated/lints';
+import { operationCall } from './calls';
 import type { HostManifest } from './manifest';
+import { innermost } from './messages';
 import { expression, propertyRead } from './properties';
 import { overlaps, rangeAt, type Range } from './protocol';
 import { elements, type Analysis } from './workspace';
@@ -57,10 +60,19 @@ export const nearest = (name: string, candidates: Iterable<string>) => {
     .map(({ c }) => c);
 };
 
+// Bindings that may hold a function, since a call may name a Function Value.
+const callable = new Set<BindingKind>([
+  'function',
+  'builtin function',
+  'local',
+  'parameter',
+  'script variable',
+  'constant',
+]);
 // What each role may name without trading one load error for another.
 const fits: Partial<Record<string, (kind: BindingKind) => boolean>> = {
   value: kind => kind !== 'handler' && kind !== 'builtin function',
-  call: kind => kind === 'function' || kind === 'builtin function',
+  call: kind => callable.has(kind),
 };
 
 /** Names the checker could resolve at an unknown name, by its role. */
@@ -68,20 +80,12 @@ const nameCandidates = (analysis: Analysis, start: number) => {
   const name = analysis.names.find(
     n => n.span.start === start && n.binding === null,
   );
-  const fit = name && fits[name.role];
   if (!name) {
     return [];
   }
   if (name.role === 'binary size') {
     // Only a field bound earlier in the same Binary Pattern.
-    const pattern = analysis.nodes
-      .filter(
-        n =>
-          n.rule === 'BinaryPattern' &&
-          n.span.start <= start &&
-          start < n.span.end,
-      )
-      .at(-1);
+    const pattern = innermost(analysis, start, ['BinaryPattern']);
     return pattern
       ? elements<SemanticElement>(pattern)
           .filter(
@@ -94,30 +98,56 @@ const nameCandidates = (analysis: Analysis, start: number) => {
           .map(e => e.text)
       : [];
   }
+  const fit = fits[name.role];
   if (!fit) {
     return [];
   }
+  // A Constant's initializer reads only Built-in Constants and the Constants
+  // declared before it, and calls only Built-in functions without effects.
+  const declaration = innermost(analysis, start, ['Declaration']);
+  const constant =
+    declaration?.children[0]?.kind === 'token' &&
+    declaration.children[0].text === 'constant'
+      ? declaration.span.start
+      : undefined;
+  const allowed = (b: Binding) =>
+    constant === undefined
+      ? fit(b.kind)
+      : name.role === 'call'
+        ? b.kind === 'builtin function' && b.name !== 'random'
+        : b.kind === 'builtin constant' ||
+          (b.kind === 'constant' && b.span !== null && b.span.start < constant);
   const scopes = analysis.checked.tree.scopes;
-  let scope: number | null | undefined = analysis.nodes
-    .filter(n => n.span.start <= start && start < n.span.end)
-    .at(-1)?.scope;
   const out: string[] = [];
-  for (; scope !== undefined && scope !== null; scope = scopes[scope]?.parent) {
+  for (
+    let scope =
+      analysis.nodes
+        .filter(n => n.span.start <= start && start < n.span.end)
+        .at(-1)?.scope ?? null;
+    scope !== null;
+    scope = scopes[scope]?.parent ?? null
+  ) {
     for (const b of scopes[scope]?.bindings ?? []) {
-      if (fit(b.kind) && !b.name.includes(':')) {
+      if (allowed(b) && !b.name.includes(':')) {
         out.push(b.name);
       }
     }
   }
   for (const b of builtins) {
-    if (fit(b.kind === 'function' ? 'builtin function' : 'builtin constant')) {
+    const kind =
+      b.kind === 'function' ? 'builtin function' : 'builtin constant';
+    if (allowed({ kind, name: b.name, span: null } as Binding)) {
       out.push(b.name);
     }
   }
   return out;
 };
 
-/** A Grant's name, or one of its Operations, from the call at `start`. */
+/**
+ * A misspelt Operation gets its Grant's Operations, and a call's misspelt
+ * receiver the Grants the Script holds. Anything else, such as a Host
+ * Command, gets nothing.
+ */
 const operationCandidates = (
   analysis: Analysis,
   manifest: HostManifest,
@@ -128,39 +158,33 @@ const operationCandidates = (
     .filter(
       (e): e is SyntaxNode =>
         e.kind === 'node' &&
-        (e.rule === 'AskTell' || e.rule === 'OperationLine') &&
+        ['AskTell', 'OperationLine', 'TellBlock'].includes(e.rule) &&
         e.start <= start &&
         start < e.end,
     )
     .at(-1);
-  let op: SyntaxElement | undefined;
-  let grant = '';
-  if (call?.rule === 'AskTell') {
-    const to = call.children.findIndex(e => e.kind === 'token' && e.v === 'to');
-    op = call.children[to + 1];
-    const receiver = call.children[to - 1];
-    grant =
-      receiver?.kind === 'node'
-        ? analysis.document.text.slice(receiver.start, receiver.end).trim()
-        : '';
-  } else if (call) {
-    op = call.children[0];
-    const receiver = syntax.find(
-      (e): e is SyntaxNode =>
-        e.kind === 'node' &&
-        e.rule === 'TellBlock' &&
-        e.children.includes(call),
-    )?.children[1];
-    grant =
-      receiver?.kind === 'node'
-        ? analysis.document.text.slice(receiver.start, receiver.end).trim()
-        : '';
+  if (!call) {
+    return [];
   }
-  if (op?.kind === 'token' && op.pos === start) {
-    return [...(manifest.grants.get(grant)?.keys() ?? [])];
+  const operation =
+    call.rule === 'TellBlock'
+      ? undefined
+      : operationCall(syntax, call, analysis.document.text);
+  if (operation?.op.pos === start) {
+    return [...(manifest.grants.get(operation.grant)?.keys() ?? [])];
   }
-  // A Grant the Script doesn't hold: only the Grants it does.
-  return [...manifest.grants.keys()];
+  const to = call.children.findIndex(e => e.kind === 'token' && e.v === 'to');
+  const receiver =
+    call.rule === 'AskTell'
+      ? call.children[to - 1]
+      : call.rule === 'TellBlock'
+        ? call.children[1]
+        : undefined;
+  return receiver?.kind === 'node' &&
+    receiver.start <= start &&
+    start < receiver.end
+    ? [...manifest.grants.keys()]
+    : [];
 };
 
 // A Selector's Argument Labels: `to:` of `move:to:`, nothing of `demo`.
@@ -270,10 +294,10 @@ export const suggestionActions = (
             ? propertyCandidates(analysis, manifest, start)
             : messageCandidates(
                 manifest,
-                // The Handler's binding names its whole Selector.
-                analysis.checked.tree.scopes[0]?.bindings.find(
-                  b => b.kind === 'handler' && b.span?.start === start,
-                )?.name ?? name,
+                // Each Clause's head names the whole Selector.
+                analysis.names.find(
+                  n => n.span.start === start && n.role === 'declaration',
+                )?.text ?? name,
               );
     const range = rangeAt(text, start, end);
     const ending =
