@@ -235,9 +235,36 @@ initializer and shown in the display form. Operations show their dictionary
 entry, below; Function Values show their Home Script. Hover also shows Declaration Documentation for named functions, Constants, Script Variables and each Handler Clause in declaration order. Imports and aliases resolve to the defining Library's block; Built-ins use the catalogue's descriptive text. Locals and parameters do not inherit a same-spelled declaration's documentation. Hovering a Handler or function head also shows its static Fuel estimate ([`src/fuel.ts`](src/fuel.ts), [#1606](https://github.com/odogono/odgn-talk/issues/1606)). This is the constant Fuel of its cheapest and dearest paths, the Fuel of one pass of each loop, and the value-dependent terms by line. Calls to its own unit's bodies and to imported Library functions add their callees' bounds, but recursive calls and calls through Function Values are listed, not added. Capability calls add the Manifest's declared cost. An Error in a `catch`, `finally` or guard range may leave by its target. Catch search's `unwind` charge, offer actions and `wait for` event tests are listed, not added. The same hover gives a Fuel Bound ([#1610](https://github.com/odogono/odgn-talk/issues/1610)): the most Fuel the body can use while every value stays within the caps (text, digits, collection items, Bytes and computed `repeat n times` counts) and each loop runs at most its cap. `repeat for each` runs at most the collection's cap, or the text's or Bytes' cap for a list of chunks. `repeat n times` runs `n` times for a constant `n`, and nested loops multiply. A declared result Shape caps a Capability result's size. Anything else uncapped makes the bound unbounded, and the hover lists every reason rather than giving a partial number. The setting `northtalk.fuelCaps` (or the `fuelCaps` configuration) replaces any cap, and `fuelFrame` adds a note when the bound is more than one frame's Fuel. The hover counts a value-dependent term that recurs; `fuelText(e, { full: true })` lists each one. Every blessed corpus Run of a Handler is checked against these estimates and bounds (`tests/fuel-corpus.test.ts`), except in `limits/`, whose cases build values past the caps on purpose. The estimate is advisory: it reads the lowering and the Cost Model tables that `bun run lints:generate` copies into `src/generated/fuel.ts`, and a Run's charges stay the Cost Model's. Formatting delegates to
 the formatter, and `prefer-explicit-end` has an insertion quick fix.
 
+With a Host Manifest, the LSP also offers "did you mean" quick fixes, titled
+"Change to …", for `unknown name`, `unknown operation`, `unknown-message` and
+`unknown-property` ([#2361](https://github.com/odogono/odgn-talk/issues/2361),
+[`src/lsp/suggest.ts`](src/lsp/suggest.ts)). Each offers up to three names
+within `max(1, ⌊len/3⌋)` edits, where swapping two neighbouring characters is
+one edit: a case-only difference first, then the nearest, ties broken by name.
+None is preferred, since a near name is a guess. The names are the ones that
+exist in that place:
+
+- **`unknown name`:** the names the checker can see there. A value leaves out
+  Handlers and Built-in functions, and a call takes the functions and the names
+  that may hold a Function Value. A Constant's initializer takes only the
+  Built-in Constants, the Constants declared before it and the Built-in
+  functions other than `random`. A Binary Pattern size takes only the fields
+  bound before it in that pattern.
+- **`unknown operation`:** a call's misspelt receiver gets the Grants the
+  Script holds, and its Operation the Operations that Grant declares, whatever
+  the verb's mode. Any other `unknown operation`, such as a Host Command the
+  Script holds no Grant for, gets no fix.
+- **`unknown-message`:** the Manifest's messages with the same Argument Labels.
+  The fix renames the Handler's head word and its matching explicit `end`.
+- **`unknown-property`:** the properties of the kinds the object may be. A `set`
+  leaves out those that every declaring kind marks read-only.
+
+The diagnostics' and Lints' text is unchanged, and a Library's diagnostics shown
+again at an importer's `use` get no fix.
+
 When completing the property in `the label of button1`, the Manifest's kind
-for `button1` supplies its properties. The Manifest does not identify `me`'s
-kind, so this completion does not infer properties for `me`.
+for `button1` supplies its properties, and the Manifest's Owner Kind, when it
+names one, supplies `me`'s.
 
 The Manifest reader retains an Object Kind's optional `elements` declaration,
 including its member Shape and count, positional and name lookup costs. Hover

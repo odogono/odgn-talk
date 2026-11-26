@@ -25,7 +25,8 @@ export type MessageSite = {
 const senderKinds = new Set<SiteKind>(['send', 'pass', 'command']);
 const implementorKinds = new Set<SiteKind>(['handler', 'wait']);
 
-const innermost = (analysis: Analysis, start: number, rules: string[]) =>
+/** The innermost node of one of `rules` that holds `start`. */
+export const innermost = (analysis: Analysis, start: number, rules: string[]) =>
   analysis.nodes
     .filter(
       n =>
